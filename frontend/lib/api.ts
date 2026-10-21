@@ -132,6 +132,27 @@ export const api = {
     a.click();
     URL.revokeObjectURL(url);
   },
+  /** Excel or PDF of one section / teacher / room, or all of them (no id; staff only). */
+  exportTimetable: async (format: "xlsx" | "pdf", view: string, id?: string) => {
+    const q = new URLSearchParams({ format, view, ...(id ? { id } : {}) });
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}${org()}/export?${q}`, { headers: { Authorization: `Bearer ${session.token}` } });
+    } catch {
+      throw new ApiError(0, "Can't reach the server. Is the backend running?");
+    }
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : "Couldn't download the file");
+    }
+    const name = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "")?.[1] ?? `timetable.${format}`;
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = name;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
   saveSectionShifts: (shifts: Record<string, string>) =>
     request<SetupSaved>(`${org()}/section-shifts`, { method: "PUT", body: JSON.stringify({ shifts }) }),
   insights: () => request<Insight[]>(`${org()}/insights`),

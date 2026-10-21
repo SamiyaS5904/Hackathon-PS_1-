@@ -68,7 +68,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Timetabl.ai API", version="0.4.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
+app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"],
+                   expose_headers=["Content-Disposition"])  # file names for downloads
 
 
 @app.get("/api/health")

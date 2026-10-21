@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
-import { auth, setSession } from "./api";
+import { ApiError, auth, setSession } from "./api";
 import type { AuthOut, Member, Role } from "./types";
 
 const TOKEN_KEY = "tt_token";
@@ -72,11 +72,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return;
     }
     setSession(token, read(ORG_KEY), signOut);
-    auth
-      .me()
-      .then((out) => signIn({ ...out, token }))
-      .catch(() => write(TOKEN_KEY, null))
-      .finally(() => setReady(true));
+    let cancelled = false;
+    // A backend restart or a network blip must not log people out: retry for ~10 s; only 401 ends the session.
+    const restore = async () => {
+      for (let attempt = 0; attempt < 7 && !cancelled; attempt++) {
+        try {
+          const out = await auth.me();
+          if (!cancelled) signIn({ ...out, token });
+          return;
+        } catch (e) {
+          const retryable = e instanceof ApiError && (e.status === 0 || e.status >= 500);
+          if (!retryable) break;
+          await new Promise((r) => setTimeout(r, 1500));
+        }
+      }
+      if (!cancelled) write(TOKEN_KEY, null);
+    };
+    restore().finally(() => {
+      if (!cancelled) setReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [signIn, signOut]);
 
   // Guard: private pages need a login.

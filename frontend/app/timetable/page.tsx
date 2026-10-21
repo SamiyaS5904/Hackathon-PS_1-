@@ -5,6 +5,7 @@ import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Move, Printer, Undo2,
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { PublishButton } from "@/components/timetable/PublishButton";
+import { DownloadMenu } from "@/components/timetable/DownloadMenu";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
 import { OneDayPanel } from "@/components/timetable/OneDayPanel";
 import { ProposalDialog } from "@/components/timetable/ProposalDialog";
@@ -144,6 +145,14 @@ export default function TimetablePage() {
         subtitle={college ? `${college.name}${isStudent ? ` · ${studentLabel(college, member)}` : " · weekly timetable"}` : undefined}
         actions={
           <>
+            {data && data.timetable.sessions.length > 0 && (
+              <DownloadMenu
+                view={isStudent ? "section" : view}
+                entityId={isStudent ? (member?.section_id ?? "") : entityId}
+                entityName={isStudent ? "My timetable" : entityName}
+                canAll={isStaff(role)}
+              />
+            )}
             {data && (
               <Button variant="ghost" onClick={() => window.print()} className="no-print">
                 <Printer size={16} aria-hidden /> Print
