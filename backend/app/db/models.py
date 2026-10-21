@@ -100,6 +100,28 @@ class AuditRow(Base):
     undone: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class NotificationRow(Base):
+    """One in-app notification for an audience (sections, teachers, departments, roles), not a user list,
+    so students who log in later still see what concerns them."""
+
+    __tablename__ = "notifications"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    at: Mapped[float] = mapped_column(Float, default=time.time, index=True)
+    title: Mapped[str] = mapped_column(String(300))
+    body: Mapped[str] = mapped_column(String(1000), default="")
+    link: Mapped[str] = mapped_column(String(200), default="/timetable")
+    audience: Mapped[dict] = mapped_column(JSON)
+    actor_user_id: Mapped[str] = mapped_column(String(32), default="")
+
+
+class NotificationSeenRow(Base):
+    __tablename__ = "notifications_seen"
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    seen_at: Mapped[float] = mapped_column(Float, default=0.0)
+
+
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)

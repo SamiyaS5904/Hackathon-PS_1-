@@ -265,3 +265,30 @@ def test_exports_excel_and_pdf_with_role_limits(client, admin):
     mine = " ".join(str(c.value) for row in load_workbook(io.BytesIO(own.content)).active.iter_rows()
                     for c in row if c.value)
     assert "[B2]" not in mine
+
+
+def test_notifications_reach_the_right_people(client, admin):
+    st = login(client, "cse3a.01@demo.timetabl.ai")
+    other = login(client, "ece3a.01@demo.timetabl.ai")
+    co = login(client, "cse.coordinator@demo.timetabl.ai")
+    me = client.get("/api/orgs/demo/notifications", headers=st).json()
+    assert any(n["title"] == "Timetable published" for n in me["items"]) and me["unread"] >= 1
+    # The person who acted isn't notified about their own change.
+    assert not any(n["title"] == "Timetable published"
+                   for n in client.get("/api/orgs/demo/notifications", headers=admin).json()["items"])
+    client.post("/api/orgs/demo/notifications/seen", headers=st)
+    assert client.get("/api/orgs/demo/notifications", headers=st).json()["unread"] == 0
+
+    sessions = client.get("/api/orgs/demo/timetable", headers=admin).json()["timetable"]["sessions"]
+    s = next(x for x in sessions if x["section_ids"] == ["cse-3a"] and not x["batch_id"]
+             and not x["elective_slot_id"])
+    r = client.post("/api/orgs/demo/overrides", headers=admin, json={
+        "session_id": s["id"], "date": WEEKDAY_DATE[s["day"]], "kind": "cancel", "reason": "Exam duty"})
+    assert r.status_code == 201, r.text
+    mine = client.get("/api/orgs/demo/notifications", headers=st).json()
+    assert mine["unread"] == 1 and "Exam duty" in mine["items"][0]["body"]
+    assert client.get("/api/orgs/demo/notifications", headers=co).json()["items"][0]["title"] == mine["items"][0]["title"]
+    assert not any("Exam duty" in n["body"]
+                   for n in client.get("/api/orgs/demo/notifications", headers=other).json()["items"])
+    client.post("/api/orgs/demo/audit/undo", headers=admin)
+    assert client.get("/api/orgs/demo/notifications", headers=st).json()["items"][0]["title"].startswith("Change undone")

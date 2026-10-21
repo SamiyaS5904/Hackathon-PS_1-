@@ -39,6 +39,7 @@ from app.io.excel import RowError
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
 from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
+from app.notify import Audience, FeedOut, feed, mark_seen, notify_change, send
 from app.models.domain import College, Department, Rule, TimeBlock, Timetable, Venue
 from app.permissions import (
     can_edit_one_day,
@@ -361,7 +362,12 @@ def publish_timetable(ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
         raise HTTPException(409, "This timetable is already published.")
     if validate(state.college, state.timetable.sessions, state.timetable.lunches):  # golden rule #1
         raise HTTPException(409, "This timetable has clashes, so it can't be published.")
+    first = state.published is None
     store.publish(state.id, ctx.user.name)
+    send(state.id, "Timetable published" if first else "Timetable updated",
+         "Your timetable is ready. Open it to see your classes, rooms and teachers." if first else
+         "The College Admin published an updated timetable. Check your classes.",
+         Audience(everyone=True), ctx.user.id)
     return _timetable_out(ctx)
 
 
@@ -467,8 +473,15 @@ def apply_proposal(proposal_id: str, ctx: Ctx = Depends(org_ctx)) -> TimetableOu
     store.pop_proposal(state.id, proposal_id)
     if validate(state.college, p.timetable.sessions, p.timetable.lunches):  # golden rule #1, re-checked
         raise HTTPException(409, "This change would create a clash, so it wasn't applied.")
+    before = state.timetable
     store.set_timetable(state.id, p.timetable, action=p.action, source=p.source, actor=ctx.user.name,
                         changes=p.changes)
+    first = p.changes[0]
+    others = len(p.changes) - 1
+    body = f"{first.before} → {first.after}, every week from now on."
+    if others:
+        body += f" {others} other class{'es' if others > 1 else ''} moved to make room."
+    notify_change(state.id, state.college, before, p.timetable, p.action, body, ctx.user.id)
     return _timetable_out(ctx)
 
 
@@ -491,13 +504,28 @@ def get_audit(ctx: Ctx = Depends(org_ctx)) -> list[AuditOut]:
     ]
 
 
+@app.get("/api/orgs/{org}/notifications", response_model=FeedOut)
+def get_notifications(ctx: Ctx = Depends(org_ctx)) -> FeedOut:
+    return feed(ctx.member)
+
+
+@app.post("/api/orgs/{org}/notifications/seen", status_code=204, response_class=Response)
+def notifications_seen(ctx: Ctx = Depends(org_ctx)) -> Response:
+    mark_seen(ctx.member)
+    return Response(status_code=204)
+
+
 @app.post("/api/orgs/{org}/audit/undo", response_model=TimetableOut)
 def undo(ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
     entry = store.last_undoable(ctx.state.id)
     if entry is None:
         raise HTTPException(409, "Nothing to undo.")
     allow(can_undo(ctx.member, entry.actor))
+    before = ctx.state.timetable
     store.undo_last(ctx.state.id, actor=ctx.user.name)
+    if entry.source != "generate":
+        notify_change(ctx.state.id, ctx.state.college, before, store.org(ctx.state.id).timetable,
+                      f"Change undone: {entry.action}", "The class is back where it was.", ctx.user.id)
     return _timetable_out(ctx)
 
 
@@ -555,7 +583,10 @@ def create_override(body: OverrideRequest, ctx: Ctx = Depends(org_ctx)) -> Overr
     if new is None:
         raise HTTPException(422, message)
     source = "chatbot" if body.via == "chatbot" else "teacher" if ctx.member.role == "teacher" else "one-day"
+    before = state.timetable
     store.set_timetable(state.id, new, action=action, source=source, actor=ctx.user.name)
+    notify_change(state.id, state.college, before, new, action,
+                  f"{message} {('Reason: ' + body.reason) if body.reason else ''}".strip(), ctx.user.id)
     return OverrideOut(message=message, timetable=_timetable_out(ctx))
 
 
@@ -569,7 +600,10 @@ def delete_override(override_id: str, ctx: Ctx = Depends(org_ctx)) -> OverrideOu
     new, message = remove_override(state.college, state.timetable, override_id)
     if new is None:
         raise HTTPException(409, message)
+    before = state.timetable
     store.set_timetable(state.id, new, action=message, source="one-day", actor=ctx.user.name)
+    notify_change(state.id, state.college, before, new, message, "The class is back to its usual time.",
+                  ctx.user.id)
     return OverrideOut(message=message + ".", timetable=_timetable_out(ctx))
 
 
@@ -866,6 +900,13 @@ def set_my_blocked(body: BlockedRequest, ctx: Ctx = Depends(org_ctx)) -> Blocked
                                          "Coordinator to move it first, or mark a one-day change for a single day.")
     teachers = [t.model_copy(update={"blocked": body.blocked}) if t.id == tid else t for t in college.teachers]
     saved = store.update_college(ctx.state.id, college.model_copy(update={"teachers": teachers}), bump=False)
+    added = [b for b in body.blocked if b not in college.teacher(tid).blocked]
+    if added:
+        when = ", ".join(f"{b.day} {b.start}-{b.end}" for b in added)
+        send(ctx.state.id, f"{ctx.user.name} blocked {when}",
+             "Confirmed automatically: it doesn't clash with their lectures.",
+             Audience(coordinator_departments=[college.teacher(tid).department_id], roles=["admin"]),
+             ctx.user.id, link="/departments")
     return BlockedOut(blocked=saved.teacher(tid).blocked,
                       message="Saved. Your blocked times are confirmed and the next timetable will respect them.")
 
