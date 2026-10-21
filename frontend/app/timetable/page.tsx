@@ -1,9 +1,10 @@
 "use client";
 
 import clsx from "clsx";
-import { ChevronLeft, ChevronRight, Loader2, Move, Printer, Undo2, X } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Move, Printer, Undo2, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
+import { PublishButton } from "@/components/timetable/PublishButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
 import { OneDayPanel } from "@/components/timetable/OneDayPanel";
 import { ProposalDialog } from "@/components/timetable/ProposalDialog";
@@ -14,7 +15,7 @@ import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
 import { useChatPage } from "@/lib/chat-context";
 import { useTimetable } from "@/lib/timetable-context";
-import type { Occurrence, OverrideOut, Session, ViewKind, WeekOut } from "@/lib/types";
+import type { Occurrence, OverrideOut, Session, TimetableOut, ViewKind, WeekOut } from "@/lib/types";
 
 const isoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -148,7 +149,11 @@ export default function TimetablePage() {
                 <Printer size={16} aria-hidden /> Print
               </Button>
             )}
-            {role === "admin" && <GenerateButton />}
+            {/* One primary action: Publish while a draft waits, otherwise (re)generate. */}
+            {role === "admin" && (
+              <GenerateButton primary={!data || data.stale || data.timetable.sessions.length === 0} />
+            )}
+            {role === "admin" && <PublishButton />}
           </>
         }
       />
@@ -178,6 +183,7 @@ export default function TimetablePage() {
               {" "}Editing is paused until then.
             </div>
           )}
+          {isStaff(role) && !data.stale && <PublishStatus data={data} />}
           {isStaff(role) && !data.stale && <HealthStrip data={data} />}
 
           <div className="no-print mb-3 flex flex-wrap items-center gap-3">
@@ -380,8 +386,12 @@ function EmptyState() {
   if (role !== "admin") {
     return (
       <Card className="flex flex-col items-center px-6 py-16 text-center">
-        <h2 className="text-lg font-semibold">No timetable yet</h2>
-        <p className="mt-2 max-w-md text-sm text-muted">Your College Admin hasn&apos;t generated the timetable yet. Check back soon.</p>
+        <h2 className="text-lg font-semibold">{isStaff(role) ? "No timetable yet" : "Not published yet"}</h2>
+        <p className="mt-2 max-w-md text-sm text-muted">
+          {isStaff(role)
+            ? "Your College Admin hasn't generated the timetable yet. Check back soon."
+            : "Your timetable appears here as soon as the College Admin publishes it. You'll get a notification."}
+        </p>
       </Card>
     );
   }
@@ -396,5 +406,27 @@ function EmptyState() {
         <GenerateButton />
       </div>
     </Card>
+  );
+}
+
+/** Draft or published: staff always know whether teachers and students can see what's on screen. */
+function PublishStatus({ data }: { data: TimetableOut }) {
+  const { published_at, published_by } = data.timetable;
+  if (published_at) {
+    const when = new Date(published_at * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+    return (
+      <p className="no-print mb-3 flex items-center gap-2 text-xs text-muted" role="status">
+        <CheckCircle2 size={14} className="text-ok" aria-hidden /> Published {when} by {published_by}. Changes reach
+        teachers and students straight away.
+      </p>
+    );
+  }
+  return (
+    <div className="no-print mb-4 rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-accent-text" role="status">
+      <b>Draft:</b>{" "}
+      {data.ever_published
+        ? "teachers and students still see the previously published timetable. Publish this one to replace it."
+        : "teachers and students can't see it yet. Review it, then Publish."}
+    </div>
   );
 }

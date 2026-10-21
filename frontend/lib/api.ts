@@ -70,6 +70,7 @@ export const api = {
   loadSample: () => request<College>(`${org()}/load-sample`, { method: "POST" }),
   precheck: () => request<Precheck>(`${org()}/precheck`),
   timetable: () => request<TimetableOut>(`${org()}/timetable`),
+  publish: () => request<TimetableOut>(`${org()}/timetable/publish`, { method: "POST" }),
   generate: (timeLimit = 45) => request<Job>(`${org()}/timetable/generate`, post({ time_limit: timeLimit })),
   job: (id: string) => request<Job>(`${org()}/jobs/${id}`),
   moveOptions: (sessionId: string) => request<MoveOption[]>(`${org()}/timetable/sessions/${sessionId}/options`),

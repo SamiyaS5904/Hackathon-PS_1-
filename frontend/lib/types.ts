@@ -50,6 +50,7 @@ export interface Override {
 export interface Timetable {
   college_id: string; status: string; sessions: Session[]; lunches: Lunch[]; overrides: Override[];
   messages: string[]; warnings: string[]; solve_seconds: number;
+  published_at: number | null; published_by: string;
 }
 export interface QualityItem { key: string; label: string; value: number; penalty: number; detail: string }
 export interface QualityReport {
@@ -60,6 +61,7 @@ export interface QualityReport {
 export interface Violation { type: string; message: string; session_ids: string[] }
 export interface TimetableOut {
   timetable: Timetable; quality: QualityReport | null; violations: Violation[]; stale: boolean;
+  ever_published: boolean;
 }
 export interface Job { id: string; status: "running" | "done" | "failed"; elapsed: number; error: string | null }
 export interface Precheck { problems: string[]; warnings: string[] }

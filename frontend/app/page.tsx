@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { InsightsCard } from "@/components/chat/InsightsCard";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
+import { PublishButton } from "@/components/timetable/PublishButton";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
@@ -107,6 +108,21 @@ export default function Dashboard() {
               </p>
             </div>
             {role === "admin" ? <GenerateButton label="Regenerate timetable" /> : <span className="text-sm text-muted">The College Admin regenerates the timetable.</span>}
+          </div>
+        ) : hasTimetable && data && !data.timetable.published_at ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="mt-1 text-lg font-semibold">Review and publish</h2>
+              <p className="mt-1 max-w-xl text-sm text-muted">
+                {data.ever_published
+                  ? "A new draft is ready. Teachers and students keep the previously published timetable until you publish this one."
+                  : "The draft is clash-free. Check it by section, teacher or room, then publish so teachers and students can see it."}
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Link href="/timetable"><Button>Review timetable</Button></Link>
+              {role === "admin" ? <PublishButton /> : <span className="text-sm text-muted">The College Admin publishes it.</span>}
+            </div>
           </div>
         ) : hasTimetable ? (
           <div className="flex flex-wrap items-center justify-between gap-4">

@@ -4,13 +4,13 @@ import { Loader2, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui";
 import { GENERATE_SECONDS, isGenerating, useTimetable } from "@/lib/timetable-context";
 
-export function GenerateButton({ label }: { label?: string }) {
+export function GenerateButton({ label, primary = true }: { label?: string; primary?: boolean }) {
   const { generate, job, data, precheck, college } = useTimetable();
   const running = isGenerating(job);
   const blocked = (precheck?.problems.length ?? 0) > 0;
   return (
     <Button
-      variant="primary"
+      variant={primary ? "primary" : "secondary"}
       onClick={generate}
       disabled={running || blocked || !college}
       title={blocked ? "Fix the data problems first" : undefined}
