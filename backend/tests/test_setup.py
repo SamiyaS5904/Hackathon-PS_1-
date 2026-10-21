@@ -151,3 +151,15 @@ def test_structure_errors_and_permissions(setup):
     r = c.put(f"{base}/departments", headers=admin, json={"departments": [{"id": "me", "name": "Mechanical", "short": "ME"}],
                                                          "shared_venues": []})
     assert r.status_code == 422 and "still have sections" in r.json()["detail"]
+
+
+def test_section_shifts_admin_only(setup):
+    c, admin, base = setup
+    r = c.put(f"{base}/section-shifts", headers=admin, json={"shifts": {"cse-1a": "nope"}})
+    assert r.status_code == 422
+    r = c.put(f"{base}/section-shifts", headers=admin, json={"shifts": {"cse-1a": "day"}})
+    assert r.status_code == 200
+    inv = c.post(f"{base}/invites", headers=admin,
+                 json={"email": "cse.co@sunrise.edu", "role": "coordinator", "department_id": "cse"}).json()
+    co = auth(c.post(f"/api/invites/{inv['token']}/accept", json={"name": "CSE Co", "password": "longenough"}))
+    assert c.put(f"{base}/section-shifts", headers=co, json={"shifts": {"cse-1a": "day"}}).status_code == 403
