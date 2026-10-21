@@ -31,7 +31,7 @@ A college signs up, answers a guided setup (shifts, periods, breaks, venues, dep
 2. **Timetable generation uses the algorithm, never an LLM.** Claude powers only the chatbot.
 3. **The chatbot never writes directly.** It creates a `ChangeProposal`; the user sees a before/after diff and clicks Apply.
 4. **The chatbot acts with the logged-in user's permissions.** It calls the backend with the user's own token; it can never do more than the user could do by hand.
-5. **Tenant isolation:** every tenant table has `org_id`; Supabase RLS enforces it; the backend reads `org_id` + role from the JWT, **never from the request body**.
+5. **Tenant isolation:** every tenant table has `org_id`; the backend is the only database client and checks the caller's membership on every `/api/orgs/{org}` request (org from the URL, user from the signed token, role from the database: **never from the request body**). A college you're not in answers 404, exactly like one that doesn't exist.
 6. **Every change is logged** (who, what, when, how: manual / drag / chatbot / system, reason) and can be undone.
 7. **Configurable, not hard-coded.** Anything that differs between colleges (shifts, periods, breaks, lab length, rules, structure levels) is data, not code.
 8. **Small working commits** after every step (see §10). Never leave `main` broken.
@@ -238,12 +238,12 @@ OpenAI Whisper as a second voice option (side by side with browser speech) · ca
 | Frontend | Next.js 15 (App Router), TypeScript strict, Tailwind, shadcn/ui, TanStack Query, dnd-kit → Vercel |
 | Backend | Python 3.12, FastAPI, Pydantic v2, OR-Tools CP-SAT, openpyxl, a PDF library → Render/Railway |
 | Chatbot | Python 3.12, FastAPI, Anthropic SDK (Claude tool use), SSE streaming → Render/Railway |
-| Data / Auth | Supabase: Postgres, Auth (magic link, Google), Row Level Security |
+| Data / Auth | **Supabase Postgres** as the database (`DATABASE_URL`; SQLite file locally). Login, roles and invite links are handled by our backend (scrypt password hashes, signed JWT). Decided 2026-10-21: option B, one place for every permission rule, testable offline |
 | Email | Resend |
 | LLM models | `claude-sonnet-5-5` (agent), `claude-haiku-5-5` (light Q&A / routing) |
 
 **Environment variables** (never commit values; keep `.env.example` files current)
-`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` (backend only), `SUPABASE_JWT_SECRET`, `ANTHROPIC_API_KEY` (chatbot only), `RESEND_API_KEY`, `BACKEND_URL`, `CHATBOT_URL`, `NEXT_PUBLIC_*` for public frontend values.
+`DATABASE_URL` (Supabase Postgres; empty = local SQLite), `APP_SECRET` (signs login tokens), `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (optional, backend only), `ANTHROPIC_API_KEY` (chatbot only), `OPENAI_API_KEY` (chatbot, V2 Whisper), `RESEND_API_KEY`, `BACKEND_URL`, `CHATBOT_URL`, `NEXT_PUBLIC_*` for public frontend values.
 
 ---
 
