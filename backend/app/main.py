@@ -10,7 +10,7 @@ import threading
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -32,6 +32,9 @@ from app.core.security import create_token
 from app.db.models import UserRow
 from app.edits.moves import Change, MoveOption, diff, move_options, repair_move
 from app.edits.oneday import DayInfo, Occurrence, add_override, day_options, occurrences, remove_override, week
+from app.io.excel import RowError
+from app.io.excel import parse as excel_parse
+from app.io.excel import template as excel_template
 from app.models.domain import College, Department, Timetable, Venue
 from app.permissions import (
     can_edit_one_day,
@@ -666,3 +669,43 @@ def readiness(ctx: Ctx = Depends(org_ctx)) -> list[DepartmentReadiness]:
             without_teacher=sum(1 for a in sl.allotments if a.teacher_id is None), students=len(sl.students),
         ))
     return out
+
+
+# ---------------------------------------------------------------------------
+# Excel: template download (pre-filled) and import with row-level errors
+# ---------------------------------------------------------------------------
+
+class ImportOut(BaseModel):
+    errors: list[RowError]
+    counts: dict[str, int]
+    problems: list[str] = []
+    warnings: list[str] = []
+    saved: bool = False
+
+
+@app.get("/api/orgs/{org}/departments/{dept}/template")
+def download_template(dept: str, ctx: Ctx = Depends(org_ctx)) -> Response:
+    _dept_access(ctx, dept)
+    data = excel_template(ctx.state.college, dept)
+    name = f"timetabl-{ctx.state.id}-{dept}.xlsx"
+    return Response(content=data, headers={"Content-Disposition": f'attachment; filename="{name}"'},
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+@app.post("/api/orgs/{org}/departments/{dept}/import", response_model=ImportOut)
+async def import_excel(dept: str, file: UploadFile, commit: bool = False, ctx: Ctx = Depends(org_ctx)) -> ImportOut:
+    """commit=false: check and preview only. commit=true: save if there are no row errors."""
+    _dept_access(ctx, dept)
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "The file is larger than 5 MB.")
+    result = excel_parse(ctx.state.college, dept, content)
+    if result.errors:
+        return ImportOut(errors=result.errors, counts=result.counts)
+    new, errs = merge_dept(ctx.state.college, dept, result.data, actor=ctx.user.name)
+    if new is None:
+        return ImportOut(errors=[RowError(sheet="", row=0, message=e) for e in errs], counts=result.counts)
+    if not commit:
+        return ImportOut(errors=[], counts=result.counts, problems=check(new), warnings=warnings(new))
+    saved = store.update_college(ctx.state.id, new)
+    return ImportOut(errors=[], counts=result.counts, problems=check(saved), warnings=warnings(saved), saved=True)
