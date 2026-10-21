@@ -1,0 +1,138 @@
+"use client";
+
+import { AlertTriangle, ArrowRight, Info } from "lucide-react";
+import Link from "next/link";
+import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
+import { HealthStrip } from "@/components/timetable/HealthStrip";
+import { Button, Card, PageHeader, Skeleton } from "@/components/ui";
+import { useTimetable } from "@/lib/timetable-context";
+
+export default function Dashboard() {
+  const { college, data, precheck, loading, error } = useTimetable();
+
+  if (loading || !college) {
+    return (
+      <div className="mx-auto max-w-5xl space-y-4">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-36 w-full" />
+        <Skeleton className="h-24 w-full" />
+      </div>
+    );
+  }
+
+  const problems = precheck?.problems ?? [];
+  const warnings = [...(precheck?.warnings ?? [])];
+  const hasTimetable = !!data && data.timetable.sessions.length > 0;
+
+  return (
+    <div className="mx-auto max-w-5xl">
+      <PageHeader title="Dashboard" subtitle={college.name} />
+      <GenerationProgress />
+      {error && <Card className="mb-4 border-danger/30 bg-danger-soft p-4 text-sm text-danger">{error}</Card>}
+
+      {/* Core first: the next step is always the first thing on the page. */}
+      <Card className="mb-6 p-6">
+        <p className="text-xs font-medium uppercase tracking-wide text-accent-text">Next step</p>
+        {problems.length > 0 ? (
+          <>
+            <h2 className="mt-1 text-lg font-semibold">Fix {problems.length} data problem(s) before generating</h2>
+            <ul className="mt-3 space-y-1.5 text-sm">
+              {problems.map((p) => (
+                <li key={p} className="flex gap-2 text-danger">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden /> {p}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : hasTimetable ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="mt-1 text-lg font-semibold">Your timetable is ready</h2>
+              <p className="mt-1 text-sm text-muted">
+                Review it by section, teacher or room. Editing and publishing come next.
+              </p>
+            </div>
+            <Link href="/timetable">
+              <Button variant="primary">
+                Open timetable <ArrowRight size={16} aria-hidden />
+              </Button>
+            </Link>
+          </div>
+        ) : (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="mt-1 text-lg font-semibold">Generate your first timetable</h2>
+              <p className="mt-1 text-sm text-muted">
+                All data checks passed. Generation takes under a minute.
+              </p>
+            </div>
+            <GenerateButton />
+          </div>
+        )}
+      </Card>
+
+      {hasTimetable && data && <HealthStrip data={data} />}
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className="p-5">
+          <h3 className="text-sm font-semibold">College at a glance</h3>
+          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
+            {[
+              ["Departments", college.departments.length],
+              ["Sections", college.sections.length],
+              ["Teachers", college.teachers.length],
+              ["Rooms & labs", college.venues.length],
+              ["Shifts", college.shifts.map((s) => s.name).join(", ")],
+              ["Working days", college.days.length],
+            ].map(([k, v]) => (
+              <div key={String(k)}>
+                <dt className="text-xs text-muted">{k}</dt>
+                <dd className="font-medium">{v}</dd>
+              </div>
+            ))}
+          </dl>
+        </Card>
+
+        {hasTimetable && data?.quality ? (
+          <Card className="p-5">
+            <h3 className="text-sm font-semibold">Why the quality score is {data.quality.score}</h3>
+            <ul className="mt-3 space-y-2 text-sm">
+              {data.quality.items.map((i) => (
+                <li key={i.key} className="flex items-start justify-between gap-3">
+                  <span>
+                    {i.label}
+                    <span className="block text-xs text-muted">{i.detail}</span>
+                  </span>
+                  <span className="shrink-0 font-mono text-xs text-muted">−{i.penalty}</span>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        ) : (
+          <Card className="p-5">
+            <h3 className="text-sm font-semibold">What the generator guarantees</h3>
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted">
+              <li>No teacher, room or student group is ever double-booked</li>
+              <li>Rooms fit the class size and type (labs in labs)</li>
+              <li>Labs run as back-to-back periods, batches in parallel</li>
+              <li>Shifts, breaks and a lunch slot inside the mess window</li>
+            </ul>
+          </Card>
+        )}
+      </div>
+
+      {warnings.length > 0 && (
+        <Card className="mt-4 p-5">
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            <Info size={16} className="text-warn" aria-hidden /> Good to know
+          </h3>
+          <ul className="mt-2 space-y-1.5 text-sm text-muted">
+            {warnings.map((w) => (
+              <li key={w}>{w}</li>
+            ))}
+          </ul>
+        </Card>
+      )}
+    </div>
+  );
+}

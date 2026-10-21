@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "D:\\Hackathon\\backend\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--port", "8000", "--app-dir", "D:\\Hackathon\\backend"],
+      "port": 8000
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "D:\\Hackathon\\frontend", "run", "dev"],
+      "port": 3000
+    }
+  ]
+}

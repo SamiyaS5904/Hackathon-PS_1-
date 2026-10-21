@@ -22,6 +22,7 @@ Soft objective (minimised)
   * teacher's heaviest day (spreads load across the week)
   * empty seats and borrowing another department's room
   * a section's lectures spread over many rooms (prefer a home room)
+  * uneven student weeks: heavy days, and days with a single class
 
 The result is always re-checked by ``app.validator`` (independent code).
 """
@@ -50,6 +51,8 @@ W_GAP = 3
 W_TEACHER_PEAK = 2
 W_FOREIGN_ROOM = 2
 W_ROOM_SPREAD = 3
+W_STUDENT_PEAK = 2
+W_LIGHT_DAY = 6
 
 
 @dataclass
@@ -169,6 +172,7 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
     cover: dict[tuple[str, int, int], list] = defaultdict(list)  # (resource, day, minute)
     teacher_day: dict[tuple[str, int], list] = defaultdict(list)
     room_use: dict[tuple[str, str], list] = defaultdict(list)  # (section, venue) -> lecture vars
+    group_day: dict[tuple[str, int], list] = defaultdict(list)  # (group, day) -> (var, periods)
     cost_terms = []
 
     for ui, u in enumerate(units):
@@ -189,6 +193,8 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
                         for g in u.groups:
                             cover[(f"g:{g}", d, c)].append(var)
                     teacher_day[(u.teacher_id, d)].append((var, u.length))
+                    for g in u.groups:
+                        group_day[(g, d)].append((var, u.length))
                     if u.kind == Kind.lecture:
                         for sid in u.section_ids:
                             room_use[(sid, vid)].append(var)
@@ -258,6 +264,25 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
             used = True
         if used:
             cost_terms.append(W_TEACHER_PEAK * peak)
+
+    # Even student weeks: lighten the heaviest day and avoid single-class days.
+    for sec in college.sections:
+        max_load = len(available_periods(college, sec.shift_id, sec.year))
+        for g in group_ids(sec):
+            peak = model.NewIntVar(0, max_load, "")
+            for d in range(len(days)):
+                items = group_day.get((g, d))
+                if not items:
+                    continue
+                load = sum(v * ln for v, ln in items)
+                model.Add(peak >= load)
+                has = model.NewBoolVar("")
+                model.Add(load >= has)
+                model.Add(load <= max_load * has)
+                light = model.NewBoolVar("")
+                model.Add(light >= has - (load - 1))  # has classes and load == 1
+                cost_terms.append(W_LIGHT_DAY * light)
+            cost_terms.append(W_STUDENT_PEAK * peak)
 
     # Compact days for every student group: penalise each extra block start.
     for s in college.sections:

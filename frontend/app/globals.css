@@ -1,0 +1,78 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Design tokens: neutral surfaces, one accent. Every colour has a dark-mode value. */
+:root {
+  --bg: 250 250 249;
+  --surface: 255 255 255;
+  --surface-2: 245 245 244;
+  --border: 231 229 228;
+  --border-strong: 214 211 209;
+  --text: 28 25 23;
+  --muted: 120 113 108;
+  --accent: 79 70 229;
+  --accent-soft: 238 242 255;
+  --accent-text: 67 56 202;
+  --ok: 4 120 87;
+  --ok-soft: 236 253 245;
+  --warn: 180 83 9;
+  --warn-soft: 255 251 235;
+  --danger: 185 28 28;
+  --danger-soft: 254 242 242;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: 12 10 9;
+    --surface: 23 21 19;
+    --surface-2: 32 29 27;
+    --border: 41 37 36;
+    --border-strong: 68 64 60;
+    --text: 245 245 244;
+    --muted: 168 162 158;
+    --accent: 129 140 248;
+    --accent-soft: 30 27 75;
+    --accent-text: 165 180 252;
+    --ok: 52 211 153;
+    --ok-soft: 6 44 34;
+    --warn: 251 191 36;
+    --warn-soft: 51 33 6;
+    --danger: 248 113 113;
+    --danger-soft: 55 15 15;
+  }
+}
+
+html,
+body {
+  background: rgb(var(--bg));
+  color: rgb(var(--text));
+}
+
+body {
+  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+}
+
+@media print {
+  aside,
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
+}
+
+/* Subject colour: hue set per card via --h, works in light and dark. */
+.subj {
+  background: hsl(var(--h) 85% 96%);
+  border-color: hsl(var(--h) 55% 80%);
+  color: hsl(var(--h) 55% 22%);
+}
+@media (prefers-color-scheme: dark) {
+  .subj {
+    background: hsl(var(--h) 30% 16%);
+    border-color: hsl(var(--h) 35% 32%);
+    color: hsl(var(--h) 70% 86%);
+  }
+}

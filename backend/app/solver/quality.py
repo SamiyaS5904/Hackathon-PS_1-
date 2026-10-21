@@ -54,6 +54,16 @@ def score(college: College, sessions: list[Session], lunches: list[Lunch] | None
                     total_gaps += (used[-1] - used[0] + 1) - len(used)
     gaps_per_group = total_gaps / max(n_groups, 1)
 
+    # Student week balance: days with a single class, and the heaviest day vs an even spread.
+    light_days, uneven = 0, 0.0
+    for sec in college.sections:
+        for g in group_ids(sec):
+            loads = [len(occupied[(g, d)]) for d in days]
+            light_days += sum(1 for n in loads if n == 1)
+            if sum(loads):
+                uneven += max(loads) - sum(loads) / len(days)
+    uneven_avg = uneven / max(n_groups, 1)
+
     # Same subject lecture twice in a day.
     per_day: dict[tuple[str, str], int] = defaultdict(int)
     for s in sessions:
@@ -104,6 +114,9 @@ def score(college: College, sessions: list[Session], lunches: list[Lunch] | None
         QualityItem(key="gaps", label="Student free gaps", value=round(gaps_per_group, 2),
                     penalty=round(min(30, gaps_per_group * 6), 1),
                     detail=f"{total_gaps} idle periods across {n_groups} student groups per week"),
+        QualityItem(key="student_balance", label="Student week balance", value=round(uneven_avg, 2),
+                    penalty=round(min(20, light_days * 2 + uneven_avg * 4), 1),
+                    detail=f"{light_days} day(s) with a single class; heaviest day {uneven_avg:.1f} periods above even"),
         QualityItem(key="repeats", label="Same subject twice a day", value=repeats,
                     penalty=round(min(25, repeats * 3), 1),
                     detail=f"{repeats} extra same-day repeats"),
