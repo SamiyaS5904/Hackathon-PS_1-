@@ -110,6 +110,7 @@ def test_full_setup_flow(setup):
     assert next(d for d in wk["days"] if d["date"] == "2026-10-21")["holiday"] == "Founders' Day"
     assert not any(o["date"] == "2026-10-21" for o in wk["occurrences"])
 
+    assert c.post(f"{base}/timetable/publish", headers=admin).status_code == 200
     # Students from the list log in with email + roll number the first time.
     st = auth(c.post("/api/auth/login", json={"email": "s21@sunrise.edu", "password": "CSE1A21"}))
     mine = c.get(f"{base}/timetable", headers=st).json()["timetable"]["sessions"]

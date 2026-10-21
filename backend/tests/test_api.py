@@ -74,6 +74,24 @@ def test_new_college_is_isolated(client, admin):
     assert again.status_code == 409
 
 
+def test_publish_flow(client, admin):
+    st = login(client, "cse3a.01@demo.timetabl.ai")
+    t = login(client, "anita.sharma@demo.timetabl.ai")
+    co = login(client, "cse.coordinator@demo.timetabl.ai")
+    # Before publishing, teachers and students see nothing yet (with a plain reason).
+    r = client.get("/api/orgs/demo/timetable", headers=st)
+    assert r.status_code == 404 and "published" in r.json()["detail"]
+    assert client.get("/api/orgs/demo/timetable", headers=t).status_code == 404
+    assert client.get("/api/orgs/demo/timetable", headers=admin).json()["timetable"]["published_at"] is None
+    assert client.post("/api/orgs/demo/timetable/publish", headers=co).status_code == 403  # Admin only
+    out = client.post("/api/orgs/demo/timetable/publish", headers=admin)
+    assert out.status_code == 200 and out.json()["timetable"]["published_at"] and out.json()["ever_published"]
+    assert client.post("/api/orgs/demo/timetable/publish", headers=admin).status_code == 409  # already
+    assert client.get("/api/orgs/demo/timetable", headers=st).status_code == 200
+    audit = client.get("/api/orgs/demo/audit", headers=admin).json()
+    assert audit[0]["source"] == "publish" and not audit[0]["can_undo"]
+
+
 def test_student_sees_only_own_section_and_cannot_edit(client):
     st = login(client, "cse3a.01@demo.timetabl.ai")
     sessions = client.get("/api/orgs/demo/timetable", headers=st).json()["timetable"]["sessions"]
@@ -198,3 +216,23 @@ def test_assistant_changes_are_labelled_in_the_activity_log(client, admin):
     audit = client.get("/api/orgs/demo/audit", headers=admin).json()
     assert audit[0]["source"] == "chatbot"
     client.post("/api/orgs/demo/audit/undo", headers=admin)
+
+
+def test_regenerated_draft_keeps_the_published_one_for_students(client, admin):
+    """A new draft doesn't reach teachers and students, and they can't edit the old one meanwhile."""
+    from app.store import store
+
+    st = login(client, "cse3a.01@demo.timetabl.ai")
+    t = login(client, "anita.sharma@demo.timetabl.ai")
+    published = store.org("demo").timetable
+    draft = published.model_copy(update={"published_at": None, "sessions": published.sessions[1:]})
+    store.set_timetable("demo", draft, action="Generated timetable", source="generate", actor="Admin")
+    mine = client.get("/api/orgs/demo/timetable", headers=st).json()["timetable"]
+    assert mine["published_at"] == published.published_at  # still the published one
+    s = next(x for x in published.sessions if x.teacher_id == "t-anita")
+    r = client.post("/api/orgs/demo/overrides", headers=t,
+                    json={"session_id": s.id, "date": WEEKDAY_DATE[s.day], "kind": "cancel"})
+    assert r.status_code == 409 and "published" in r.json()["detail"]
+    # Undoing the regeneration brings the published timetable back as the live one.
+    client.post("/api/orgs/demo/audit/undo", headers=admin)
+    assert store.org("demo").published is store.org("demo").timetable

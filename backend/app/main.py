@@ -209,6 +209,7 @@ class TimetableOut(BaseModel):
     quality: QualityReport | None
     violations: list[Violation]
     stale: bool = False  # college data changed since this timetable was generated
+    ever_published: bool = False  # teachers and students can see a timetable
 
 
 class PrecheckOut(BaseModel):
@@ -294,7 +295,8 @@ def get_job(job_id: str, ctx: Ctx = Depends(org_ctx)) -> JobOut:
 def _timetable_out(ctx: Ctx) -> TimetableOut:
     tt = ctx.state.timetable
     if tt is None:
-        raise HTTPException(404, "No timetable generated yet")
+        raise HTTPException(404, NOT_PUBLISHED if ctx.member.role in ("teacher", "student")
+                            else "No timetable generated yet")
     college = ctx.state.college
     stale = tt.college_revision != college.revision
     if stale:  # the data it was built from has changed: don't score it against new data
@@ -304,11 +306,25 @@ def _timetable_out(ctx: Ctx) -> TimetableOut:
         violations = validate(college, tt.sessions, tt.lunches) if tt.sessions else []
     if ctx.member.role not in ("admin", "coordinator"):
         tt = tt.model_copy(update={"sessions": visible_sessions(ctx.member, college, tt)})
-    return TimetableOut(timetable=tt, quality=quality, violations=violations, stale=stale)
+    return TimetableOut(timetable=tt, quality=quality, violations=violations, stale=stale,
+                        ever_published=ctx.state.published is not None)
 
 
 @app.get("/api/orgs/{org}/timetable", response_model=TimetableOut)
 def get_timetable(ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
+    return _timetable_out(ctx)
+
+
+@app.post("/api/orgs/{org}/timetable/publish", response_model=TimetableOut)
+def publish_timetable(ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
+    """Admin only. Teachers and students see the timetable from now on, and later edits reach them live."""
+    allow(can_generate(ctx.member))
+    state = _current(ctx, for_edit=True)
+    if state.timetable.published_at:
+        raise HTTPException(409, "This timetable is already published.")
+    if validate(state.college, state.timetable.sessions, state.timetable.lunches):  # golden rule #1
+        raise HTTPException(409, "This timetable has clashes, so it can't be published.")
+    store.publish(state.id, ctx.user.name)
     return _timetable_out(ctx)
 
 
@@ -343,9 +359,16 @@ class AuditOut(BaseModel):
     can_undo: bool
 
 
+NOT_PUBLISHED = "Your timetable hasn't been published yet. It appears here as soon as the College Admin publishes it."
+
+
 def _current(ctx: Ctx, for_edit: bool = False):
     if ctx.state.timetable is None or not ctx.state.timetable.sessions:
-        raise HTTPException(404, "No timetable generated yet")
+        raise HTTPException(404, NOT_PUBLISHED if ctx.member.role in ("teacher", "student")
+                            else "No timetable generated yet")
+    if for_edit and not ctx.live:
+        raise HTTPException(409, "The College Admin is preparing an updated timetable. Changes open again "
+                                 "once it is published.")
     if for_edit and ctx.state.timetable.college_revision != ctx.state.college.revision:
         raise HTTPException(409, "The college data changed since this timetable was generated. "
                                  "Ask the College Admin to regenerate it first.")
@@ -792,7 +815,7 @@ def set_my_blocked(body: BlockedRequest, ctx: Ctx = Depends(org_ctx)) -> Blocked
     for b in body.blocked:
         if b.day not in college.days or not (b.start < b.end):
             raise HTTPException(422, f"Block {b.day} {b.start}-{b.end} isn't a valid working-day time range.")
-    tt = ctx.state.timetable
+    tt = store.org(ctx.state.id).timetable  # the real current one, also when a newer draft waits
     if tt and tt.sessions:
         def _min(t: str) -> int:
             h, mm = t.split(":")

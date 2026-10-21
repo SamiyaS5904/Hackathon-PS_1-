@@ -77,6 +77,14 @@ class TimetableRow(Base):
     updated_at: Mapped[float] = mapped_column(Float, default=time.time)
 
 
+class PublishedRow(Base):
+    """The timetable teachers and students see while the Admin works on a newer draft."""
+
+    __tablename__ = "published_timetables"
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    data: Mapped[dict] = mapped_column(JSON)
+
+
 class AuditRow(Base):
     __tablename__ = "audit_log"
     id: Mapped[str] = mapped_column(String(32), primary_key=True)

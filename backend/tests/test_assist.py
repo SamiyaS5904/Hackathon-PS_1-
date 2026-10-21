@@ -46,6 +46,7 @@ def test_assist_endpoints_permissions():
                 if client.get(f"/api/orgs/demo/jobs/{job['id']}", headers=admin).json()["status"] != "running":
                     break
                 time.sleep(1)
+        client.post("/api/orgs/demo/timetable/publish", headers=admin)  # 409 if it already is: fine
         st = login("cse3a.01@demo.timetabl.ai")
         rooms = client.get(f"/api/orgs/demo/free-rooms?date={MONDAY}&at=11:00", headers=st)
         assert rooms.status_code == 200 and all("name" in r for r in rooms.json())

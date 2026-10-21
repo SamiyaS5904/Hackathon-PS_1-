@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import select
 
-from app.db.models import AuditRow, OrgRow, SessionLocal, TimetableRow, init_db
+from app.db.models import AuditRow, OrgRow, PublishedRow, SessionLocal, TimetableRow, init_db
 from app.models.domain import College, Timetable
 
 
@@ -46,7 +46,7 @@ class AuditEntry:
     id: str
     at: float
     action: str  # human sentence, e.g. "Moved Data Structures (CSE-2A) to Thu 11:00"
-    source: str  # "generate" | "drag" | "one-day" | "chatbot" | "teacher" | "undo"
+    source: str  # "generate" | "drag" | "one-day" | "chatbot" | "teacher" | "undo" | "publish"
     actor: str
     changes: list  # list[Change] (or dicts once loaded from the database)
     before: Timetable | None
@@ -61,6 +61,9 @@ class OrgState:
     college: College
     is_demo: bool = False
     timetable: Timetable | None = None
+    # What teachers and students see: the current timetable once published, or the last published one
+    # while a regenerated draft waits for the Admin. None until the first publish.
+    published: Timetable | None = None
     version: int = 0
     proposals: dict[str, Proposal] = field(default_factory=dict)
     audit: list[AuditEntry] = field(default_factory=list)
@@ -93,6 +96,12 @@ class Store:
                 if row.org_id in self._orgs:
                     st = self._orgs[row.org_id]
                     st.timetable, st.version = Timetable.model_validate(row.data), row.version
+                    if st.timetable.published_at:
+                        st.published = st.timetable
+            for row in db.scalars(select(PublishedRow)):
+                st = self._orgs.get(row.org_id)
+                if st is not None and st.published is None:
+                    st.published = Timetable.model_validate(row.data)
             for row in db.scalars(select(AuditRow).order_by(AuditRow.seq)):
                 if row.org_id in self._orgs:
                     self._orgs[row.org_id].audit.append(AuditEntry(
@@ -144,6 +153,20 @@ class Store:
         else:
             row.version, row.data, row.updated_at = state.version, data, time.time()
 
+    def _sync_published(self, db, state: OrgState) -> None:
+        """A published current timetable is what everyone sees; a draft leaves the last published one."""
+        row = db.get(PublishedRow, state.id)
+        if state.timetable is not None and state.timetable.published_at:
+            state.published = state.timetable
+            if row is not None:
+                db.delete(row)
+        elif state.published is not None:
+            data = state.published.model_dump(mode="json")
+            if row is None:
+                db.add(PublishedRow(org_id=state.id, data=data))
+            else:
+                row.data = data
+
     def _persist_audit(self, db, state: OrgState, entry: AuditEntry) -> None:
         db.add(AuditRow(
             id=entry.id, org_id=state.id, seq=len(state.audit), at=entry.at, action=entry.action,
@@ -164,6 +187,7 @@ class Store:
             state.proposals.clear()  # proposals computed on an older version are stale
             state.audit.append(entry)
             self._persist_timetable(db, state)
+            self._sync_published(db, state)
             self._persist_audit(db, state, entry)
             db.commit()
             return entry
@@ -184,7 +208,8 @@ class Store:
     def last_undoable(self, org: str) -> AuditEntry | None:
         with self._lock:
             state = self._orgs[org]
-            entry = next((e for e in reversed(state.audit) if not e.undone and e.source != "undo"), None)
+            entry = next((e for e in reversed(state.audit)
+                          if not e.undone and e.source not in ("undo", "publish")), None)
             return entry if entry and entry.before is not None else None
 
     def undo_last(self, org: str, actor: str = "Admin") -> AuditEntry | None:
@@ -198,14 +223,39 @@ class Store:
             row = db.get(AuditRow, entry.id)
             if row:
                 row.undone = True
-            state.timetable = entry.before
+            restored = entry.before
+            if entry.source != "generate" and state.timetable.published_at and not restored.published_at:
+                # Undoing an edit made before publishing keeps the timetable published.
+                restored = restored.model_copy(update={"published_at": state.timetable.published_at,
+                                                       "published_by": state.timetable.published_by})
+            state.timetable = restored
             state.version += 1
             state.proposals.clear()
             undo = AuditEntry(id=uuid.uuid4().hex[:10], at=time.time(), action=f"Undid: {entry.action}",
-                              source="undo", actor=actor, changes=[], before=entry.after, after=entry.before)
+                              source="undo", actor=actor, changes=[], before=entry.after, after=restored)
             state.audit.append(undo)
             self._persist_timetable(db, state)
+            self._sync_published(db, state)
             self._persist_audit(db, state, undo)
+            db.commit()
+            return entry
+
+    def publish(self, org: str, actor: str) -> AuditEntry:
+        """Make the current timetable the one teachers and students see."""
+        with self._lock, SessionLocal() as db:
+            state = self._orgs[org]
+            tt = state.timetable.model_copy(update={"published_at": time.time(), "published_by": actor})
+            first = state.published is None
+            entry = AuditEntry(id=uuid.uuid4().hex[:10], at=time.time(),
+                               action="Published the timetable" if first else "Published the updated timetable",
+                               source="publish", actor=actor, changes=[], before=None, after=tt)
+            state.timetable = tt
+            state.version += 1
+            state.proposals.clear()
+            state.audit.append(entry)
+            self._persist_timetable(db, state)
+            self._persist_audit(db, state, entry)
+            self._sync_published(db, state)
             db.commit()
             return entry
 

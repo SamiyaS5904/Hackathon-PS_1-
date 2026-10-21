@@ -6,7 +6,7 @@ the database membership: never from the request body (golden rule 5).
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from fastapi import Depends, Header, HTTPException
 
@@ -21,6 +21,8 @@ class Ctx:
     user: UserRow
     member: Member
     state: OrgState
+    # False when this member sees the last published timetable while a newer draft waits: no edits then.
+    live: bool = True
 
 
 def current_user(authorization: str | None = Header(default=None)) -> UserRow:
@@ -39,6 +41,10 @@ def org_ctx(org: str, user: UserRow = Depends(current_user)) -> Ctx:
     if state is None or m is None:
         # Same answer whether the college doesn't exist or you're not in it: no tenant leaks.
         raise HTTPException(404, "College not found.")
+    if m.role in ("teacher", "student"):
+        # Teachers and students only ever see a published timetable.
+        live = state.published is not None and state.published is state.timetable
+        return Ctx(user=user, member=m, state=replace(state, timetable=state.published), live=live)
     return Ctx(user=user, member=m, state=state)
 
 

@@ -364,6 +364,8 @@ class Timetable(BaseModel):
     warnings: list[str] = Field(default_factory=list)  # worth knowing, not blocking
     solve_seconds: float = 0.0
     objective: float | None = None
+    published_at: float | None = None  # set when the College Admin publishes; edits keep it
+    published_by: str = ""
 
 
 Teacher.model_rebuild()
