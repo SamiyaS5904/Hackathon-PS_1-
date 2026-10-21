@@ -177,9 +177,9 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - ✅ Students of one department **taught in another department's rooms or by another department's teachers** (e.g. first-year common subjects).
 - ✅ **Combined classes** across departments need a room for the total strength; combined sections in different shifts → error.
 - ✅ Lab batches whose strengths don't add up to the section; batch bigger than every suitable lab → error.
-- 🔜 **Elective slots** across departments: CSE students in a group taught by an ME teacher in an ME room; all groups of a slot at the same time; home sections blocked; room fits members, not sections (5).
-- 🔜 **Pooled groups**: a few students from 5 departments taught together in a 6th department (5).
-- 🔜 Student-level lists: every student of a participating section must be in exactly one group of each elective slot; missing or double-assigned students → row-level error (5).
+- ✅ **Elective slots** across departments: CSE students in a group taught by an ME teacher in an ME room; all groups of a slot at the same time; home sections blocked; room fits members, not sections.
+- ✅ **Pooled groups**: a few students from several departments taught together in another department (same mechanism).
+- ✅ Student-level lists: every student of a participating section must be in exactly one group of each elective slot; missing or double-assigned students → plain-language error naming the roll numbers.
 - 🔜 Auto-sectioning a whole-year list that doesn't divide evenly (V2).
 
 **Rooms**
@@ -189,17 +189,19 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - 🔜 Room temporarily unavailable (maintenance, exams) (3).
 
 **Teachers**
+- ✅ Teacher block times confirmed instantly only if they don't clash with current lectures.
 - ✅ Teacher in two departments or both shifts; overlapping shift times checked.
 - ✅ Weekly load above `max_per_day × days` → error; blocked times respected.
+- ✅ Classes without a teacher block generation with a clear message; suggestions fill them within weekly limits.
 - 🔜 Teacher on leave → substitutes (if time); teacher leaves mid-semester → re-allotment (V2).
 
 **Time**
 - ✅ Lab can't cross a break; mess window without a full period → error; more weekly lectures than working days → error.
-- 🔜 Holidays and one-day overrides on real dates (3); semester dates moved (5).
+- ✅ Holidays (no classes that day; one-day moves onto them refused) and one-day overrides on real dates; semester dates editable in setup.
 
 **Data & scale**
 - ✅ Unknown references (section, teacher, subject, shift) → error naming the row.
-- 🔜 Duplicate names / codes in Excel import (5).
+- ✅ Duplicate names / codes / emails in Excel import → row-level errors; re-import keeps ids (sections, teachers, subjects, rooms, students).
 - 🔜 Large colleges (50+ sections): solve time grows; plan: progress bar + time limit, then solve per shift / per year with shared rooms fixed (later).
 
 ---
