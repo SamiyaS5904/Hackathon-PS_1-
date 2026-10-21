@@ -16,13 +16,23 @@ from pydantic import BaseModel
 
 from app import accounts
 from app.accounts import InviteOut, Member
+from app.college_edit import (
+    DeptData,
+    Settings,
+    apply_settings,
+    dept_slice,
+    merge_dept,
+    set_ready,
+    settings_of,
+    structural_errors,
+)
 from app.core.config import CORS_ORIGINS
 from app.core.deps import Ctx, allow, current_user, org_ctx
 from app.core.security import create_token
 from app.db.models import UserRow
 from app.edits.moves import Change, MoveOption, diff, move_options, repair_move
 from app.edits.oneday import DayInfo, Occurrence, add_override, day_options, occurrences, remove_override, week
-from app.models.domain import College, Timetable
+from app.models.domain import College, Department, Timetable, Venue
 from app.permissions import (
     can_edit_one_day,
     can_edit_weekly,
@@ -35,6 +45,7 @@ from app.permissions import (
     visible_sessions,
 )
 from app.seed.demo_college import build_demo_college, empty_college
+from app.solver.allotment import SuggestResult, suggest
 from app.solver.feasibility import check, warnings
 from app.solver.generate import generate
 from app.solver.quality import QualityReport, score
@@ -192,6 +203,7 @@ class TimetableOut(BaseModel):
     timetable: Timetable
     quality: QualityReport | None
     violations: list[Violation]
+    stale: bool = False  # college data changed since this timetable was generated
 
 
 class PrecheckOut(BaseModel):
@@ -224,9 +236,11 @@ def load_sample(ctx: Ctx = Depends(org_ctx)) -> College:
     allow(can_manage_college(ctx.member))
     if ctx.state.college.allotments:
         raise HTTPException(409, "This college already has data.")
-    sample = build_demo_college().model_copy(update={"id": ctx.state.id, "name": ctx.state.name, "students": []})
-    store.update_college(ctx.state.id, sample)
-    return sample
+    sample = build_demo_college().model_copy(update={"id": ctx.state.id, "name": ctx.state.name})
+    # Keep the sample's structure and electives, but this college's own students come from its list.
+    sample.students = [st.model_copy(update={"email": st.email.replace("@demo.timetabl.ai", f"@{ctx.state.id}.edu")})
+                       for st in sample.students]
+    return store.update_college(ctx.state.id, sample)
 
 
 @app.get("/api/orgs/{org}/precheck", response_model=PrecheckOut)
@@ -239,6 +253,7 @@ def precheck(ctx: Ctx = Depends(org_ctx)) -> PrecheckOut:
 def start_generation(body: GenerateRequest, ctx: Ctx = Depends(org_ctx)) -> JobOut:
     allow(can_generate(ctx.member))
     org, college, actor = ctx.state.id, ctx.state.college, ctx.user.name
+    allow("" if not check(college) else "Fix the data problems shown on the dashboard first.")
     if store.running_job(org):
         raise HTTPException(409, "A timetable is already being generated for this college.")
     job = store.new_job(org)
@@ -246,6 +261,7 @@ def start_generation(body: GenerateRequest, ctx: Ctx = Depends(org_ctx)) -> JobO
     def run() -> None:
         try:
             tt = generate(college, time_limit=max(5.0, min(body.time_limit, 300.0)))
+            tt.college_revision = college.revision
             if tt.sessions:
                 store.set_timetable(org, tt, action=f"Generated timetable ({len(tt.sessions)} classes)",
                                     source="generate", actor=actor)
@@ -275,11 +291,15 @@ def _timetable_out(ctx: Ctx) -> TimetableOut:
     if tt is None:
         raise HTTPException(404, "No timetable generated yet")
     college = ctx.state.college
-    quality = score(college, tt.sessions, tt.lunches) if tt.sessions else None
-    violations = validate(college, tt.sessions, tt.lunches) if tt.sessions else []
+    stale = tt.college_revision != college.revision
+    if stale:  # the data it was built from has changed: don't score it against new data
+        quality, violations = None, []
+    else:
+        quality = score(college, tt.sessions, tt.lunches) if tt.sessions else None
+        violations = validate(college, tt.sessions, tt.lunches) if tt.sessions else []
     if ctx.member.role not in ("admin", "coordinator"):
         tt = tt.model_copy(update={"sessions": visible_sessions(ctx.member, college, tt)})
-    return TimetableOut(timetable=tt, quality=quality, violations=violations)
+    return TimetableOut(timetable=tt, quality=quality, violations=violations, stale=stale)
 
 
 @app.get("/api/orgs/{org}/timetable", response_model=TimetableOut)
@@ -317,9 +337,12 @@ class AuditOut(BaseModel):
     can_undo: bool
 
 
-def _current(ctx: Ctx):
+def _current(ctx: Ctx, for_edit: bool = False):
     if ctx.state.timetable is None or not ctx.state.timetable.sessions:
         raise HTTPException(404, "No timetable generated yet")
+    if for_edit and ctx.state.timetable.college_revision != ctx.state.college.revision:
+        raise HTTPException(409, "The college data changed since this timetable was generated. "
+                                 "Ask the College Admin to regenerate it first.")
     return ctx.state
 
 
@@ -332,14 +355,14 @@ def _session(state, session_id: str):
 
 @app.get("/api/orgs/{org}/timetable/sessions/{session_id}/options", response_model=list[MoveOption])
 def get_move_options(session_id: str, ctx: Ctx = Depends(org_ctx)) -> list[MoveOption]:
-    state = _current(ctx)
+    state = _current(ctx, for_edit=True)
     allow(can_edit_weekly(ctx.member, state.college, _session(state, session_id)))
     return move_options(state.college, state.timetable, session_id)
 
 
 @app.post("/api/orgs/{org}/proposals", response_model=ProposalOut, status_code=201)
 def create_proposal(body: ProposalRequest, ctx: Ctx = Depends(org_ctx)) -> ProposalOut:
-    state = _current(ctx)
+    state = _current(ctx, for_edit=True)
     moved = _session(state, body.session_id)
     allow(can_edit_weekly(ctx.member, state.college, moved))
     if body.day not in state.college.days:
@@ -368,7 +391,7 @@ def create_proposal(body: ProposalRequest, ctx: Ctx = Depends(org_ctx)) -> Propo
 
 @app.post("/api/orgs/{org}/proposals/{proposal_id}/apply", response_model=TimetableOut)
 def apply_proposal(proposal_id: str, ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
-    state = _current(ctx)
+    state = _current(ctx, for_edit=True)
     p = state.proposals.get(proposal_id)
     if p is None or p.based_on != state.version:
         store.pop_proposal(state.id, proposal_id)
@@ -451,14 +474,14 @@ def get_week(start: str, ctx: Ctx = Depends(org_ctx)) -> WeekOut:
 
 @app.get("/api/orgs/{org}/timetable/sessions/{session_id}/day-options", response_model=list[MoveOption])
 def get_day_options(session_id: str, date: str, to_date: str, ctx: Ctx = Depends(org_ctx)) -> list[MoveOption]:
-    state = _current(ctx)
+    state = _current(ctx, for_edit=True)
     allow(can_edit_one_day(ctx.member, state.college, _session(state, session_id)))
     return day_options(state.college, state.timetable, session_id, date, to_date)
 
 
 @app.post("/api/orgs/{org}/overrides", response_model=OverrideOut, status_code=201)
 def create_override(body: OverrideRequest, ctx: Ctx = Depends(org_ctx)) -> OverrideOut:
-    state = _current(ctx)
+    state = _current(ctx, for_edit=True)
     allow(can_edit_one_day(ctx.member, state.college, _session(state, body.session_id)))
     new, message, action = add_override(state.college, state.timetable, body.session_id, body.date, body.kind,
                                         body.to_date, body.start_period, body.reason, actor=ctx.user.name)
@@ -471,7 +494,7 @@ def create_override(body: OverrideRequest, ctx: Ctx = Depends(org_ctx)) -> Overr
 
 @app.delete("/api/orgs/{org}/overrides/{override_id}", response_model=OverrideOut)
 def delete_override(override_id: str, ctx: Ctx = Depends(org_ctx)) -> OverrideOut:
-    state = _current(ctx)
+    state = _current(ctx, for_edit=True)
     ov = next((o for o in state.timetable.overrides if o.id == override_id), None)
     if ov is None:
         raise HTTPException(404, "That change no longer exists.")
@@ -481,3 +504,165 @@ def delete_override(override_id: str, ctx: Ctx = Depends(org_ctx)) -> OverrideOu
         raise HTTPException(409, message)
     store.set_timetable(state.id, new, action=message, source="one-day", actor=ctx.user.name)
     return OverrideOut(message=message + ".", timetable=_timetable_out(ctx))
+
+
+# ---------------------------------------------------------------------------
+# Setup: college settings (Admin), departments + shared rooms (Admin),
+# one department's data (its Coordinator or the Admin), suggestions, Ready flow
+# ---------------------------------------------------------------------------
+
+class SetupSaved(BaseModel):
+    college: College
+    problems: list[str]
+    warnings: list[str]
+
+
+class DepartmentsRequest(BaseModel):
+    departments: list[Department]
+    shared_venues: list[Venue]
+
+
+class SuggestRequest(BaseModel):
+    allotment_ids: list[str] = []  # empty = every class of the department without a teacher
+
+
+class AssignRequest(BaseModel):
+    assignments: dict[str, str | None]  # allotment id -> teacher id
+
+
+class ReadyRequest(BaseModel):
+    ready: bool
+
+
+class DepartmentReadiness(BaseModel):
+    department_id: str
+    name: str
+    ready: bool
+    by: str
+    at: float | None
+    sections: int
+    teachers: int
+    subjects: int
+    classes: int
+    without_teacher: int
+    students: int
+
+
+def _saved(state, college: College) -> SetupSaved:
+    saved = store.update_college(state.id, college)
+    return SetupSaved(college=saved, problems=check(saved), warnings=warnings(saved))
+
+
+def _dept_access(ctx: Ctx, dept: str) -> None:
+    if dept not in {d.id for d in ctx.state.college.departments}:
+        raise HTTPException(404, "Department not found.")
+    m = ctx.member
+    allow("" if m.role == "admin" or (m.role == "coordinator" and m.department_id == dept)
+          else "Only this department's Coordinator or the College Admin can do this.")
+
+
+@app.get("/api/orgs/{org}/settings", response_model=Settings)
+def get_settings(ctx: Ctx = Depends(org_ctx)) -> Settings:
+    return settings_of(ctx.state.college)
+
+
+@app.put("/api/orgs/{org}/settings", response_model=SetupSaved)
+def put_settings(body: Settings, ctx: Ctx = Depends(org_ctx)) -> SetupSaved:
+    allow(can_manage_college(ctx.member))
+    new, errs = apply_settings(ctx.state.college, body)
+    if new is None:
+        raise HTTPException(422, " ".join(errs))
+    return _saved(ctx.state, new)
+
+
+@app.put("/api/orgs/{org}/departments", response_model=SetupSaved)
+def put_departments(body: DepartmentsRequest, ctx: Ctx = Depends(org_ctx)) -> SetupSaved:
+    allow(can_manage_college(ctx.member))
+    college = ctx.state.college
+    keep = {d.id for d in body.departments}
+    in_use = {s.department_id for s in college.sections} | {t.department_id for t in college.teachers}
+    removed = sorted(in_use - keep)
+    if removed:
+        raise HTTPException(422, f"Department(s) {', '.join(removed)} still have sections or teachers. "
+                                 "Remove those first.")
+    if any(v.department_id for v in body.shared_venues):
+        raise HTTPException(422, "Shared rooms can't belong to a department.")
+    venues = [v for v in college.venues if v.department_id] + body.shared_venues
+    new = college.model_copy(update={"departments": body.departments, "venues": venues})
+    errs = structural_errors(new)
+    if errs:
+        raise HTTPException(422, " ".join(errs))
+    return _saved(ctx.state, new)
+
+
+@app.get("/api/orgs/{org}/departments/{dept}/data", response_model=DeptData)
+def get_dept_data(dept: str, ctx: Ctx = Depends(org_ctx)) -> DeptData:
+    _dept_access(ctx, dept)
+    return dept_slice(ctx.state.college, dept)
+
+
+@app.put("/api/orgs/{org}/departments/{dept}/data", response_model=SetupSaved)
+def put_dept_data(dept: str, body: DeptData, ctx: Ctx = Depends(org_ctx)) -> SetupSaved:
+    _dept_access(ctx, dept)
+    new, errs = merge_dept(ctx.state.college, dept, body, actor=ctx.user.name)
+    if new is None:
+        raise HTTPException(422, " ".join(errs))
+    return _saved(ctx.state, new)
+
+
+@app.post("/api/orgs/{org}/departments/{dept}/suggest", response_model=SuggestResult)
+def suggest_teachers(dept: str, body: SuggestRequest, ctx: Ctx = Depends(org_ctx)) -> SuggestResult:
+    _dept_access(ctx, dept)
+    college = ctx.state.college
+    mine = dept_slice(college, dept).allotments
+    ids = body.allotment_ids or [a.id for a in mine if a.teacher_id is None]
+    if not set(ids) <= {a.id for a in mine}:
+        raise HTTPException(403, "You can only get suggestions for your own department's classes.")
+    return suggest(college, ids)
+
+
+@app.put("/api/orgs/{org}/departments/{dept}/allotments", response_model=SetupSaved)
+def assign_teachers(dept: str, body: AssignRequest, ctx: Ctx = Depends(org_ctx)) -> SetupSaved:
+    """Approve teachers for the department's classes (after reviewing suggestions)."""
+    _dept_access(ctx, dept)
+    college = ctx.state.college
+    mine = {a.id for a in dept_slice(college, dept).allotments}
+    if not set(body.assignments) <= mine:
+        raise HTTPException(403, "You can only assign teachers to your own department's classes.")
+    teachers = {t.id for t in college.teachers}
+    if any(t is not None and t not in teachers for t in body.assignments.values()):
+        raise HTTPException(422, "Unknown teacher.")
+    allotments = [a.model_copy(update={"teacher_id": body.assignments[a.id]}) if a.id in body.assignments else a
+                  for a in college.allotments]
+    return _saved(ctx.state, college.model_copy(update={"allotments": allotments}))
+
+
+@app.post("/api/orgs/{org}/departments/{dept}/ready", response_model=SetupSaved)
+def mark_ready(dept: str, body: ReadyRequest, ctx: Ctx = Depends(org_ctx)) -> SetupSaved:
+    _dept_access(ctx, dept)
+    college = ctx.state.college
+    if body.ready:
+        mine = dept_slice(college, dept)
+        missing = [a for a in mine.allotments if a.teacher_id is None]
+        if not mine.sections:
+            raise HTTPException(422, "Add this department's sections first.")
+        if missing:
+            raise HTTPException(422, f"{len(missing)} class(es) still have no teacher.")
+    return _saved(ctx.state, set_ready(college, dept, body.ready, ctx.user.name))
+
+
+@app.get("/api/orgs/{org}/readiness", response_model=list[DepartmentReadiness])
+def readiness(ctx: Ctx = Depends(org_ctx)) -> list[DepartmentReadiness]:
+    allow("" if ctx.member.role in ("admin", "coordinator") else "Only staff can see department readiness.")
+    college = ctx.state.college
+    out = []
+    for d in college.departments:
+        sl = dept_slice(college, d.id)
+        st = college.department_status.get(d.id)
+        out.append(DepartmentReadiness(
+            department_id=d.id, name=d.name, ready=bool(st and st.ready), by=st.by if st else "",
+            at=st.at if st else None, sections=len(sl.sections), teachers=len(sl.teachers),
+            subjects=len(sl.subjects), classes=len(sl.allotments),
+            without_teacher=sum(1 for a in sl.allotments if a.teacher_id is None), students=len(sl.students),
+        ))
+    return out

@@ -105,6 +105,10 @@ class Store:
         with self._lock:
             return self._orgs.get(org)
 
+    def org_ids(self) -> list[str]:
+        with self._lock:
+            return list(self._orgs)
+
     def create_org(self, name: str, college: College, is_demo: bool = False, slug: str | None = None) -> OrgState:
         with self._lock, SessionLocal() as db:
             base = slug or slugify(name)
@@ -118,12 +122,15 @@ class Store:
             self._orgs[oid] = state
             return state
 
-    def update_college(self, org: str, college: College) -> None:
+    def update_college(self, org: str, college: College) -> College:
+        """Save new college data. Bumps the revision so older timetables are marked out of date."""
         with self._lock, SessionLocal() as db:
+            college = college.model_copy(update={"revision": self._orgs[org].college.revision + 1})
             row = db.get(OrgRow, org)
             row.college = college.model_dump(mode="json")
             db.commit()
             self._orgs[org].college = college
+            return college
 
     # ---- timetable + audit --------------------------------------------
     def _persist_timetable(self, db, state: OrgState) -> None:

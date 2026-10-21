@@ -34,6 +34,7 @@ class DayInfo(BaseModel):
     day: str
     label: str  # "Thu 23 Oct"
     working: bool
+    holiday: str | None = None  # holiday name: no classes that day
 
 
 def weekday(college: College, d: str) -> str | None:
@@ -55,7 +56,8 @@ def week(college: College, start: str) -> list[DayInfo]:
         d = (monday + timedelta(days=i)).isoformat()
         wd = WEEKDAYS[i]
         if wd in college.days:
-            out.append(DayInfo(date=d, day=wd, label=label(d), working=True))
+            hol = next((h.label for h in college.holidays if h.date == d), None)
+            out.append(DayInfo(date=d, day=wd, label=label(d), working=hol is None, holiday=hol))
     return out
 
 
@@ -68,6 +70,8 @@ def _placed(college: College, s: Session, day: str, p: int, venue_id: str) -> Se
 
 
 def occurrences(college: College, tt: Timetable, d: str) -> list[Occurrence]:
+    if any(h.date == d for h in college.holidays):
+        return []  # holiday: no classes (one-day moves onto it are refused)
     wd = weekday(college, d)
     by_id = {s.id: s for s in tt.sessions}
     out: list[Occurrence] = []
@@ -106,7 +110,7 @@ def day_options(college: College, tt: Timetable, session_id: str, from_date: str
     """Free slots on ``to_date`` for moving one occurrence. Anything that would disturb others is blocked."""
     s = next(x for x in tt.sessions if x.id == session_id)
     wd = weekday(college, to_date)
-    if wd is None:
+    if wd is None or any(h.date == to_date for h in college.holidays):
         return []
     others = [x for x in active(college, tt, to_date) if x.id != s.id]
     out = []

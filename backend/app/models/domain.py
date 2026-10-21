@@ -214,6 +214,17 @@ class TeacherSubject(BaseModel):
     preference: int = 2
 
 
+class Holiday(BaseModel):
+    date: str  # YYYY-MM-DD
+    label: str
+
+
+class DepartmentStatus(BaseModel):
+    ready: bool = False
+    at: float | None = None
+    by: str = ""
+
+
 class College(BaseModel):
     id: str
     name: str
@@ -229,6 +240,11 @@ class College(BaseModel):
     students: list[Student] = Field(default_factory=list)
     elective_slots: list[ElectiveSlot] = Field(default_factory=list)
     teacher_subjects: list[TeacherSubject] = Field(default_factory=list)
+    holidays: list[Holiday] = Field(default_factory=list)
+    semester_start: str | None = None  # YYYY-MM-DD (tentative, editable)
+    semester_end: str | None = None
+    department_status: dict[str, DepartmentStatus] = Field(default_factory=dict)
+    revision: int = 0  # bumped on every data change; a timetable remembers the revision it was built from
 
     # ---- lookups -------------------------------------------------------
     def shift(self, shift_id: str) -> Shift:
@@ -309,6 +325,7 @@ class Timetable(BaseModel):
     sessions: list[Session] = Field(default_factory=list)
     lunches: list[Lunch] = Field(default_factory=list)
     overrides: list[Override] = Field(default_factory=list)
+    college_revision: int = 0  # College.revision this timetable was generated from
     messages: list[str] = Field(default_factory=list)  # blocking problems
     warnings: list[str] = Field(default_factory=list)  # worth knowing, not blocking
     solve_seconds: float = 0.0

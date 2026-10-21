@@ -75,7 +75,30 @@ def create_user(email: str, name: str, password: str) -> UserRow:
 
 def authenticate(email: str, password: str) -> UserRow | None:
     user = find_user(email)
-    return user if user and verify_password(password, user.password_hash) else None
+    if user is None:
+        return _first_student_login(email, password)
+    return user if verify_password(password, user.password_hash) else None
+
+
+def _first_student_login(email: str, password: str) -> UserRow | None:
+    """Students from an uploaded list log in with their email; the first password is their roll number.
+
+    The account is created on that first login, so importing hundreds of students stays instant.
+    """
+    email = normalize_email(email)
+    for org_id in store.org_ids():
+        college = store.org(org_id).college
+        st = next((s for s in college.students if s.email.lower() == email), None)
+        if st and password.strip().lower() == st.roll_no.lower():
+            with SessionLocal() as db:
+                user = UserRow(email=email, name=st.name, password_hash=hash_password(password.strip()))
+                db.add(user)
+                db.flush()
+                db.add(MembershipRow(user_id=user.id, org_id=org_id, role="student", section_id=st.section_id,
+                                     batch_id=st.batch_id))
+                db.commit()
+                return user
+    return None
 
 
 def _member(row: MembershipRow, user: UserRow) -> Member:
