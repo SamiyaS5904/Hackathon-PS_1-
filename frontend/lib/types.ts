@@ -24,7 +24,9 @@ export interface Subject {
 export interface College {
   id: string; name: string; days: string[]; lab_periods: number; shifts: Shift[];
   departments: Department[]; venues: Venue[]; sections: Section[]; teachers: Teacher[]; subjects: Subject[];
+  students: Student[];
 }
+export interface Student { id: string; roll_no: string; name: string; email: string; section_id: string; batch_id: string | null }
 
 export interface Session {
   id: string; allotment_id: string; subject_id: string; teacher_id: string; venue_id: string;
@@ -70,3 +72,15 @@ export interface Occurrence { session: Session; date: string; status: Occurrence
 export interface DayInfo { date: string; day: string; label: string; working: boolean }
 export interface WeekOut { days: DayInfo[]; occurrences: Occurrence[] }
 export interface OverrideOut { message: string; timetable: TimetableOut }
+
+export type Role = "admin" | "coordinator" | "teacher" | "student";
+export interface Member {
+  user_id: string; org_id: string; org_name: string; name: string; email: string; role: Role;
+  department_id: string | null; teacher_id: string | null; section_id: string | null; batch_id: string | null;
+}
+export interface AuthOut { token: string; user_id: string; name: string; email: string; memberships: Member[] }
+export interface InviteOut {
+  token: string; org_id: string; org_name: string; email: string; role: Role;
+  department_id: string | null; teacher_id: string | null; status: string;
+}
+export interface OrgInfo { id: string; name: string; is_demo: boolean; role: Role; student_accounts: number }

@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, ApiError } from "./api";
+import { useAuth } from "./auth";
 import type { College, Job, Precheck, TimetableOut } from "./types";
 
 export const GENERATE_SECONDS = 45;
@@ -28,6 +29,8 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+  const { member } = useAuth();
+  const orgId = member?.org_id;
 
   const loadTimetable = useCallback(async () => {
     try {
@@ -54,11 +57,13 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
   }, [loadTimetable]);
 
   useEffect(() => {
+    if (!orgId) return;
+    setData(null);
     reload();
     return () => {
       if (timer.current) clearInterval(timer.current);
     };
-  }, [reload]);
+  }, [reload, orgId]);
 
   const generate = useCallback(async () => {
     setError(null);

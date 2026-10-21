@@ -1,14 +1,36 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, Info } from "lucide-react";
+import { AlertTriangle, ArrowRight, Info, Loader2, Sparkles } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
+import { api } from "@/lib/api";
+import { isStaff, useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
 
 export default function Dashboard() {
   const { college, data, precheck, loading, error, reload } = useTimetable();
+  const { role } = useAuth();
+  const router = useRouter();
+  const [sampleBusy, setSampleBusy] = useState(false);
+
+  // Teachers and students go straight to their own timetable.
+  useEffect(() => {
+    if (role && !isStaff(role)) router.replace("/timetable");
+  }, [role, router]);
+
+  const loadSample = async () => {
+    setSampleBusy(true);
+    try {
+      await api.loadSample();
+      await reload();
+    } finally {
+      setSampleBusy(false);
+    }
+  };
 
   if (loading || !college) {
     return (
@@ -34,7 +56,22 @@ export default function Dashboard() {
       {/* Core first: the next step is always the first thing on the page. */}
       <Card className="mb-6 p-6">
         <p className="text-xs font-medium uppercase tracking-wide text-accent-text">Next step</p>
-        {problems.length > 0 ? (
+        {college.sections.length === 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="mt-1 text-lg font-semibold">Add your college&apos;s data</h2>
+              <p className="mt-1 max-w-xl text-sm text-muted">
+                The setup wizard and Excel import are coming next. For now, load a realistic sample college
+                (4 departments, 2 shifts, 12 sections) to try everything.
+              </p>
+            </div>
+            {role === "admin" && (
+              <Button variant="primary" onClick={loadSample} disabled={sampleBusy}>
+                {sampleBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Load sample college
+              </Button>
+            )}
+          </div>
+        ) : problems.length > 0 ? (
           <>
             <h2 className="mt-1 text-lg font-semibold">Fix {problems.length} data problem(s) before generating</h2>
             <ul className="mt-3 space-y-1.5 text-sm">
@@ -50,7 +87,7 @@ export default function Dashboard() {
             <div>
               <h2 className="mt-1 text-lg font-semibold">Your timetable is ready</h2>
               <p className="mt-1 text-sm text-muted">
-                Review it by section, teacher or room. Editing and publishing come next.
+                Review it by section, teacher or room, and drag any class to change it safely.
               </p>
             </div>
             <Link href="/timetable">
@@ -67,7 +104,11 @@ export default function Dashboard() {
                 All data checks passed. Generation takes under a minute.
               </p>
             </div>
-            <GenerateButton />
+            {role === "admin" ? (
+              <GenerateButton />
+            ) : (
+              <span className="text-sm text-muted">The College Admin generates the timetable.</span>
+            )}
           </div>
         )}
       </Card>

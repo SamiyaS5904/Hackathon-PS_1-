@@ -11,6 +11,7 @@ import { useMoveEditor } from "@/components/timetable/useMoveEditor";
 import { type OccurrenceMeta, TimetableGrid } from "@/components/timetable/TimetableGrid";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
+import { isStaff, useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
 import type { Occurrence, OverrideOut, Session, ViewKind, WeekOut } from "@/lib/types";
 
@@ -30,11 +31,19 @@ const VIEWS: { id: ViewKind; label: string }[] = [
 
 export default function TimetablePage() {
   const { college, data, loading, error, reload } = useTimetable();
-  const [view, setView] = useState<ViewKind>("section");
-  const [picked, setPicked] = useState<Record<ViewKind, string>>({ section: "", teacher: "", venue: "" });
+  const { role, member } = useAuth();
+  const isStudent = role === "student";
+  const isTeacher = role === "teacher";
+  // Teachers open on their own timetable, students on their section.
+  const [view, setView] = useState<ViewKind>(isTeacher && member?.teacher_id ? "teacher" : "section");
+  const [picked, setPicked] = useState<Record<ViewKind, string>>({
+    section: member?.section_id ?? "", teacher: member?.teacher_id ?? "", venue: "",
+  });
   const editor = useMoveEditor();
   const { setData } = useTimetable();
-  const [mode, setMode] = useState<"plan" | "week">("plan");
+  // Students and teachers care about real dates (cancellations, one-day moves) first.
+  const [mode, setMode] = useState<"plan" | "week">(isStaff(role) ? "plan" : "week");
+  const canDrag = isStaff(role);
   const [weekStart, setWeekStart] = useState(() => isoDate(new Date()));
   const [week, setWeek] = useState<WeekOut | null>(null);
   const [selected, setSelected] = useState<Occurrence | null>(null);
@@ -75,11 +84,15 @@ export default function TimetablePage() {
   const options = useMemo(() => {
     if (!college) return [];
     const dept = new Map(college.departments.map((d) => [d.id, d.short]));
+    // Teachers only see their own department's sections and colleagues.
+    const mineOnly = (d: string) => !isTeacher || d === member?.department_id;
     const list =
       view === "section"
-        ? college.sections.map((s) => ({ id: s.id, label: s.name, group: dept.get(s.department_id) ?? "" }))
+        ? college.sections.filter((s) => mineOnly(s.department_id))
+            .map((s) => ({ id: s.id, label: s.name, group: dept.get(s.department_id) ?? "" }))
         : view === "teacher"
-          ? college.teachers.map((t) => ({ id: t.id, label: t.name, group: dept.get(t.department_id) ?? "" }))
+          ? college.teachers.filter((t) => mineOnly(t.department_id) || t.id === member?.teacher_id)
+              .map((t) => ({ id: t.id, label: t.name, group: dept.get(t.department_id) ?? "" }))
           : college.venues.map((v) => ({
               id: v.id,
               label: `${v.name} (${v.capacity})`,
@@ -88,7 +101,7 @@ export default function TimetablePage() {
     const groups = new Map<string, typeof list>();
     for (const o of list) groups.set(o.group, [...(groups.get(o.group) ?? []), o]);
     return [...groups.entries()];
-  }, [college, view]);
+  }, [college, view, isTeacher, member]);
 
   const entityId = picked[view] || options[0]?.[1][0]?.id || "";
 
@@ -112,8 +125,8 @@ export default function TimetablePage() {
   return (
     <div className="mx-auto max-w-7xl">
       <PageHeader
-        title="Timetable"
-        subtitle={college ? `${college.name} · weekly timetable` : undefined}
+        title={isStaff(role) ? "Timetable" : "My timetable"}
+        subtitle={college ? `${college.name}${isStudent ? ` · ${studentLabel(college, member)}` : " · weekly timetable"}` : undefined}
         actions={
           <>
             {data && (
@@ -121,7 +134,7 @@ export default function TimetablePage() {
                 <Printer size={16} aria-hidden /> Print
               </Button>
             )}
-            <GenerateButton />
+            {role === "admin" && <GenerateButton />}
           </>
         }
       />
@@ -144,9 +157,10 @@ export default function TimetablePage() {
         </Card>
       ) : (
         <>
-          <HealthStrip data={data} />
+          {isStaff(role) && <HealthStrip data={data} />}
 
           <div className="no-print mb-3 flex flex-wrap items-center gap-3">
+            {!isStudent && (<>
             <div className="inline-flex rounded-lg border border-border bg-surface p-0.5" role="tablist" aria-label="View by">
               {VIEWS.map((v) => (
                 <button
@@ -183,6 +197,7 @@ export default function TimetablePage() {
               ))}
             </select>
             <span className="text-sm text-muted">{subtitle}</span>
+            </>)}
 
             <div className="ml-auto flex items-center gap-2">
               {mode === "week" && week && (
@@ -214,20 +229,24 @@ export default function TimetablePage() {
           <EditBar
             editor={editor}
             college={college}
-            hint={mode === "week"
-              ? "Real dates. Click a class to cancel or reschedule it for that day only. The weekly plan stays as it is."
-              : undefined}
+            hint={HINTS[role ?? "student"][mode]}
           />
           {mode === "week" ? (
             weekView ? (
               <TimetableGrid college={college} timetable={weekView.timetable} view={view} entityId={entityId}
                 dayLabels={weekView.dayLabels} meta={weekView.meta}
-                onSelect={(s) => setSelected(weekView.byDisplayId.get(s.id) ?? null)} />
+                onSelect={isStudent ? undefined : (s) => {
+                  const occ = weekView.byDisplayId.get(s.id) ?? null;
+                  // Teachers can change only their own lectures; staff any (the server checks too).
+                  if (occ && (isStaff(role) || occ.session.teacher_id === member?.teacher_id)) setSelected(occ);
+                  else if (occ) editor.setToast({ text: "You can only change your own lectures.", tone: "danger" });
+                }} />
             ) : (
               <Skeleton className="h-[520px] w-full" />
             )
           ) : (
-            <TimetableGrid college={college} timetable={data.timetable} view={view} entityId={entityId} edit={editor.edit} />
+            <TimetableGrid college={college} timetable={data.timetable} view={view} entityId={entityId}
+              edit={canDrag ? editor.edit : undefined} />
           )}
           {selected && week && (
             <OneDayPanel occurrence={selected} days={week.days} college={college} onDone={onOneDayDone}
@@ -237,6 +256,34 @@ export default function TimetablePage() {
       )}
     </div>
   );
+}
+
+const HINTS: Record<string, Record<"plan" | "week", string | undefined>> = {
+  admin: {
+    plan: undefined,
+    week: "Real dates. Click a class to cancel or reschedule it for that day only. The weekly plan stays as it is.",
+  },
+  coordinator: {
+    plan: undefined,
+    week: "Real dates. Click a class to cancel or reschedule it for that day only. The weekly plan stays as it is.",
+  },
+  teacher: {
+    plan: "Your usual week. To change it permanently, ask your Department Coordinator. For a one-day change, open This week.",
+    week: "Click one of your lectures to cancel it or move it for that day. Students see the change straight away.",
+  },
+  student: {
+    plan: "Your usual weekly timetable.",
+    week: "Your classes this week, including any one-day changes by your teachers.",
+  },
+};
+
+function studentLabel(
+  college: NonNullable<ReturnType<typeof useTimetable>["college"]>,
+  member: ReturnType<typeof useAuth>["member"],
+): string {
+  const sec = college.sections.find((x) => x.id === member?.section_id);
+  const batch = sec?.batches.find((b) => b.id === member?.batch_id);
+  return sec ? `${sec.name}${batch ? ` · lab batch ${batch.name}` : ""}` : "";
 }
 
 function EditBar({
@@ -308,6 +355,15 @@ function EditBar({
 }
 
 function EmptyState() {
+  const { role } = useAuth();
+  if (role !== "admin") {
+    return (
+      <Card className="flex flex-col items-center px-6 py-16 text-center">
+        <h2 className="text-lg font-semibold">No timetable yet</h2>
+        <p className="mt-2 max-w-md text-sm text-muted">Your College Admin hasn&apos;t generated the timetable yet. Check back soon.</p>
+      </Card>
+    );
+  }
   return (
     <Card className="flex flex-col items-center px-6 py-16 text-center">
       <h2 className="text-lg font-semibold">No timetable yet</h2>

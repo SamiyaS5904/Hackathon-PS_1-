@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
-import { AppShell } from "@/components/layout/AppShell";
-import { TimetableProvider } from "@/lib/timetable-context";
+import { Gate } from "@/components/layout/Gate";
+import { AuthProvider } from "@/lib/auth";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -16,9 +16,9 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <TimetableProvider>
-          <AppShell>{children}</AppShell>
-        </TimetableProvider>
+        <AuthProvider>
+          <Gate>{children}</Gate>
+        </AuthProvider>
       </body>
     </html>
   );
