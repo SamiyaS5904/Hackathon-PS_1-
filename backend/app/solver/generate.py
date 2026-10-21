@@ -52,6 +52,21 @@ W_FOREIGN_ROOM = 2
 W_ROOM_SPREAD = 3
 W_STUDENT_PEAK = 2
 W_LIGHT_DAY = 6
+W_RULE = 2  # x rule weight (1-10) for "try" rules
+
+
+def _window_rules(college: College, section_ids: list[str], day: str, begin: int, end: int) -> int | None:
+    """None if a Must "no classes" rule forbids this time for these sections, else the Try-rule cost."""
+    cost = 0
+    secs = [college.section(i) for i in section_ids]
+    for rule in college.rules:
+        if not rule.enabled or rule.kind != "no_classes" or not rule.blocks(day, begin, end):
+            continue
+        if any(rule.applies_to(s) for s in secs):
+            if rule.mode == "must":
+                return None
+            cost += W_RULE * rule.weight * 3
+    return cost
 
 
 @dataclass(frozen=True)
@@ -385,6 +400,9 @@ def _solve(
                     is_busy(f"g:{g}", day, begin, end) for g in u.groups
                 ):
                     continue
+                rule_cost = _window_rules(college, u.section_ids, day, begin, end)
+                if rule_cost is None:  # a Must rule forbids this time
+                    continue
                 points = [c for c in checkpoints if begin <= c < end]
                 for vid, cost in venues:
                     if frozen and not any(
@@ -413,8 +431,8 @@ def _solve(
                     if vid is not None and u.kind == Kind.lecture:
                         for sid in u.section_ids:
                             room_use[(sid, vid)].append(var)
-                    if cost:
-                        cost_terms.append(cost * var)
+                    if cost or rule_cost:
+                        cost_terms.append((cost + rule_cost) * var)
 
     # Elective slots (times-only stage): one variable per day/start; every group meets then.
     z: dict[tuple[int, int, int], cp_model.IntVar] = {}
@@ -426,7 +444,12 @@ def _solve(
             vars_today = []
             for s in _starts(college, eu.shift_id, eu.years, 1, eu.teacher_ids, day):
                 begin, end = shift.periods[s].start_min, shift.periods[s].end_min
+                rule_cost = _window_rules(college, eu.slot.section_ids, day, begin, end)
+                if rule_cost is None:
+                    continue
                 var = model.NewBoolVar(f"e{ei}_d{d}_s{s}")
+                if rule_cost:
+                    cost_terms.append(rule_cost * var)
                 z[(ei, d, s)] = var
                 vars_today.append(var)
                 points = [c for c in checkpoints if begin <= c < end]
@@ -532,6 +555,22 @@ def _solve(
             used = True
         if used:
             cost_terms.append(W_TEACHER_PEAK * peak)
+
+    # Rules: at most N periods a day for the sections in scope.
+    for rule in (r for r in college.rules if r.enabled and r.kind == "max_per_day" and r.max_periods):
+        for sec in (s for s in college.sections if rule.applies_to(s)):
+            for g in group_ids(sec):
+                for d in range(len(days)):
+                    items = group_day.get((g, d))
+                    if not items:
+                        continue
+                    load = sum(v * ln for v, ln in items) + fixed_load.get((f"g:{g}", d), 0)
+                    if rule.mode == "must":
+                        model.Add(load <= rule.max_periods)
+                    else:
+                        extra = model.NewIntVar(0, 50, "")
+                        model.Add(extra >= load - rule.max_periods)
+                        cost_terms.append(W_RULE * rule.weight * extra)
 
     # Even student weeks: lighten the heaviest day and avoid single-class days.
     for sec in college.sections:

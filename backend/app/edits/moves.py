@@ -85,6 +85,9 @@ def check_slot(
         opt.reason = f"{teacher.name} has blocked this time."
     elif any(br for br in shift.year_breaks if set(br.years) & years and begin < _m(br.end) and _m(br.start) < end):
         opt.reason = "Overlaps a fixed break."
+    elif (rule := next((r for r in college.rules if r.enabled and r.mode == "must" and r.blocks(day, begin, end)
+                        and any(r.applies_to(college.section(i)) for i in s.section_ids)), None)):
+        opt.reason = f"Not allowed by the rule '{rule.name}'."
     else:
         clash = [
             o for o in others

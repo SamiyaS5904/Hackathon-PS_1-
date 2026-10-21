@@ -214,6 +214,39 @@ class TeacherSubject(BaseModel):
     preference: int = 2
 
 
+class Rule(BaseModel):
+    """A rule card. kind="no_classes": no classes on ``days`` (all if empty) between ``after`` and ``before``
+    (either may be empty = start/end of day). kind="max_per_day": at most ``max_periods`` periods a day.
+
+    Applies to the sections of ``department_id`` (all departments if None) and ``years`` (all if empty).
+    mode="must" is never broken; mode="try" is a preference with ``weight`` (1-10).
+    """
+
+    id: str
+    name: str
+    kind: str  # "no_classes" | "max_per_day"
+    mode: str = "must"  # "must" | "try"
+    weight: int = 5
+    enabled: bool = True
+    department_id: str | None = None
+    years: list[int] = Field(default_factory=list)
+    days: list[str] = Field(default_factory=list)
+    after: str | None = None
+    before: str | None = None
+    max_periods: int | None = None
+
+    def applies_to(self, section) -> bool:
+        return (self.department_id in (None, section.department_id)) and (not self.years or section.year in self.years)
+
+    def blocks(self, day: str, begin: int, end: int) -> bool:
+        """For no_classes: does [begin, end) on ``day`` fall in the rule's window?"""
+        if self.kind != "no_classes" or (self.days and day not in self.days):
+            return False
+        lo = to_minutes(self.after) if self.after else 0
+        hi = to_minutes(self.before) if self.before else 24 * 60
+        return begin < hi and lo < end
+
+
 class Holiday(BaseModel):
     date: str  # YYYY-MM-DD
     label: str
@@ -241,6 +274,7 @@ class College(BaseModel):
     elective_slots: list[ElectiveSlot] = Field(default_factory=list)
     teacher_subjects: list[TeacherSubject] = Field(default_factory=list)
     holidays: list[Holiday] = Field(default_factory=list)
+    rules: list[Rule] = Field(default_factory=list)
     semester_start: str | None = None  # YYYY-MM-DD (tentative, editable)
     semester_end: str | None = None
     department_status: dict[str, DepartmentStatus] = Field(default_factory=dict)

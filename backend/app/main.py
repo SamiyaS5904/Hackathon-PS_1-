@@ -35,7 +35,7 @@ from app.edits.oneday import DayInfo, Occurrence, add_override, day_options, occ
 from app.io.excel import RowError
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
-from app.models.domain import College, Department, Timetable, Venue
+from app.models.domain import College, Department, Rule, TimeBlock, Timetable, Venue
 from app.permissions import (
     can_edit_one_day,
     can_edit_weekly,
@@ -709,3 +709,98 @@ async def import_excel(dept: str, file: UploadFile, commit: bool = False, ctx: C
         return ImportOut(errors=[], counts=result.counts, problems=check(new), warnings=warnings(new))
     saved = store.update_college(ctx.state.id, new)
     return ImportOut(errors=[], counts=result.counts, problems=check(saved), warnings=warnings(saved), saved=True)
+
+
+# ---------------------------------------------------------------------------
+# Rules (Admin: college-wide; Coordinator: own department) and teacher block times
+# ---------------------------------------------------------------------------
+
+class RulesRequest(BaseModel):
+    rules: list[Rule]
+
+
+class BlockedRequest(BaseModel):
+    blocked: list[TimeBlock]
+
+
+class BlockedOut(BaseModel):
+    blocked: list[TimeBlock]
+    message: str
+
+
+def _rule_errors(college: College, rules: list[Rule]) -> list[str]:
+    errs = []
+    depts = {d.id for d in college.departments}
+    for r in rules:
+        if r.kind not in ("no_classes", "max_per_day"):
+            errs.append(f"Rule '{r.name}': unknown kind.")
+        if r.mode not in ("must", "try") or not 1 <= r.weight <= 10:
+            errs.append(f"Rule '{r.name}': mode must be must/try and weight 1-10.")
+        if r.department_id and r.department_id not in depts:
+            errs.append(f"Rule '{r.name}': unknown department.")
+        if r.kind == "max_per_day" and not (r.max_periods and r.max_periods > 0):
+            errs.append(f"Rule '{r.name}': set the maximum periods per day.")
+        if r.kind == "no_classes" and not (r.after or r.before or r.days):
+            errs.append(f"Rule '{r.name}': choose the days and/or times with no classes.")
+        if any(d not in college.days for d in r.days):
+            errs.append(f"Rule '{r.name}': uses a day that isn't a working day.")
+    if len({r.id for r in rules}) != len(rules):
+        errs.append("Two rules have the same id.")
+    return errs
+
+
+@app.get("/api/orgs/{org}/rules", response_model=list[Rule])
+def get_rules(ctx: Ctx = Depends(org_ctx)) -> list[Rule]:
+    return ctx.state.college.rules
+
+
+@app.put("/api/orgs/{org}/rules", response_model=SetupSaved)
+def put_rules(body: RulesRequest, ctx: Ctx = Depends(org_ctx)) -> SetupSaved:
+    m, college = ctx.member, ctx.state.college
+    if m.role == "coordinator":
+        # Coordinators may only add / change / remove their own department's rules.
+        theirs = lambda rs: sorted((r.model_dump_json() for r in rs if r.department_id != m.department_id))  # noqa: E731
+        if theirs(body.rules) != theirs(college.rules):
+            raise HTTPException(403, "Coordinators can only change their own department's rules.")
+    else:
+        allow(can_manage_college(m))
+    errs = _rule_errors(college, body.rules)
+    if errs:
+        raise HTTPException(422, " ".join(errs))
+    return _saved(ctx.state, college.model_copy(update={"rules": body.rules}))
+
+
+@app.get("/api/orgs/{org}/me/blocked", response_model=BlockedOut)
+def my_blocked(ctx: Ctx = Depends(org_ctx)) -> BlockedOut:
+    tid = ctx.member.teacher_id
+    if ctx.member.role != "teacher" or not tid:
+        raise HTTPException(403, "Only teachers linked to the timetable have block times.")
+    return BlockedOut(blocked=ctx.state.college.teacher(tid).blocked, message="")
+
+
+@app.put("/api/orgs/{org}/me/blocked", response_model=BlockedOut)
+def set_my_blocked(body: BlockedRequest, ctx: Ctx = Depends(org_ctx)) -> BlockedOut:
+    """Teachers block times they can't teach. Confirmed instantly when it doesn't clash with their lectures."""
+    tid = ctx.member.teacher_id
+    if ctx.member.role != "teacher" or not tid:
+        raise HTTPException(403, "Only teachers linked to the timetable can set block times.")
+    college = ctx.state.college
+    for b in body.blocked:
+        if b.day not in college.days or not (b.start < b.end):
+            raise HTTPException(422, f"Block {b.day} {b.start}-{b.end} isn't a valid working-day time range.")
+    tt = ctx.state.timetable
+    if tt and tt.sessions:
+        def _min(t: str) -> int:
+            h, mm = t.split(":")
+            return int(h) * 60 + int(mm)
+        for b in body.blocked:
+            hit = next((s for s in tt.sessions if s.teacher_id == tid and s.day == b.day
+                        and _min(s.start) < _min(b.end) and _min(b.start) < _min(s.end)), None)
+            if hit:
+                subj = college.subject(hit.subject_id).name
+                raise HTTPException(409, f"You teach {subj} on {hit.day} {hit.start}-{hit.end}. Ask your Department "
+                                         "Coordinator to move it first, or mark a one-day change for a single day.")
+    teachers = [t.model_copy(update={"blocked": body.blocked}) if t.id == tid else t for t in college.teachers]
+    saved = store.update_college(ctx.state.id, college.model_copy(update={"teachers": teachers}), bump=False)
+    return BlockedOut(blocked=saved.teacher(tid).blocked,
+                      message="Saved. Your blocked times are confirmed and the next timetable will respect them.")

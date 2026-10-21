@@ -222,6 +222,34 @@ def validate(
                 if b0 < _m(p.end) and _m(p.start) < b1:
                     bad("class_during_lunch", f"{subjects[s.subject_id].name} on {s.day} is during year {year} lunch.", s)
 
+    # Must rules (rule cards set by the Admin / Coordinators).
+    for rule in college.rules:
+        if not rule.enabled or rule.mode != "must":
+            continue
+        if rule.kind == "no_classes":
+            for s in sessions:
+                if s.id not in interval:
+                    continue
+                secs = [sections[i] for i in (slots[s.elective_slot_id].section_ids if s.elective_slot_id in slots
+                                             else s.section_ids) if i in sections]
+                if any(rule.applies_to(x) for x in secs) and rule.blocks(s.day, *interval[s.id]):
+                    bad("rule_broken", f"{subjects[s.subject_id].name} on {s.day} {s.start} breaks the rule "
+                        f"'{rule.name}'.", s)
+        elif rule.kind == "max_per_day" and rule.max_periods:
+            busy: dict[tuple[str, str], set[int]] = defaultdict(set)
+            for s in sessions:
+                for g in groups_of.get(s.id, []):
+                    busy[(g, s.day)].update(range(s.start_period, s.start_period + s.length))
+            for sec in college.sections:
+                if not rule.applies_to(sec):
+                    continue
+                for g in _groups(sec):
+                    for day in college.days:
+                        if len(busy[(g, day)]) > rule.max_periods:
+                            out.append(Violation(type="rule_broken", message=f"{sec.name} has "
+                                                 f"{len(busy[(g, day)])} periods on {day}, more than the rule "
+                                                 f"'{rule.name}' allows ({rule.max_periods})."))
+
     # Teacher daily limit.
     load: dict[tuple[str, str], int] = defaultdict(int)
     for s in sessions:

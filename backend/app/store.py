@@ -122,10 +122,12 @@ class Store:
             self._orgs[oid] = state
             return state
 
-    def update_college(self, org: str, college: College) -> College:
-        """Save new college data. Bumps the revision so older timetables are marked out of date."""
+    def update_college(self, org: str, college: College, bump: bool = True) -> College:
+        """Save new college data. Bumps the revision (older timetables become out of date) unless the
+        change is known to keep the current timetable valid (e.g. a clash-free teacher block time)."""
         with self._lock, SessionLocal() as db:
-            college = college.model_copy(update={"revision": self._orgs[org].college.revision + 1})
+            old_rev = self._orgs[org].college.revision
+            college = college.model_copy(update={"revision": old_rev + 1 if bump else old_rev})
             row = db.get(OrgRow, org)
             row.college = college.model_dump(mode="json")
             db.commit()
