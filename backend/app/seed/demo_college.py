@@ -315,10 +315,11 @@ def build_demo_college() -> College:
         if (a.teacher_id, a.subject_id) not in seen:
             seen.add((a.teacher_id, a.subject_id))
             teacher_subjects.append(TeacherSubject(teacher_id=a.teacher_id, subject_id=a.subject_id, preference=1))
-    for t in teachers:
+    for i, t in enumerate(teachers):
         mine = {sid for tid, sid in seen if tid == t.id}
-        extra = next((sub.id for sub in subjects if sub.department_id == t.department_id and sub.id not in mine
-                      and sub.lectures_per_week and (t.id, sub.id) not in seen), None)
+        options = [sub.id for sub in subjects if sub.department_id == t.department_id and sub.id not in mine
+                   and sub.lectures_per_week]
+        extra = options[(i * 7) % len(options)] if options else None  # spread 2nd choices across subjects
         if extra:
             seen.add((t.id, extra))
             teacher_subjects.append(TeacherSubject(teacher_id=t.id, subject_id=extra, preference=2))

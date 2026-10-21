@@ -344,6 +344,7 @@ function SessionCard({
         {status === "moved_out" && <span className="rounded bg-surface-2 px-1 text-[9px] font-semibold uppercase text-muted">moved</span>}
         {status === "moved_in" && <span className="rounded bg-accent px-1 text-[9px] font-semibold uppercase text-white dark:text-bg">this day</span>}
         {s.kind === "lab" && <FlaskConical size={12} aria-label="Lab" className="shrink-0" />}
+        {s.elective_slot_id && <span className="rounded bg-white/60 px-1 text-[9px] font-semibold uppercase dark:bg-black/30">elective</span>}
         {changed && <span className="rounded bg-accent px-1 text-[9px] font-semibold uppercase text-white dark:text-bg">new</span>}
         {batch && <span className="ml-auto shrink-0 rounded bg-white/60 px-1 text-[10px] font-medium dark:bg-black/30">{batch}</span>}
       </div>

@@ -25,13 +25,22 @@ export interface College {
   id: string; name: string; days: string[]; lab_periods: number; shifts: Shift[];
   departments: Department[]; venues: Venue[]; sections: Section[]; teachers: Teacher[]; subjects: Subject[];
   students: Student[];
+  teacher_subjects: TeacherSubject[];
+  elective_slots: ElectiveSlot[];
+  holidays: Holiday[];
+  rules: Rule[];
+  department_status: Record<string, { ready: boolean; at: number | null; by: string }>;
+  revision: number;
 }
+export interface ElectiveGroup { id: string; name: string; subject_id: string; teacher_id: string; student_ids: string[] }
+export interface ElectiveSlot { id: string; name: string; section_ids: string[]; lectures_per_week: number; groups: ElectiveGroup[] }
 export interface Student { id: string; roll_no: string; name: string; email: string; section_id: string; batch_id: string | null }
 
 export interface Session {
   id: string; allotment_id: string; subject_id: string; teacher_id: string; venue_id: string;
   kind: Kind; section_ids: string[]; batch_id: string | null; day: string; shift_id: string;
   start_period: number; length: number; start: string; end: string;
+  elective_slot_id: string | null; group_id: string | null;
 }
 export interface Lunch { shift_id: string; year: number; period: number; start: string; end: string }
 export interface Override {
@@ -49,7 +58,9 @@ export interface QualityReport {
   venue_utilisation: Record<string, number>;
 }
 export interface Violation { type: string; message: string; session_ids: string[] }
-export interface TimetableOut { timetable: Timetable; quality: QualityReport | null; violations: Violation[] }
+export interface TimetableOut {
+  timetable: Timetable; quality: QualityReport | null; violations: Violation[]; stale: boolean;
+}
 export interface Job { id: string; status: "running" | "done" | "failed"; elapsed: number; error: string | null }
 export interface Precheck { problems: string[]; warnings: string[] }
 
@@ -69,7 +80,7 @@ export interface AuditEntry {
 }
 export type OccurrenceStatus = "normal" | "cancelled" | "moved_out" | "moved_in";
 export interface Occurrence { session: Session; date: string; status: OccurrenceStatus; override_id: string | null; note: string }
-export interface DayInfo { date: string; day: string; label: string; working: boolean }
+export interface DayInfo { date: string; day: string; label: string; working: boolean; holiday: string | null }
 export interface WeekOut { days: DayInfo[]; occurrences: Occurrence[] }
 export interface OverrideOut { message: string; timetable: TimetableOut }
 
@@ -84,3 +95,41 @@ export interface InviteOut {
   department_id: string | null; teacher_id: string | null; status: string;
 }
 export interface OrgInfo { id: string; name: string; is_demo: boolean; role: Role; student_accounts: number }
+
+// ---- Stage 5: setup ----
+export interface TimeBlock { day: string; start: string; end: string }
+export interface Holiday { date: string; label: string }
+export interface ShiftFull {
+  id: string; name: string; periods: Period[];
+  year_breaks: { years: number[]; start: string; end: string; label: string }[];
+  lunch: LunchRule | null;
+}
+export interface Settings {
+  days: string[]; lab_periods: number; shifts: ShiftFull[]; holidays: Holiday[];
+  semester_start: string | null; semester_end: string | null;
+}
+export interface TeacherFull extends Teacher { blocked: TimeBlock[] }
+export interface Allotment {
+  id: string; subject_id: string; teacher_id: string | null; kind: Kind; section_ids: string[]; batch_id: string | null;
+}
+export interface TeacherSubject { teacher_id: string; subject_id: string; preference: number }
+export interface DeptData {
+  sections: Section[]; teachers: TeacherFull[]; subjects: Subject[]; venues: Venue[];
+  allotments: Allotment[]; teacher_subjects: TeacherSubject[]; students: Student[];
+}
+export interface SetupSaved { college: College; problems: string[]; warnings: string[] }
+export interface Suggestion { allotment_id: string; teacher_id: string | null; reason: string }
+export interface SuggestResult { suggestions: Suggestion[]; unfilled: string[]; loads: Record<string, number> }
+export interface DepartmentReadiness {
+  department_id: string; name: string; ready: boolean; by: string; at: number | null;
+  sections: number; teachers: number; subjects: number; classes: number; without_teacher: number; students: number;
+}
+export interface RowError { sheet: string; row: number; message: string }
+export interface ImportOut {
+  errors: RowError[]; counts: Record<string, number>; problems: string[]; warnings: string[]; saved: boolean;
+}
+export interface Rule {
+  id: string; name: string; kind: "no_classes" | "max_per_day"; mode: "must" | "try"; weight: number;
+  enabled: boolean; department_id: string | null; years: number[]; days: string[];
+  after: string | null; before: string | null; max_periods: number | null;
+}

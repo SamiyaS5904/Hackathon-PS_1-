@@ -1,6 +1,7 @@
 import type {
-  AuditEntry, AuthOut, College, InviteOut, Job, Member, MoveOption, OrgInfo, OverrideOut, Precheck, Proposal,
-  TimetableOut, WeekOut,
+  AuditEntry, AuthOut, College, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
+  TimetableOut, Venue, WeekOut,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
@@ -84,4 +85,52 @@ export const api = {
   invites: () => request<InviteOut[]>(`${org()}/invites`),
   invite: (body: { email: string; role: string; department_id?: string | null; teacher_id?: string | null }) =>
     request<InviteOut>(`${org()}/invites`, post(body)),
+  // ---- setup ----
+  settings: () => request<Settings>(`${org()}/settings`),
+  saveSettings: (s: Settings) => request<SetupSaved>(`${org()}/settings`, { method: "PUT", body: JSON.stringify(s) }),
+  saveDepartments: (departments: Department[], shared_venues: Venue[]) =>
+    request<SetupSaved>(`${org()}/departments`, { method: "PUT", body: JSON.stringify({ departments, shared_venues }) }),
+  deptData: (dept: string) => request<DeptData>(`${org()}/departments/${dept}/data`),
+  saveDeptData: (dept: string, d: DeptData) =>
+    request<SetupSaved>(`${org()}/departments/${dept}/data`, { method: "PUT", body: JSON.stringify(d) }),
+  suggest: (dept: string, allotment_ids: string[] = []) =>
+    request<SuggestResult>(`${org()}/departments/${dept}/suggest`, post({ allotment_ids })),
+  assign: (dept: string, assignments: Record<string, string | null>) =>
+    request<SetupSaved>(`${org()}/departments/${dept}/allotments`, { method: "PUT", body: JSON.stringify({ assignments }) }),
+  ready: (dept: string, ready: boolean) => request<SetupSaved>(`${org()}/departments/${dept}/ready`, post({ ready })),
+  readiness: () => request<DepartmentReadiness[]>(`${org()}/readiness`),
+  importExcel: async (dept: string, file: File, commit: boolean) => {
+    const form = new FormData();
+    form.append("file", file);
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}${org()}/departments/${dept}/import?commit=${commit}`, {
+        method: "POST", body: form, headers: { Authorization: `Bearer ${session.token}` },
+      });
+    } catch {
+      throw new ApiError(0, "Can't reach the server. Is the backend running?");
+    }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : "Upload failed");
+    return body as ImportOut;
+  },
+  downloadTemplate: async (dept: string) => {
+    const res = await fetch(`${BASE}${org()}/departments/${dept}/template`, {
+      headers: { Authorization: `Bearer ${session.token}` },
+    });
+    if (!res.ok) throw new ApiError(res.status, "Couldn't download the template");
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `timetabl-${session.org}-${dept}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  saveSectionShifts: (shifts: Record<string, string>) =>
+    request<SetupSaved>(`${org()}/section-shifts`, { method: "PUT", body: JSON.stringify({ shifts }) }),
+  rules: () => request<Rule[]>(`${org()}/rules`),
+  saveRules: (rules: Rule[]) => request<SetupSaved>(`${org()}/rules`, { method: "PUT", body: JSON.stringify({ rules }) }),
+  myBlocked: () => request<{ blocked: TimeBlock[]; message: string }>(`${org()}/me/blocked`),
+  saveMyBlocked: (blocked: TimeBlock[]) =>
+    request<{ blocked: TimeBlock[]; message: string }>(`${org()}/me/blocked`, { method: "PUT", body: JSON.stringify({ blocked }) }),
 };

@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { CalendarDays, Database, History, LayoutDashboard, Loader2, LogOut, Users } from "lucide-react";
+import { Building2, CalendarClock, CalendarDays, Database, History, LayoutDashboard, ListChecks, Loader2, LogOut, Settings2, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ROLE_LABEL, useAuth } from "@/lib/auth";
@@ -15,9 +15,14 @@ const CORE: Item[] = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "coordinator"] },
   { href: "/timetable", label: "Timetable", icon: CalendarDays, roles: ["admin", "coordinator"] },
   { href: "/timetable", label: "My timetable", icon: CalendarDays, roles: ["teacher", "student"] },
-  { href: "/data", label: "College data", icon: Database, roles: ["admin", "coordinator"] },
+  { href: "/setup", label: "College setup", icon: Settings2, roles: ["admin"] },
+  { href: "/departments", label: "Departments", icon: Building2, roles: ["admin"] },
+  { href: "/departments", label: "My department", icon: Building2, roles: ["coordinator"] },
+  { href: "/availability", label: "My availability", icon: CalendarClock, roles: ["teacher"] },
 ];
 const SECONDARY: Item[] = [
+  { href: "/rules", label: "Rules", icon: ListChecks, roles: ["admin", "coordinator"] },
+  { href: "/data", label: "College data", icon: Database, roles: ["admin", "coordinator"] },
   { href: "/members", label: "People & invites", icon: Users, roles: ["admin", "coordinator"] },
   { href: "/activity", label: "Activity", icon: History, roles: ["admin", "coordinator"] },
 ];
@@ -83,13 +88,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center gap-2 border-b border-border bg-surface px-4 py-3 md:hidden">
-          <span className="font-semibold">Timetabl.ai</span>
-          <nav className="ml-auto flex gap-1">
-            {[...core, ...secondary].map(({ href, label }) => (
-              <Link key={label} href={href} className="rounded px-2 py-1 text-sm text-muted hover:bg-surface-2">{label}</Link>
-            ))}
-            <button onClick={signOut} aria-label="Log out" className="rounded px-2 py-1 text-muted"><LogOut size={16} /></button>
+        <header className="border-b border-border bg-surface md:hidden">
+          <div className="flex items-center gap-2 px-4 pt-3">
+            <span className="font-semibold">Timetabl.ai</span>
+            <span className="truncate text-xs text-muted">{user?.name}</span>
+            <button onClick={signOut} aria-label="Log out" className="ml-auto rounded p-1.5 text-muted hover:bg-surface-2"><LogOut size={16} /></button>
+          </div>
+          {/* One scrollable row instead of wrapping on small screens. */}
+          <nav className="flex gap-1 overflow-x-auto whitespace-nowrap px-3 py-2">
+            {[...core, ...secondary].map(({ href, label }) => {
+              const active = href === "/" ? path === "/" : path.startsWith(href);
+              return (
+                <Link key={label} href={href}
+                  className={clsx("shrink-0 rounded-md px-2.5 py-1 text-sm", active ? "bg-accent-soft font-medium text-accent-text" : "text-muted hover:bg-surface-2")}>
+                  {label}
+                </Link>
+              );
+            })}
           </nav>
         </header>
         <main className="flex-1 px-4 py-6 md:px-8">{children}</main>

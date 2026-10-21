@@ -157,7 +157,14 @@ export default function TimetablePage() {
         </Card>
       ) : (
         <>
-          {isStaff(role) && <HealthStrip data={data} />}
+          {data.stale && (
+            <div className="mb-4 rounded-xl border border-warn/40 bg-warn-soft px-4 py-3 text-sm text-warn" role="status">
+              <b>Out of date:</b> college data changed after this timetable was made.
+              {role === "admin" ? " Regenerate it (top right) to apply the changes." : " The College Admin will regenerate it."}
+              {" "}Editing is paused until then.
+            </div>
+          )}
+          {isStaff(role) && !data.stale && <HealthStrip data={data} />}
 
           <div className="no-print mb-3 flex flex-wrap items-center gap-3">
             {!isStudent && (<>

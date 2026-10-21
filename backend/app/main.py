@@ -804,3 +804,24 @@ def set_my_blocked(body: BlockedRequest, ctx: Ctx = Depends(org_ctx)) -> Blocked
     saved = store.update_college(ctx.state.id, college.model_copy(update={"teachers": teachers}), bump=False)
     return BlockedOut(blocked=saved.teacher(tid).blocked,
                       message="Saved. Your blocked times are confirmed and the next timetable will respect them.")
+
+
+class SectionShiftsRequest(BaseModel):
+    shifts: dict[str, str]  # section id -> shift id
+
+
+@app.put("/api/orgs/{org}/section-shifts", response_model=SetupSaved)
+def set_section_shifts(body: SectionShiftsRequest, ctx: Ctx = Depends(org_ctx)) -> SetupSaved:
+    """Two shifts: which sections study in which shift (e.g. 1st years Morning, the rest Evening)."""
+    allow(can_manage_college(ctx.member))
+    college = ctx.state.college
+    shifts = {s.id for s in college.shifts}
+    known = {s.id for s in college.sections}
+    if not set(body.shifts) <= known or not set(body.shifts.values()) <= shifts:
+        raise HTTPException(422, "Unknown section or shift.")
+    sections = [s.model_copy(update={"shift_id": body.shifts.get(s.id, s.shift_id)}) for s in college.sections]
+    new = college.model_copy(update={"sections": sections})
+    errs = structural_errors(new)
+    if errs:
+        raise HTTPException(422, " ".join(errs))
+    return _saved(ctx.state, new)

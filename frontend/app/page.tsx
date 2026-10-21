@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, Info, Loader2, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Circle, Info, Loader2, RefreshCw, Settings2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -10,12 +10,18 @@ import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
+import type { DepartmentReadiness } from "@/lib/types";
 
 export default function Dashboard() {
   const { college, data, precheck, loading, error, reload } = useTimetable();
   const { role } = useAuth();
   const router = useRouter();
   const [sampleBusy, setSampleBusy] = useState(false);
+  const [readiness, setReadiness] = useState<DepartmentReadiness[] | null>(null);
+
+  useEffect(() => {
+    if (isStaff(role) && college) api.readiness().then(setReadiness).catch(() => setReadiness(null));
+  }, [role, college]);
 
   // Teachers and students go straight to their own timetable.
   useEffect(() => {
@@ -59,16 +65,24 @@ export default function Dashboard() {
         {college.sections.length === 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="mt-1 text-lg font-semibold">Add your college&apos;s data</h2>
+              <h2 className="mt-1 text-lg font-semibold">
+                {college.departments.length === 0 ? "Set up your college" : "Departments are adding their data"}
+              </h2>
               <p className="mt-1 max-w-xl text-sm text-muted">
-                The setup wizard and Excel import are coming next. For now, load a realistic sample college
-                (4 departments, 2 shifts, 12 sections) to try everything.
+                {college.departments.length === 0
+                  ? "Answer a few questions (shifts, periods, lunch, holidays, departments). Or load a realistic sample college (4 departments, 2 shifts, 12 sections) to try everything first."
+                  : "Each Department Coordinator downloads their Excel sheet, fills it in, uploads it and marks the department Ready."}
               </p>
             </div>
             {role === "admin" && (
-              <Button variant="primary" onClick={loadSample} disabled={sampleBusy}>
-                {sampleBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Load sample college
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button onClick={loadSample} disabled={sampleBusy}>
+                  {sampleBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Load sample college
+                </Button>
+                <Link href={college.departments.length === 0 ? "/setup" : "/departments"}>
+                  <Button variant="primary"><Settings2 size={16} /> {college.departments.length === 0 ? "Start setup" : "Open departments"}</Button>
+                </Link>
+              </div>
             )}
           </div>
         ) : problems.length > 0 ? (
@@ -82,6 +96,17 @@ export default function Dashboard() {
               ))}
             </ul>
           </>
+        ) : data?.stale ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="mt-1 flex items-center gap-2 text-lg font-semibold"><RefreshCw size={18} className="text-warn" /> College data changed</h2>
+              <p className="mt-1 max-w-xl text-sm text-muted">
+                Sections, teachers, rules or settings changed after the current timetable was made. Regenerate so the
+                timetable matches; editing the old one is paused until then.
+              </p>
+            </div>
+            {role === "admin" ? <GenerateButton label="Regenerate timetable" /> : <span className="text-sm text-muted">The College Admin regenerates the timetable.</span>}
+          </div>
         ) : hasTimetable ? (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
@@ -113,7 +138,29 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {hasTimetable && data && <HealthStrip data={data} />}
+      {hasTimetable && data && !data.stale && <HealthStrip data={data} />}
+
+      {readiness && readiness.length > 0 && (
+        <Card className="mb-4 p-5">
+          <div className="flex items-center justify-between">
+            <h3 className="text-sm font-semibold">Departments ready: {readiness.filter((d) => d.ready).length} of {readiness.length}</h3>
+            <Link href="/departments" className="text-xs text-accent-text hover:underline">Open departments</Link>
+          </div>
+          <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+            {readiness.map((d) => (
+              <li key={d.department_id}>
+                <Link href={`/departments/${d.department_id}`} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface-2">
+                  {d.ready ? <CheckCircle2 size={16} className="text-ok" /> : <Circle size={16} className="text-muted" />}
+                  <span className="flex-1 truncate">{d.name}</span>
+                  <span className="text-xs text-muted">
+                    {d.ready ? "Ready" : d.without_teacher ? `${d.without_teacher} without teacher` : d.sections ? "In progress" : "No data yet"}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      )}
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="p-5">
