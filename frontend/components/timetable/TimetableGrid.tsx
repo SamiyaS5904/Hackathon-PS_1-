@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { FlaskConical, Utensils } from "lucide-react";
 import { useMemo } from "react";
-import type { College, MoveOption, Session, Timetable, ViewKind } from "@/lib/types";
+import type { College, MoveOption, OccurrenceStatus, Session, Timetable, ViewKind } from "@/lib/types";
 
 const toMin = (t: string) => {
   const [h, m] = t.split(":").map(Number);
@@ -26,6 +26,9 @@ interface Row {
   breakBefore: string | null;
 }
 
+/** Week mode: what happened to a class on its real date. Keyed by display session id. */
+export type OccurrenceMeta = Map<string, { status: OccurrenceStatus; note: string }>;
+
 export interface EditState {
   movingId: string | null;
   options: Map<string, MoveOption> | null; // key: `${day}|${start}`
@@ -41,12 +44,18 @@ export function TimetableGrid({
   view,
   entityId,
   edit,
+  dayLabels,
+  meta,
+  onSelect,
 }: {
   college: College;
   timetable: Timetable;
   view: ViewKind;
   entityId: string;
   edit?: EditState;
+  dayLabels?: Record<string, string>;
+  meta?: OccurrenceMeta;
+  onSelect?: (s: Session) => void;
 }) {
   const lookup = useMemo(
     () => ({
@@ -106,7 +115,7 @@ export function TimetableGrid({
             <th className="w-28 px-3 py-2.5 text-left text-xs font-medium text-muted">Time</th>
             {college.days.map((d) => (
               <th key={d} className="px-2 py-2.5 text-left text-xs font-medium uppercase tracking-wide text-muted">
-                {d}
+                {dayLabels?.[d] ?? d}
               </th>
             ))}
           </tr>
@@ -128,6 +137,8 @@ export function TimetableGrid({
                         startsHere={s.start === row.start}
                         lookup={lookup}
                         edit={edit}
+                        meta={meta?.get(s.id)}
+                        onSelect={onSelect}
                       />
                     ))}
                   </TargetCell>
@@ -240,10 +251,14 @@ function SessionCard({
   startsHere,
   lookup,
   edit,
+  meta,
+  onSelect,
 }: {
   session: Session;
   view: ViewKind;
   startsHere: boolean;
+  meta?: { status: OccurrenceStatus; note: string };
+  onSelect?: (s: Session) => void;
   lookup: {
     subject: Map<string, { code: string; name: string }>;
     teacher: Map<string, { name: string }>;
@@ -264,6 +279,8 @@ function SessionCard({
   const title = `${subj?.name} · ${s.start}–${s.end} · ${lookup.teacher.get(s.teacher_id)?.name} · ${lookup.venue.get(s.venue_id)?.name} · ${sections}${batch ? ` (${batch})` : ""}`;
   const isMoving = edit?.movingId === s.id;
   const changed = edit?.changedIds.has(s.id);
+  const status = meta?.status ?? "normal";
+  const interactive = !!edit || !!onSelect;
 
   if (!startsHere) {
     return (
@@ -286,37 +303,53 @@ function SessionCard({
         edit?.onPick(s);
       }}
       onClick={(e) => {
+        if (onSelect) return onSelect(s);
         if (!edit || edit.busy) return;
         // While moving another class, let the click reach the cell (drop target).
         if (edit.movingId && edit.movingId !== s.id) return;
         e.stopPropagation();
         edit.onPick(s); // pick, or cancel when it's the class being moved
       }}
-      role={edit ? "button" : undefined}
-      tabIndex={edit ? 0 : undefined}
+      role={interactive ? "button" : undefined}
+      tabIndex={interactive ? 0 : undefined}
       aria-pressed={edit ? isMoving : undefined}
-      aria-label={edit ? `${subj?.name}, ${s.day} ${s.start}. Press to move.` : undefined}
-      onKeyDown={(e) => edit && (e.key === "Enter" || e.key === " ") && (e.preventDefault(), edit.onPick(s))}
+      aria-label={
+        onSelect
+          ? `${subj?.name}, ${s.start}${status !== "normal" ? `, ${meta?.note}` : ""}. Press for options.`
+          : edit ? `${subj?.name}, ${s.day} ${s.start}. Press to move.` : undefined
+      }
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        if (onSelect) onSelect(s);
+        else edit?.onPick(s);
+      }}
       className={clsx(
         "subj flex-1 rounded-md border px-2 py-1.5 leading-tight",
         s.kind === "lab" && "border-l-4",
         edit && "cursor-grab active:cursor-grabbing hover:shadow-sm",
+        onSelect && "cursor-pointer hover:shadow-sm",
         isMoving && "opacity-50 ring-2 ring-accent",
         changed && "ring-2 ring-accent/70",
+        status === "cancelled" && "opacity-55 [&_.code]:line-through",
+        status === "moved_out" && "border-dashed opacity-55",
+        status === "moved_in" && "ring-2 ring-accent",
       )}
       style={{ "--h": hue } as React.CSSProperties}
-      title={title}
+      title={meta && status !== "normal" ? `${meta.note} · ${title}` : title}
     >
       <div className="flex items-center gap-1">
-        <span className="truncate text-[13px] font-semibold">{subj?.code}</span>
+        <span className="code truncate text-[13px] font-semibold">{subj?.code}</span>
+        {status === "cancelled" && <span className="rounded bg-danger-soft px-1 text-[9px] font-semibold uppercase text-danger">cancelled</span>}
+        {status === "moved_out" && <span className="rounded bg-surface-2 px-1 text-[9px] font-semibold uppercase text-muted">moved</span>}
+        {status === "moved_in" && <span className="rounded bg-accent px-1 text-[9px] font-semibold uppercase text-white dark:text-bg">this day</span>}
         {s.kind === "lab" && <FlaskConical size={12} aria-label="Lab" className="shrink-0" />}
         {changed && <span className="rounded bg-accent px-1 text-[9px] font-semibold uppercase text-white dark:text-bg">new</span>}
         {batch && <span className="ml-auto shrink-0 rounded bg-white/60 px-1 text-[10px] font-medium dark:bg-black/30">{batch}</span>}
       </div>
       <div className="truncate text-[11px] opacity-90">{subj?.name}</div>
       <div className="mt-0.5 truncate text-[11px] opacity-75">
-        {who}
-        {where ? ` · ${where}` : ""}
+        {status !== "normal" && meta ? meta.note : `${who ?? ""}${where ? ` · ${where}` : ""}`}
       </div>
     </div>
   );

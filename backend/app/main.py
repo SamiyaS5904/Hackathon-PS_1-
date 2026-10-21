@@ -15,6 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app.edits.moves import Change, MoveOption, diff, move_options, repair_move
+from app.edits.oneday import DayInfo, Occurrence, add_override, day_options, occurrences, remove_override, week
 from app.models.domain import College, Timetable
 from app.solver.feasibility import check, warnings
 from app.solver.generate import generate
@@ -237,3 +238,65 @@ def undo(org: str) -> TimetableOut:
     if store.undo_last(org) is None:
         raise HTTPException(409, "Nothing to undo.")
     return get_timetable(org)
+
+
+# ---------------------------------------------------------------------------
+# One-day changes (overrides on real dates)
+# ---------------------------------------------------------------------------
+
+class WeekOut(BaseModel):
+    days: list[DayInfo]
+    occurrences: list[Occurrence]
+
+
+class OverrideRequest(BaseModel):
+    session_id: str
+    date: str
+    kind: str  # "cancel" | "move"
+    to_date: str | None = None
+    start_period: int | None = None
+    reason: str = ""
+
+
+class OverrideOut(BaseModel):
+    message: str
+    timetable: TimetableOut
+
+
+@app.get("/api/orgs/{org}/timetable/week", response_model=WeekOut)
+def get_week(org: str, start: str) -> WeekOut:
+    state = _current(org)
+    try:
+        days = week(state.college, start)
+    except ValueError:
+        raise HTTPException(422, "Use a date like 2026-10-21") from None
+    occ = [o for d in days for o in occurrences(state.college, state.timetable, d.date)]
+    return WeekOut(days=days, occurrences=occ)
+
+
+@app.get("/api/orgs/{org}/timetable/sessions/{session_id}/day-options", response_model=list[MoveOption])
+def get_day_options(org: str, session_id: str, date: str, to_date: str) -> list[MoveOption]:
+    state = _current(org)
+    _session(state, session_id)
+    return day_options(state.college, state.timetable, session_id, date, to_date)
+
+
+@app.post("/api/orgs/{org}/overrides", response_model=OverrideOut, status_code=201)
+def create_override(org: str, body: OverrideRequest) -> OverrideOut:
+    state = _current(org)
+    new, message, action = add_override(state.college, state.timetable, body.session_id, body.date, body.kind,
+                                        body.to_date, body.start_period, body.reason, actor="Admin")
+    if new is None:
+        raise HTTPException(422, message)
+    store.set_timetable(org, new, action=action, source="one-day")
+    return OverrideOut(message=message, timetable=get_timetable(org))
+
+
+@app.delete("/api/orgs/{org}/overrides/{override_id}", response_model=OverrideOut)
+def delete_override(org: str, override_id: str) -> OverrideOut:
+    state = _current(org)
+    new, message = remove_override(state.college, state.timetable, override_id)
+    if new is None:
+        raise HTTPException(409, message)
+    store.set_timetable(org, new, action=message, source="one-day")
+    return OverrideOut(message=message + ".", timetable=get_timetable(org))

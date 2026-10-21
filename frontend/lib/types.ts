@@ -32,8 +32,12 @@ export interface Session {
   start_period: number; length: number; start: string; end: string;
 }
 export interface Lunch { shift_id: string; year: number; period: number; start: string; end: string }
+export interface Override {
+  id: string; session_id: string; date: string; kind: "cancel" | "move"; to_date: string | null;
+  start_period: number | null; venue_id: string | null; reason: string; created_by: string;
+}
 export interface Timetable {
-  college_id: string; status: string; sessions: Session[]; lunches: Lunch[];
+  college_id: string; status: string; sessions: Session[]; lunches: Lunch[]; overrides: Override[];
   messages: string[]; warnings: string[]; solve_seconds: number;
 }
 export interface QualityItem { key: string; label: string; value: number; penalty: number; detail: string }
@@ -61,3 +65,8 @@ export interface AuditEntry {
   id: string; at: number; action: string; source: string; actor: string; changes: Change[];
   undone: boolean; can_undo: boolean;
 }
+export type OccurrenceStatus = "normal" | "cancelled" | "moved_out" | "moved_in";
+export interface Occurrence { session: Session; date: string; status: OccurrenceStatus; override_id: string | null; note: string }
+export interface DayInfo { date: string; day: string; label: string; working: boolean }
+export interface WeekOut { days: DayInfo[]; occurrences: Occurrence[] }
+export interface OverrideOut { message: string; timetable: TimetableOut }

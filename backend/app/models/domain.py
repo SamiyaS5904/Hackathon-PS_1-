@@ -227,11 +227,30 @@ class Lunch(BaseModel):
     end: str
 
 
+class Override(BaseModel):
+    """A one-day change on top of the weekly template (the template itself is untouched).
+
+    kind="cancel": the class doesn't happen on `date`.
+    kind="move": on `date` the class happens on `to_date` at `start_period` in `venue_id` instead.
+    """
+
+    id: str
+    session_id: str
+    date: str  # YYYY-MM-DD, the original occurrence
+    kind: str  # "cancel" | "move"
+    to_date: str | None = None
+    start_period: int | None = None
+    venue_id: str | None = None
+    reason: str = ""
+    created_by: str = "Admin"
+
+
 class Timetable(BaseModel):
     college_id: str
     status: str  # "optimal" | "feasible" | "infeasible" | "invalid_input" | "timeout"
     sessions: list[Session] = Field(default_factory=list)
     lunches: list[Lunch] = Field(default_factory=list)
+    overrides: list[Override] = Field(default_factory=list)
     messages: list[str] = Field(default_factory=list)  # blocking problems
     warnings: list[str] = Field(default_factory=list)  # worth knowing, not blocking
     solve_seconds: float = 0.0

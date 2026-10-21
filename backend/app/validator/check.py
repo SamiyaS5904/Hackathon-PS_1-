@@ -30,7 +30,10 @@ def _groups(section) -> list[str]:
     return [b.id for b in section.batches] if section.batches else [f"{section.id}:all"]
 
 
-def validate(college: College, sessions: list[Session], lunches: list[Lunch] | None = None) -> list[Violation]:
+def validate(
+    college: College, sessions: list[Session], lunches: list[Lunch] | None = None, check_counts: bool = True,
+) -> list[Violation]:
+    """All hard-rule violations. ``check_counts=False`` checks a single real day (one-day changes)."""
     out: list[Violation] = []
     lunches = lunches or []
     sections = {s.id: s for s in college.sections}
@@ -117,23 +120,24 @@ def validate(college: College, sessions: list[Session], lunches: list[Lunch] | N
         elif venue.type == VenueType.lab:
             bad("venue_type", f"{name}: lecture placed in lab {venue.name}.", s)
 
-    # Weekly counts per allotment.
-    count: dict[str, int] = defaultdict(int)
-    for s in sessions:
-        count[s.allotment_id] += 1
-    for a in college.allotments:
-        subj = subjects.get(a.subject_id)
-        if subj is None:
-            continue
-        need = subj.lectures_per_week if a.kind == Kind.lecture else subj.labs_per_week
-        if count[a.id] != need:
-            sec_names = ", ".join(sections[i].name for i in a.section_ids if i in sections)
-            out.append(
-                Violation(
-                    type="wrong_count",
-                    message=f"{subj.name} ({sec_names}) has {count[a.id]} {a.kind.value}(s) a week; needs {need}.",
+    # Weekly counts per allotment (skipped when checking a single real day).
+    if check_counts:
+        count: dict[str, int] = defaultdict(int)
+        for s in sessions:
+            count[s.allotment_id] += 1
+        for a in college.allotments:
+            subj = subjects.get(a.subject_id)
+            if subj is None:
+                continue
+            need = subj.lectures_per_week if a.kind == Kind.lecture else subj.labs_per_week
+            if count[a.id] != need:
+                sec_names = ", ".join(sections[i].name for i in a.section_ids if i in sections)
+                out.append(
+                    Violation(
+                        type="wrong_count",
+                        message=f"{subj.name} ({sec_names}) has {count[a.id]} {a.kind.value}(s) a week; needs {need}.",
+                    )
                 )
-            )
 
     # Clashes: same day, overlapping time, shared teacher / venue / student group.
     by_day: dict[str, list[Session]] = defaultdict(list)

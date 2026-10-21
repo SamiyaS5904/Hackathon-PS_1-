@@ -1,16 +1,26 @@
 "use client";
 
 import clsx from "clsx";
-import { Loader2, Move, Printer, Undo2, X } from "lucide-react";
-import { useMemo, useState } from "react";
+import { ChevronLeft, ChevronRight, Loader2, Move, Printer, Undo2, X } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
+import { OneDayPanel } from "@/components/timetable/OneDayPanel";
 import { ProposalDialog } from "@/components/timetable/ProposalDialog";
 import { useMoveEditor } from "@/components/timetable/useMoveEditor";
-import { TimetableGrid } from "@/components/timetable/TimetableGrid";
+import { type OccurrenceMeta, TimetableGrid } from "@/components/timetable/TimetableGrid";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
+import { api } from "@/lib/api";
 import { useTimetable } from "@/lib/timetable-context";
-import type { ViewKind } from "@/lib/types";
+import type { Occurrence, OverrideOut, Session, ViewKind, WeekOut } from "@/lib/types";
+
+const isoDate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const addDays = (iso: string, n: number) => {
+  const d = new Date(`${iso}T12:00:00`);
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+};
 
 const VIEWS: { id: ViewKind; label: string }[] = [
   { id: "section", label: "Section" },
@@ -23,6 +33,44 @@ export default function TimetablePage() {
   const [view, setView] = useState<ViewKind>("section");
   const [picked, setPicked] = useState<Record<ViewKind, string>>({ section: "", teacher: "", venue: "" });
   const editor = useMoveEditor();
+  const { setData } = useTimetable();
+  const [mode, setMode] = useState<"plan" | "week">("plan");
+  const [weekStart, setWeekStart] = useState(() => isoDate(new Date()));
+  const [week, setWeek] = useState<WeekOut | null>(null);
+  const [selected, setSelected] = useState<Occurrence | null>(null);
+
+  const loadWeek = useCallback(async () => {
+    try {
+      setWeek(await api.week(weekStart));
+    } catch (e) {
+      editor.setToast({ text: e instanceof Error ? e.message : "Couldn't load this week", tone: "danger" });
+    }
+  }, [weekStart, editor.setToast]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (mode === "week" && data?.timetable.sessions.length) loadWeek();
+  }, [mode, data, loadWeek]);
+
+  // Week mode: occurrences on real dates, shown through the same grid.
+  const weekView = useMemo(() => {
+    if (mode !== "week" || !week || !data) return null;
+    const meta: OccurrenceMeta = new Map();
+    const byDisplayId = new Map<string, Occurrence>();
+    const sessions: Session[] = week.occurrences.map((o) => {
+      const id = `${o.session.id}@${o.date}@${o.status}`;
+      meta.set(id, { status: o.status, note: o.note });
+      byDisplayId.set(id, o);
+      return { ...o.session, id };
+    });
+    const dayLabels = Object.fromEntries(week.days.map((d) => [d.day, d.label]));
+    return { timetable: { ...data.timetable, sessions }, meta, byDisplayId, dayLabels };
+  }, [mode, week, data]);
+
+  const onOneDayDone = (out: OverrideOut) => {
+    setData(out.timetable);
+    setSelected(null);
+    editor.setToast({ text: out.message, undo: true, tone: "ok" });
+  };
 
   const options = useMemo(() => {
     if (!college) return [];
@@ -135,17 +183,71 @@ export default function TimetablePage() {
               ))}
             </select>
             <span className="text-sm text-muted">{subtitle}</span>
+
+            <div className="ml-auto flex items-center gap-2">
+              {mode === "week" && week && (
+                <div className="flex items-center gap-1 text-sm">
+                  <button aria-label="Previous week" onClick={() => setWeekStart(addDays(weekStart, -7))}
+                    className="rounded p-1.5 hover:bg-surface-2"><ChevronLeft size={16} /></button>
+                  <span className="min-w-36 text-center font-medium">
+                    {week.days[0]?.label} – {week.days.at(-1)?.label}
+                  </span>
+                  <button aria-label="Next week" onClick={() => setWeekStart(addDays(weekStart, 7))}
+                    className="rounded p-1.5 hover:bg-surface-2"><ChevronRight size={16} /></button>
+                  <button onClick={() => setWeekStart(isoDate(new Date()))}
+                    className="rounded px-2 py-1 text-xs text-muted hover:bg-surface-2">Today</button>
+                </div>
+              )}
+              <div className="inline-flex rounded-lg border border-border bg-surface p-0.5" role="tablist" aria-label="Timetable mode">
+                {([["plan", "Weekly plan"], ["week", "This week"]] as const).map(([id, label]) => (
+                  <button key={id} role="tab" aria-selected={mode === id}
+                    onClick={() => { editor.cancel(); setMode(id); }}
+                    className={clsx("rounded-md px-3 py-1.5 text-sm transition",
+                      mode === id ? "bg-accent-soft font-medium text-accent-text" : "text-muted hover:text-text")}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
           </div>
 
-          <EditBar editor={editor} college={college} />
-          <TimetableGrid college={college} timetable={data.timetable} view={view} entityId={entityId} edit={editor.edit} />
+          <EditBar
+            editor={editor}
+            college={college}
+            hint={mode === "week"
+              ? "Real dates. Click a class to cancel or reschedule it for that day only. The weekly plan stays as it is."
+              : undefined}
+          />
+          {mode === "week" ? (
+            weekView ? (
+              <TimetableGrid college={college} timetable={weekView.timetable} view={view} entityId={entityId}
+                dayLabels={weekView.dayLabels} meta={weekView.meta}
+                onSelect={(s) => setSelected(weekView.byDisplayId.get(s.id) ?? null)} />
+            ) : (
+              <Skeleton className="h-[520px] w-full" />
+            )
+          ) : (
+            <TimetableGrid college={college} timetable={data.timetable} view={view} entityId={entityId} edit={editor.edit} />
+          )}
+          {selected && week && (
+            <OneDayPanel occurrence={selected} days={week.days} college={college} onDone={onOneDayDone}
+              onClose={() => setSelected(null)} />
+          )}
         </>
       )}
     </div>
   );
 }
 
-function EditBar({ editor, college }: { editor: ReturnType<typeof useMoveEditor>; college: NonNullable<ReturnType<typeof useTimetable>["college"]> }) {
+function EditBar({
+  editor,
+  college,
+  hint,
+}: {
+  editor: ReturnType<typeof useMoveEditor>;
+  college: NonNullable<ReturnType<typeof useTimetable>["college"]>;
+  hint?: string;
+}) {
   const { moving, options, busy, proposal, apply, discard, cancel, undo, toast, setToast } = editor;
   const subject = moving ? college.subjects.find((s) => s.id === moving.subject_id)?.name : null;
   const counts = options
@@ -174,8 +276,8 @@ function EditBar({ editor, college }: { editor: ReturnType<typeof useMoveEditor>
           </div>
         ) : (
           <p className="px-1 py-3 text-xs text-muted">
-            Tip: drag any class to a new slot, or click it and then click a slot. Green = free, amber = other classes
-            will shift to make room, red = not allowed. You always see the result before it&apos;s applied.
+            {hint ?? <>Tip: drag any class to a new slot, or click it and then click a slot. Green = free, amber = other classes
+            will shift to make room, red = not allowed. You always see the result before it&apos;s applied.</>}
           </p>
         )}
       </div>

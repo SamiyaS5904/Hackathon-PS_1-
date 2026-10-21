@@ -61,67 +61,83 @@ def _fits(college: College, s: Session, venue_id: str) -> bool:
     return v.type in (VenueType.lecture, VenueType.seminar)
 
 
-def move_options(college: College, tt: Timetable, session_id: str) -> list[MoveOption]:
-    s = next(x for x in tt.sessions if x.id == session_id)
+def check_slot(
+    college: College, s: Session, day: str, p: int, others: list[Session], lunches: list, same_day_ok: bool = False,
+) -> MoveOption | None:
+    """Can session ``s`` start at period ``p`` on ``day`` given the ``others``? None if p is out of range.
+
+    ``same_day_ok``: the class is moving within its own day, so another lecture of the
+    same subject that day doesn't count as a repeat.
+    """
     shift = college.shift(s.shift_id)
+    if p + s.length > len(shift.periods):
+        return None
     teacher = college.teacher(s.teacher_id)
     groups = _groups(college, s)
     years = {college.section(i).year for i in s.section_ids}
-    lunch = {ln.period for ln in tt.lunches if ln.shift_id == s.shift_id and ln.year in years}
+    lunch = {ln.period for ln in lunches if ln.shift_id == s.shift_id and ln.year in years}
+    idx = range(p, p + s.length)
+    begin, end = shift.periods[p].start_min, shift.periods[p + s.length - 1].end_min
+    opt = MoveOption(day=day, start_period=p, start=shift.periods[p].start, end=shift.periods[p + s.length - 1].end,
+                     status="blocked")
+    if any(shift.periods[i].end != shift.periods[i + 1].start for i in range(p, p + s.length - 1)):
+        opt.reason = "A lab can't run across a break."
+    elif lunch & set(idx):
+        opt.reason = "That's the lunch period for these students."
+    elif any(b.day == day and begin < _m(b.end) and _m(b.start) < end for b in teacher.blocked):
+        opt.reason = f"{teacher.name} has blocked this time."
+    elif any(br for br in shift.year_breaks if set(br.years) & years and begin < _m(br.end) and _m(br.start) < end):
+        opt.reason = "Overlaps a fixed break."
+    else:
+        clash = [
+            o for o in others
+            if o.day == day and _m(o.start) < end and begin < _m(o.end)
+            and (o.teacher_id == s.teacher_id or _groups(college, o) & groups)
+        ]
+        same_subject = [
+            o for o in others
+            if o.day == day and o.allotment_id == s.allotment_id and s.kind == Kind.lecture and not same_day_ok
+        ]
+        load = sum(o.length for o in others if o.teacher_id == s.teacher_id and o.day == day) + s.length
+        busy_rooms = {o.venue_id for o in others if o.day == day and _m(o.start) < end and begin < _m(o.end)}
+        if not clash and not same_subject and load <= teacher.max_per_day:
+            rooms = [s.venue_id] + [v.id for v in college.venues if v.id != s.venue_id]
+            room = next((r for r in rooms if r not in busy_rooms and _fits(college, s, r)), None)
+            if room:
+                opt.status, opt.venue_id = "free", room
+                if room != s.venue_id:
+                    opt.reason = f"Moves to {college.venue(room).name} (current room is busy)."
+            else:
+                opt.status, opt.reason = "repair", "No suitable room is free; other classes would shift."
+        else:
+            opt.status = "repair"
+            opt.conflicts = [o.id for o in clash + same_subject]
+            parts = []
+            names = sorted({college.subject(o.subject_id).code for o in clash})
+            if names:
+                parts.append(f"Clashes with {', '.join(names)}")
+            if same_subject:
+                parts.append(f"{college.subject(s.subject_id).code} already has a lecture on {day} (max one a day)")
+            opt.reason = (
+                f"{'; '.join(parts)}; those would be rearranged." if parts
+                else f"{teacher.name} would exceed {teacher.max_per_day} periods that day."
+            )
+    return opt
+
+
+def move_options(college: College, tt: Timetable, session_id: str) -> list[MoveOption]:
+    """Every slot in the weekly template the class could move to, and what that would take."""
+    s = next(x for x in tt.sessions if x.id == session_id)
+    shift = college.shift(s.shift_id)
     others = [x for x in tt.sessions if x.id != s.id]
     out: list[MoveOption] = []
-
     for day in college.days:
-        for p in range(len(shift.periods) - s.length + 1):
-            idx = range(p, p + s.length)
-            begin, end = shift.periods[p].start_min, shift.periods[p + s.length - 1].end_min
-            opt = MoveOption(day=day, start_period=p, start=shift.periods[p].start, end=shift.periods[p + s.length - 1].end,
-                             status="blocked")
+        for p in range(len(shift.periods)):
             if day == s.day and p == s.start_period:
                 continue
-            if any(shift.periods[i].end != shift.periods[i + 1].start for i in range(p, p + s.length - 1)):
-                opt.reason = "A lab can't run across a break."
-            elif lunch & set(idx):
-                opt.reason = "That's the lunch period for these students."
-            elif any(b.day == day and begin < _m(b.end) and _m(b.start) < end for b in teacher.blocked):
-                opt.reason = f"{teacher.name} has blocked this time."
-            elif any(
-                br for br in shift.year_breaks
-                if set(br.years) & years and begin < _m(br.end) and _m(br.start) < end
-            ):
-                opt.reason = "Overlaps a fixed break."
-            else:
-                clash = [
-                    o for o in others
-                    if o.day == day and _m(o.start) < end and begin < _m(o.end)
-                    and (o.teacher_id == s.teacher_id or _groups(college, o) & groups)
-                ]
-                same_subject = [
-                    o for o in others
-                    if o.day == day and o.allotment_id == s.allotment_id and s.kind == Kind.lecture and day != s.day
-                ]
-                load = sum(o.length for o in others if o.teacher_id == s.teacher_id and o.day == day) + s.length
-                busy_rooms = {
-                    o.venue_id for o in others if o.day == day and _m(o.start) < end and begin < _m(o.end)
-                }
-                if not clash and not same_subject and load <= teacher.max_per_day:
-                    rooms = [s.venue_id] + [v.id for v in college.venues if v.id != s.venue_id]
-                    room = next((r for r in rooms if r not in busy_rooms and _fits(college, s, r)), None)
-                    if room:
-                        opt.status, opt.venue_id = "free", room
-                        if room != s.venue_id:
-                            opt.reason = f"Moves to {college.venue(room).name} (current room is busy)."
-                    else:
-                        opt.status, opt.reason = "repair", "No suitable room is free; other classes would shift."
-                else:
-                    opt.status = "repair"
-                    opt.conflicts = [o.id for o in clash + same_subject]
-                    names = sorted({college.subject(o.subject_id).code for o in clash + same_subject})
-                    opt.reason = (
-                        f"Clashes with {', '.join(names)}; those would be rearranged." if names
-                        else f"{teacher.name} would exceed {teacher.max_per_day} periods that day."
-                    )
-            out.append(opt)
+            opt = check_slot(college, s, day, p, others, tt.lunches, same_day_ok=(day == s.day))
+            if opt:
+                out.append(opt)
     return out
 
 
@@ -130,54 +146,57 @@ def _describe(college: College, s: Session) -> str:
 
 
 def diff(college: College, before: list[Session], after: list[Session]) -> list[Change]:
-    """Match sessions by (allotment, occurrence order) and list the ones that moved."""
-    def key_list(ss):
-        by = defaultdict(list)
-        for s in sorted(ss, key=lambda x: (college.days.index(x.day), x.start_period)):
-            by[s.allotment_id].append(s)
-        return by
-
-    b, a = key_list(before), key_list(after)
+    """Classes whose placement changed, matched by session id (ids are kept stable through repairs)."""
+    old = {s.id: s for s in before}
     changes = []
-    for allot, olds in b.items():
-        news = list(a.get(allot, []))
-        unmatched_old = []
-        for o in olds:  # same placement in both = unchanged
-            same = next((n for n in news if (n.day, n.start_period, n.venue_id) == (o.day, o.start_period, o.venue_id)), None)
-            if same:
-                news.remove(same)
-            else:
-                unmatched_old.append(o)
-        for o, n in zip(unmatched_old, news):
-            changes.append(Change(
-                session_id=o.id,
-                subject=college.subject(o.subject_id).name,
-                sections=" + ".join(college.section(i).name for i in o.section_ids)
-                + (f" ({next(bt.name for bt in college.section(o.section_ids[0]).batches if bt.id == o.batch_id)})"
-                   if o.batch_id else ""),
-                before=_describe(college, o),
-                after=_describe(college, n),
-            ))
+    for n in after:
+        o = old.get(n.id)
+        if o is None or (o.day, o.start_period, o.venue_id) == (n.day, n.start_period, n.venue_id):
+            continue
+        batch = ""
+        if o.batch_id:
+            batch = f" ({next(bt.name for bt in college.section(o.section_ids[0]).batches if bt.id == o.batch_id)})"
+        changes.append(Change(
+            session_id=o.id,
+            subject=college.subject(o.subject_id).name,
+            sections=" + ".join(college.section(i).name for i in o.section_ids) + batch,
+            before=_describe(college, o),
+            after=_describe(college, n),
+        ))
     return changes
 
 
-def _with_ids(old: list[Session], new: list[Session], college: College) -> list[Session]:
-    """Keep the old session ids where a placement is unchanged so the UI stays stable."""
+def _with_ids(old: list[Session], new: list[Session], forced: tuple[str, str, int] | None = None) -> list[Session]:
+    """Give the repaired sessions the old ids so each class keeps its identity.
+
+    ``forced`` = (session id, day, start): the class the user moved keeps its id at its new slot.
+    Then unchanged placements keep their ids, and the remaining ones are paired by allotment.
+    """
     by_old = defaultdict(list)
     for s in old:
         by_old[s.allotment_id].append(s)
-    out, used = [], set()
-    pending = []
-    for n in new:
+    old_by_id = {s.id: s for s in old}
+    out, used, pending = [], set(), list(new)
+
+    if forced:
+        sid, day, start = forced
+        allot = old_by_id[sid].allotment_id
+        n = next(x for x in pending if x.allotment_id == allot and (x.day, x.start_period) == (day, start))
+        pending.remove(n)
+        used.add(sid)
+        out.append(n.model_copy(update={"id": sid}))
+
+    rest = []
+    for n in pending:
         match = next((o for o in by_old[n.allotment_id]
                       if o.id not in used and (o.day, o.start_period) == (n.day, n.start_period)), None)
         if match:
             used.add(match.id)
             out.append(n.model_copy(update={"id": match.id}))
         else:
-            pending.append(n)
-    for n in pending:
-        match = next((o for o in by_old[n.allotment_id] if o.id not in used), None)
+            rest.append(n)
+    for n in rest:
+        match = next(o for o in by_old[n.allotment_id] if o.id not in used)
         used.add(match.id)
         out.append(n.model_copy(update={"id": match.id}))
     return out
@@ -244,7 +263,7 @@ def repair_move(
     for free in (small | target_room_users, wide):
         result = attempt(free)
         if result:
-            sessions = _with_ids(tt.sessions, result.sessions, college)
+            sessions = _with_ids(tt.sessions, result.sessions, forced=(session_id, day, start_period))
             new_tt = tt.model_copy(update={"sessions": sessions})
             n = len(diff(college, tt.sessions, sessions)) - 1
             return new_tt, (f"Moved. {n} other class{'es' if n != 1 else ''} rearranged to avoid clashes."

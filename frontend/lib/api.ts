@@ -1,4 +1,6 @@
-import type { AuditEntry, College, Job, MoveOption, Precheck, Proposal, TimetableOut } from "./types";
+import type {
+  AuditEntry, College, Job, MoveOption, OverrideOut, Precheck, Proposal, TimetableOut, WeekOut,
+} from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 export const ORG = "demo"; // Stage 4: comes from the logged-in user's membership.
@@ -46,4 +48,13 @@ export const api = {
     fetch(`${BASE}/api/orgs/${ORG}/proposals/${id}`, { method: "DELETE" }).catch(() => undefined),
   audit: () => request<AuditEntry[]>(`/api/orgs/${ORG}/audit`),
   undo: () => request<TimetableOut>(`/api/orgs/${ORG}/audit/undo`, { method: "POST" }),
+  week: (start: string) => request<WeekOut>(`/api/orgs/${ORG}/timetable/week?start=${start}`),
+  dayOptions: (sessionId: string, date: string, toDate: string) =>
+    request<MoveOption[]>(
+      `/api/orgs/${ORG}/timetable/sessions/${sessionId}/day-options?date=${date}&to_date=${toDate}`,
+    ),
+  addOverride: (body: {
+    session_id: string; date: string; kind: "cancel" | "move"; to_date?: string; start_period?: number; reason?: string;
+  }) => request<OverrideOut>(`/api/orgs/${ORG}/overrides`, { method: "POST", body: JSON.stringify(body) }),
+  removeOverride: (id: string) => request<OverrideOut>(`/api/orgs/${ORG}/overrides/${id}`, { method: "DELETE" }),
 };
