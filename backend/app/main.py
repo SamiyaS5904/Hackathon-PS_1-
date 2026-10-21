@@ -16,6 +16,7 @@ from pydantic import BaseModel
 
 from app import accounts
 from app.accounts import InviteOut, Member
+from app.assist import Explanation, FreeRoom, Insight, TeacherNow, explain, free_rooms, insights, teacher_now
 from app.college_edit import (
     DeptData,
     Settings,
@@ -825,3 +826,50 @@ def set_section_shifts(body: SectionShiftsRequest, ctx: Ctx = Depends(org_ctx)) 
     if errs:
         raise HTTPException(422, " ".join(errs))
     return _saved(ctx.state, new)
+
+
+# ---------------------------------------------------------------------------
+# Assistant facts (read-only, safe for every member) and insights (staff)
+# ---------------------------------------------------------------------------
+
+def _today_now() -> tuple[str, str]:
+    now = time.localtime()
+    return time.strftime("%Y-%m-%d", now), time.strftime("%H:%M", now)
+
+
+@app.get("/api/orgs/{org}/free-rooms", response_model=list[FreeRoom])
+def get_free_rooms(date: str | None = None, at: str | None = None, min_seats: int = 0,
+                   ctx: Ctx = Depends(org_ctx)) -> list[FreeRoom]:
+    state = _current(ctx)
+    today, now = _today_now()
+    return free_rooms(state.college, state.timetable, date or today, at or now, min_seats)
+
+
+@app.get("/api/orgs/{org}/teachers/{teacher_id}/now", response_model=TeacherNow)
+def get_teacher_now(teacher_id: str, date: str | None = None, at: str | None = None,
+                    ctx: Ctx = Depends(org_ctx)) -> TeacherNow:
+    state = _current(ctx)
+    if teacher_id not in {t.id for t in state.college.teachers}:
+        raise HTTPException(404, "Teacher not found.")
+    today, now = _today_now()
+    return teacher_now(state.college, state.timetable, teacher_id, date or today, at or now)
+
+
+@app.get("/api/orgs/{org}/timetable/sessions/{session_id}/explain", response_model=Explanation)
+def explain_session(session_id: str, ctx: Ctx = Depends(org_ctx)) -> Explanation:
+    state = _current(ctx)
+    s = _session(state, session_id)
+    if ctx.member.role not in ("admin", "coordinator") and s.id not in {
+        x.id for x in visible_sessions(ctx.member, state.college, state.timetable)
+    }:
+        raise HTTPException(404, "Class not found in your timetable.")
+    return explain(state.college, state.timetable, session_id)
+
+
+@app.get("/api/orgs/{org}/insights", response_model=list[Insight])
+def get_insights(ctx: Ctx = Depends(org_ctx)) -> list[Insight]:
+    allow("" if ctx.member.role in ("admin", "coordinator") else "Insights are for staff.")
+    state = ctx.state
+    if state.timetable is None or state.timetable.college_revision != state.college.revision:
+        return []
+    return insights(state.college, state.timetable)
