@@ -4,6 +4,7 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Circle, Info, Loader2, Refresh
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { InsightsCard } from "@/components/chat/InsightsCard";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
@@ -139,6 +140,10 @@ export default function Dashboard() {
       </Card>
 
       {hasTimetable && data && !data.stale && <HealthStrip data={data} />}
+
+      {hasTimetable && data && !data.stale && (
+        <InsightsCard revision={`${college.revision}-${data.quality?.score}-${data.timetable.sessions.length}`} />
+      )}
 
       {readiness && readiness.length > 0 && (
         <Card className="mb-4 p-5">
