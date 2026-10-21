@@ -1,7 +1,15 @@
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+
+# Tests use a throwaway database and a fixed secret; set before anything imports app.core.config.
+_tmp = Path(tempfile.mkdtemp(prefix="timetabl-test-"))
+os.environ["DATABASE_URL"] = f"sqlite:///{(_tmp / 'test.db').as_posix()}"
+os.environ["APP_SECRET"] = "test-secret"
+os.environ.setdefault("DEMO_PASSWORD", "demo1234")
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 

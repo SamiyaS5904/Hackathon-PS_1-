@@ -114,6 +114,17 @@ class Section(BaseModel):
     batches: list[Batch] = Field(default_factory=list)
 
 
+class Student(BaseModel):
+    """One student, from the student-level list. Their login uses ``email``."""
+
+    id: str
+    roll_no: str
+    name: str
+    email: str
+    section_id: str
+    batch_id: str | None = None
+
+
 class Teacher(BaseModel):
     id: str
     name: str
@@ -180,6 +191,7 @@ class College(BaseModel):
     teachers: list[Teacher]
     subjects: list[Subject]
     allotments: list[Allotment]
+    students: list[Student] = Field(default_factory=list)
 
     # ---- lookups -------------------------------------------------------
     def shift(self, shift_id: str) -> Shift:

@@ -50,6 +50,9 @@ def _m(hhmm: str) -> int:
 
 def check(college: College) -> list[str]:
     problems: list[str] = []
+    if not college.allotments:
+        return ["No classes to schedule yet: add departments, sections, subjects and teachers "
+                "(or load the sample college) first."]
     ids = {
         "section": {s.id for s in college.sections},
         "teacher": {t.id for t in college.teachers},

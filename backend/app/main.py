@@ -1,7 +1,7 @@
 """Timetabl.ai backend API.
 
-Stage 2: read the college, generate a timetable in the background, read the
-current timetable with its quality report and validator result.
+Every /api/orgs/{org}/... endpoint requires a logged-in member of that college,
+and every action checks the role rules in app/permissions.py.
 """
 
 from __future__ import annotations
@@ -10,13 +10,31 @@ import threading
 import time
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from app import accounts
+from app.accounts import InviteOut, Member
+from app.core.config import CORS_ORIGINS
+from app.core.deps import Ctx, allow, current_user, org_ctx
+from app.core.security import create_token
+from app.db.models import UserRow
 from app.edits.moves import Change, MoveOption, diff, move_options, repair_move
 from app.edits.oneday import DayInfo, Occurrence, add_override, day_options, occurrences, remove_override, week
 from app.models.domain import College, Timetable
+from app.permissions import (
+    can_edit_one_day,
+    can_edit_weekly,
+    can_generate,
+    can_invite,
+    can_manage_college,
+    can_undo,
+    can_view_activity,
+    college_for,
+    visible_sessions,
+)
+from app.seed.demo_college import build_demo_college, empty_college
 from app.solver.feasibility import check, warnings
 from app.solver.generate import generate
 from app.solver.quality import QualityReport, score
@@ -26,18 +44,138 @@ from app.validator.check import Violation, validate
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
-    store.seed_demo()
+    store.load()
+    accounts.seed_demo()
     yield
 
 
-app = FastAPI(title="Timetabl.ai API", version="0.2.0", lifespan=lifespan)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+app = FastAPI(title="Timetabl.ai API", version="0.4.0", lifespan=lifespan)
+app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
+
+@app.get("/api/health")
+def health() -> dict:
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------------------
+# Accounts: signup, login, me, invites, members
+# ---------------------------------------------------------------------------
+
+class SignupRequest(BaseModel):
+    name: str
+    email: str
+    password: str
+    college_name: str
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+class AuthOut(BaseModel):
+    token: str
+    user_id: str
+    name: str
+    email: str
+    memberships: list[Member]
+
+
+class InviteRequest(BaseModel):
+    email: str
+    role: str
+    department_id: str | None = None
+    teacher_id: str | None = None
+
+
+class AcceptRequest(BaseModel):
+    name: str = ""
+    password: str
+
+
+def _auth_out(user: UserRow) -> AuthOut:
+    return AuthOut(token=create_token(user.id), user_id=user.id, name=user.name, email=user.email,
+                   memberships=accounts.memberships(user.id))
+
+
+@app.post("/api/auth/signup", response_model=AuthOut, status_code=201)
+def signup(body: SignupRequest) -> AuthOut:
+    email = accounts.normalize_email(body.email)
+    if not accounts.valid_email(email):
+        raise HTTPException(422, "Enter a valid email address.")
+    if len(body.password) < 8:
+        raise HTTPException(422, "Choose a password with at least 8 characters.")
+    if not body.name.strip() or not body.college_name.strip():
+        raise HTTPException(422, "Enter your name and your college's name.")
+    if accounts.find_user(email):
+        raise HTTPException(409, "An account with this email already exists. Log in instead.")
+    user = accounts.create_user(email, body.name, body.password)
+    org = store.create_org(body.college_name.strip(), empty_college(body.college_name.strip()))
+    accounts.add_membership(user.id, org.id, "admin")
+    return _auth_out(user)
+
+
+@app.post("/api/auth/login", response_model=AuthOut)
+def login(body: LoginRequest) -> AuthOut:
+    user = accounts.authenticate(body.email, body.password)
+    if user is None:
+        raise HTTPException(401, "Wrong email or password.")
+    return _auth_out(user)
+
+
+@app.get("/api/me", response_model=AuthOut)
+def me(user: UserRow = Depends(current_user)) -> AuthOut:
+    return _auth_out(user)
+
+
+@app.get("/api/invites/{token}", response_model=InviteOut)
+def read_invite(token: str) -> InviteOut:
+    inv = accounts.get_invite(token)
+    if inv is None or inv.status != "pending":
+        raise HTTPException(404, "This invite link is no longer valid.")
+    return inv
+
+
+@app.post("/api/invites/{token}/accept", response_model=AuthOut)
+def accept(token: str, body: AcceptRequest) -> AuthOut:
+    user, error = accounts.accept_invite(token, body.name, body.password)
+    if user is None:
+        raise HTTPException(422, error)
+    return _auth_out(user)
+
+
+@app.get("/api/orgs/{org}/members", response_model=list[Member])
+def members(ctx: Ctx = Depends(org_ctx)) -> list[Member]:
+    allow("" if ctx.member.role in ("admin", "coordinator") else "Only staff can see the member list.")
+    return accounts.list_members(ctx.state.id)
+
+
+@app.get("/api/orgs/{org}/invites", response_model=list[InviteOut])
+def invites(ctx: Ctx = Depends(org_ctx)) -> list[InviteOut]:
+    allow("" if ctx.member.role in ("admin", "coordinator") else "Only staff can see invites.")
+    return accounts.list_invites(ctx.state.id)
+
+
+@app.post("/api/orgs/{org}/invites", response_model=InviteOut, status_code=201)
+def invite(body: InviteRequest, ctx: Ctx = Depends(org_ctx)) -> InviteOut:
+    allow(can_invite(ctx.member, body.role, body.department_id))
+    email = accounts.normalize_email(body.email)
+    if not accounts.valid_email(email):
+        raise HTTPException(422, "Enter a valid email address.")
+    college = ctx.state.college
+    if body.department_id and body.department_id not in {d.id for d in college.departments}:
+        raise HTTPException(422, "Unknown department.")
+    if body.teacher_id and body.teacher_id not in {t.id for t in college.teachers}:
+        raise HTTPException(422, "Unknown teacher.")
+    if body.role in ("coordinator", "teacher") and not body.department_id:
+        raise HTTPException(422, "Choose the department.")
+    return accounts.create_invite(ctx.state.id, email, body.role, ctx.user.name, body.department_id, body.teacher_id)
+
+
+# ---------------------------------------------------------------------------
+# College data, generation, timetable
+# ---------------------------------------------------------------------------
 
 class GenerateRequest(BaseModel):
     time_limit: float = 45.0
@@ -61,32 +199,46 @@ class PrecheckOut(BaseModel):
     warnings: list[str]
 
 
-def _org(org: str):
-    state = store.org(org)
-    if state is None:
-        raise HTTPException(404, f"College '{org}' not found")
-    return state
+class OrgOut(BaseModel):
+    id: str
+    name: str
+    is_demo: bool
+    role: str
+    student_accounts: int
 
 
-@app.get("/api/health")
-def health() -> dict:
-    return {"ok": True}
+@app.get("/api/orgs/{org}", response_model=OrgOut)
+def get_org(ctx: Ctx = Depends(org_ctx)) -> OrgOut:
+    return OrgOut(id=ctx.state.id, name=ctx.state.name, is_demo=ctx.state.is_demo, role=ctx.member.role,
+                  student_accounts=accounts.count_students(ctx.state.id) if ctx.member.role == "admin" else 0)
 
 
 @app.get("/api/orgs/{org}/college", response_model=College)
-def get_college(org: str) -> College:
-    return _org(org).college
+def get_college(ctx: Ctx = Depends(org_ctx)) -> College:
+    return college_for(ctx.member, ctx.state.college)
+
+
+@app.post("/api/orgs/{org}/load-sample", response_model=College)
+def load_sample(ctx: Ctx = Depends(org_ctx)) -> College:
+    """Fill a new college with the sample data (departments, rooms, sections, teachers, subjects)."""
+    allow(can_manage_college(ctx.member))
+    if ctx.state.college.allotments:
+        raise HTTPException(409, "This college already has data.")
+    sample = build_demo_college().model_copy(update={"id": ctx.state.id, "name": ctx.state.name, "students": []})
+    store.update_college(ctx.state.id, sample)
+    return sample
 
 
 @app.get("/api/orgs/{org}/precheck", response_model=PrecheckOut)
-def precheck(org: str) -> PrecheckOut:
-    college = _org(org).college
+def precheck(ctx: Ctx = Depends(org_ctx)) -> PrecheckOut:
+    college = ctx.state.college
     return PrecheckOut(problems=check(college), warnings=warnings(college))
 
 
 @app.post("/api/orgs/{org}/timetable/generate", response_model=JobOut, status_code=202)
-def start_generation(org: str, body: GenerateRequest) -> JobOut:
-    college = _org(org).college
+def start_generation(body: GenerateRequest, ctx: Ctx = Depends(org_ctx)) -> JobOut:
+    allow(can_generate(ctx.member))
+    org, college, actor = ctx.state.id, ctx.state.college, ctx.user.name
     if store.running_job(org):
         raise HTTPException(409, "A timetable is already being generated for this college.")
     job = store.new_job(org)
@@ -96,7 +248,7 @@ def start_generation(org: str, body: GenerateRequest) -> JobOut:
             tt = generate(college, time_limit=max(5.0, min(body.time_limit, 300.0)))
             if tt.sessions:
                 store.set_timetable(org, tt, action=f"Generated timetable ({len(tt.sessions)} classes)",
-                                    source="generate")
+                                    source="generate", actor=actor)
             else:
                 job.error = "; ".join(tt.messages) or "No timetable could be built."
             job.status = "done" if tt.sessions else "failed"
@@ -110,27 +262,33 @@ def start_generation(org: str, body: GenerateRequest) -> JobOut:
 
 
 @app.get("/api/orgs/{org}/jobs/{job_id}", response_model=JobOut)
-def get_job(org: str, job_id: str) -> JobOut:
+def get_job(job_id: str, ctx: Ctx = Depends(org_ctx)) -> JobOut:
     job = store.job(job_id)
-    if job is None or job.org != org:
+    if job is None or job.org != ctx.state.id:
         raise HTTPException(404, "Job not found")
     end = job.finished_at or time.time()
     return JobOut(id=job.id, status=job.status, elapsed=round(end - job.started_at, 1), error=job.error)
 
 
-@app.get("/api/orgs/{org}/timetable", response_model=TimetableOut)
-def get_timetable(org: str) -> TimetableOut:
-    state = _org(org)
-    tt = state.timetable
+def _timetable_out(ctx: Ctx) -> TimetableOut:
+    tt = ctx.state.timetable
     if tt is None:
         raise HTTPException(404, "No timetable generated yet")
-    quality = score(state.college, tt.sessions, tt.lunches) if tt.sessions else None
-    violations = validate(state.college, tt.sessions, tt.lunches) if tt.sessions else []
+    college = ctx.state.college
+    quality = score(college, tt.sessions, tt.lunches) if tt.sessions else None
+    violations = validate(college, tt.sessions, tt.lunches) if tt.sessions else []
+    if ctx.member.role not in ("admin", "coordinator"):
+        tt = tt.model_copy(update={"sessions": visible_sessions(ctx.member, college, tt)})
     return TimetableOut(timetable=tt, quality=quality, violations=violations)
 
 
+@app.get("/api/orgs/{org}/timetable", response_model=TimetableOut)
+def get_timetable(ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
+    return _timetable_out(ctx)
+
+
 # ---------------------------------------------------------------------------
-# Stage 3: editing (move options, proposals with repair, apply, audit, undo)
+# Editing: move options, proposals with repair, apply, audit, undo
 # ---------------------------------------------------------------------------
 
 class ProposalRequest(BaseModel):
@@ -159,11 +317,10 @@ class AuditOut(BaseModel):
     can_undo: bool
 
 
-def _current(org: str):
-    state = _org(org)
-    if state.timetable is None or not state.timetable.sessions:
+def _current(ctx: Ctx):
+    if ctx.state.timetable is None or not ctx.state.timetable.sessions:
         raise HTTPException(404, "No timetable generated yet")
-    return state
+    return ctx.state
 
 
 def _session(state, session_id: str):
@@ -174,16 +331,17 @@ def _session(state, session_id: str):
 
 
 @app.get("/api/orgs/{org}/timetable/sessions/{session_id}/options", response_model=list[MoveOption])
-def get_move_options(org: str, session_id: str) -> list[MoveOption]:
-    state = _current(org)
-    _session(state, session_id)
+def get_move_options(session_id: str, ctx: Ctx = Depends(org_ctx)) -> list[MoveOption]:
+    state = _current(ctx)
+    allow(can_edit_weekly(ctx.member, state.college, _session(state, session_id)))
     return move_options(state.college, state.timetable, session_id)
 
 
 @app.post("/api/orgs/{org}/proposals", response_model=ProposalOut, status_code=201)
-def create_proposal(org: str, body: ProposalRequest) -> ProposalOut:
-    state = _current(org)
+def create_proposal(body: ProposalRequest, ctx: Ctx = Depends(org_ctx)) -> ProposalOut:
+    state = _current(ctx)
     moved = _session(state, body.session_id)
+    allow(can_edit_weekly(ctx.member, state.college, moved))
     if body.day not in state.college.days:
         raise HTTPException(422, f"{body.day} is not a working day")
     candidate, message = repair_move(state.college, state.timetable, body.session_id, body.day, body.start_period,
@@ -192,52 +350,66 @@ def create_proposal(org: str, body: ProposalRequest) -> ProposalOut:
         raise HTTPException(422, message)
     changes = diff(state.college, state.timetable.sessions, candidate.sessions)
     changes.sort(key=lambda c: c.session_id != body.session_id)  # the class the user moved comes first
+    # A Coordinator's move may not push other departments' classes around.
+    for c in changes:
+        s = next(x for x in state.timetable.sessions if x.id == c.session_id)
+        if can_edit_weekly(ctx.member, state.college, s):
+            raise HTTPException(403, "This change would also move another department's classes, "
+                                     "so it needs the College Admin.")
     before = score(state.college, state.timetable.sessions, state.timetable.lunches).score
     after = score(state.college, candidate.sessions, candidate.lunches).score
     subj = state.college.subject(moved.subject_id).name
     secs = " + ".join(state.college.section(i).name for i in moved.section_ids)
     when = f"{body.day} {state.college.shift(moved.shift_id).periods[body.start_period].start}"
-    p = store.add_proposal(org, candidate, changes, message, action=f"Moved {subj} ({secs}) to {when}")
+    p = store.add_proposal(state.id, candidate, changes, message, action=f"Moved {subj} ({secs}) to {when}",
+                           created_by=ctx.user.id)
     return ProposalOut(id=p.id, message=message, changes=changes, quality_before=before, quality_after=after)
 
 
 @app.post("/api/orgs/{org}/proposals/{proposal_id}/apply", response_model=TimetableOut)
-def apply_proposal(org: str, proposal_id: str) -> TimetableOut:
-    state = _current(org)
-    p = store.pop_proposal(org, proposal_id)
+def apply_proposal(proposal_id: str, ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
+    state = _current(ctx)
+    p = state.proposals.get(proposal_id)
     if p is None or p.based_on != state.version:
+        store.pop_proposal(state.id, proposal_id)
         raise HTTPException(409, "This change is out of date: the timetable changed since it was prepared.")
+    if p.created_by != ctx.user.id:
+        raise HTTPException(403, "Only the person who prepared this change can apply it.")
+    store.pop_proposal(state.id, proposal_id)
     if validate(state.college, p.timetable.sessions, p.timetable.lunches):  # golden rule #1, re-checked
         raise HTTPException(409, "This change would create a clash, so it wasn't applied.")
-    store.set_timetable(org, p.timetable, action=p.action, source="drag",
+    store.set_timetable(state.id, p.timetable, action=p.action, source="drag", actor=ctx.user.name,
                         changes=p.changes)
-    return get_timetable(org)
+    return _timetable_out(ctx)
 
 
 @app.delete("/api/orgs/{org}/proposals/{proposal_id}", status_code=204, response_class=Response)
-def discard_proposal(org: str, proposal_id: str) -> Response:
-    _org(org)
-    store.pop_proposal(org, proposal_id)
+def discard_proposal(proposal_id: str, ctx: Ctx = Depends(org_ctx)) -> Response:
+    p = ctx.state.proposals.get(proposal_id)
+    if p and p.created_by == ctx.user.id:
+        store.pop_proposal(ctx.state.id, proposal_id)
     return Response(status_code=204)
 
 
 @app.get("/api/orgs/{org}/audit", response_model=list[AuditOut])
-def get_audit(org: str) -> list[AuditOut]:
-    state = _org(org)
-    undoable = next((e for e in reversed(state.audit) if not e.undone and e.source != "undo"), None)
+def get_audit(ctx: Ctx = Depends(org_ctx)) -> list[AuditOut]:
+    allow(can_view_activity(ctx.member))
+    undoable = store.last_undoable(ctx.state.id)
     return [
         AuditOut(id=e.id, at=e.at, action=e.action, source=e.source, actor=e.actor, changes=e.changes,
-                 undone=e.undone, can_undo=e is undoable and e.before is not None)
-        for e in reversed(state.audit)
+                 undone=e.undone, can_undo=e is undoable and not can_undo(ctx.member, e.actor))
+        for e in reversed(ctx.state.audit)
     ]
 
 
 @app.post("/api/orgs/{org}/audit/undo", response_model=TimetableOut)
-def undo(org: str) -> TimetableOut:
-    _org(org)
-    if store.undo_last(org) is None:
+def undo(ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
+    entry = store.last_undoable(ctx.state.id)
+    if entry is None:
         raise HTTPException(409, "Nothing to undo.")
-    return get_timetable(org)
+    allow(can_undo(ctx.member, entry.actor))
+    store.undo_last(ctx.state.id, actor=ctx.user.name)
+    return _timetable_out(ctx)
 
 
 # ---------------------------------------------------------------------------
@@ -264,39 +436,48 @@ class OverrideOut(BaseModel):
 
 
 @app.get("/api/orgs/{org}/timetable/week", response_model=WeekOut)
-def get_week(org: str, start: str) -> WeekOut:
-    state = _current(org)
+def get_week(start: str, ctx: Ctx = Depends(org_ctx)) -> WeekOut:
+    state = _current(ctx)
     try:
         days = week(state.college, start)
     except ValueError:
         raise HTTPException(422, "Use a date like 2026-10-21") from None
     occ = [o for d in days for o in occurrences(state.college, state.timetable, d.date)]
+    if ctx.member.role not in ("admin", "coordinator"):
+        visible = {s.id for s in visible_sessions(ctx.member, state.college, state.timetable)}
+        occ = [o for o in occ if o.session.id in visible]
     return WeekOut(days=days, occurrences=occ)
 
 
 @app.get("/api/orgs/{org}/timetable/sessions/{session_id}/day-options", response_model=list[MoveOption])
-def get_day_options(org: str, session_id: str, date: str, to_date: str) -> list[MoveOption]:
-    state = _current(org)
-    _session(state, session_id)
+def get_day_options(session_id: str, date: str, to_date: str, ctx: Ctx = Depends(org_ctx)) -> list[MoveOption]:
+    state = _current(ctx)
+    allow(can_edit_one_day(ctx.member, state.college, _session(state, session_id)))
     return day_options(state.college, state.timetable, session_id, date, to_date)
 
 
 @app.post("/api/orgs/{org}/overrides", response_model=OverrideOut, status_code=201)
-def create_override(org: str, body: OverrideRequest) -> OverrideOut:
-    state = _current(org)
+def create_override(body: OverrideRequest, ctx: Ctx = Depends(org_ctx)) -> OverrideOut:
+    state = _current(ctx)
+    allow(can_edit_one_day(ctx.member, state.college, _session(state, body.session_id)))
     new, message, action = add_override(state.college, state.timetable, body.session_id, body.date, body.kind,
-                                        body.to_date, body.start_period, body.reason, actor="Admin")
+                                        body.to_date, body.start_period, body.reason, actor=ctx.user.name)
     if new is None:
         raise HTTPException(422, message)
-    store.set_timetable(org, new, action=action, source="one-day")
-    return OverrideOut(message=message, timetable=get_timetable(org))
+    source = "teacher" if ctx.member.role == "teacher" else "one-day"
+    store.set_timetable(state.id, new, action=action, source=source, actor=ctx.user.name)
+    return OverrideOut(message=message, timetable=_timetable_out(ctx))
 
 
 @app.delete("/api/orgs/{org}/overrides/{override_id}", response_model=OverrideOut)
-def delete_override(org: str, override_id: str) -> OverrideOut:
-    state = _current(org)
+def delete_override(override_id: str, ctx: Ctx = Depends(org_ctx)) -> OverrideOut:
+    state = _current(ctx)
+    ov = next((o for o in state.timetable.overrides if o.id == override_id), None)
+    if ov is None:
+        raise HTTPException(404, "That change no longer exists.")
+    allow(can_edit_one_day(ctx.member, state.college, _session(state, ov.session_id)))
     new, message = remove_override(state.college, state.timetable, override_id)
     if new is None:
         raise HTTPException(409, message)
-    store.set_timetable(org, new, action=message, source="one-day")
-    return OverrideOut(message=message + ".", timetable=get_timetable(org))
+    store.set_timetable(state.id, new, action=message, source="one-day", actor=ctx.user.name)
+    return OverrideOut(message=message + ".", timetable=_timetable_out(ctx))

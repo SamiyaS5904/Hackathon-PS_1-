@@ -22,6 +22,7 @@ from app.models.domain import (
     Period,
     Section,
     Shift,
+    Student,
     Subject,
     Teacher,
     TimeBlock,
@@ -272,6 +273,7 @@ def build_demo_college() -> College:
     anita.blocked = [TimeBlock(day="Wed", start="08:30", end="10:10")]
 
     return College(
+        students=_students(),
         id="demo",
         name="Demo Institute of Technology",
         days=DAYS,
@@ -283,4 +285,42 @@ def build_demo_college() -> College:
         teachers=teachers,
         subjects=subjects,
         allotments=allotments,
+    )
+
+
+FIRST_NAMES = [
+    "Aarav", "Ananya", "Arjun", "Diya", "Harleen", "Ishaan", "Jasleen", "Kabir", "Kavya", "Manav",
+    "Meher", "Navneet", "Nikita", "Pranav", "Priya", "Rahul", "Riya", "Sahil", "Sanya", "Simran",
+    "Tanvi", "Uday", "Vansh", "Zoya", "Aditi", "Gurleen", "Karan", "Muskan", "Rohan", "Sneha",
+]
+LAST_NAMES = ["Sharma", "Gill", "Verma", "Singh", "Kaur", "Gupta", "Arora", "Mehta", "Bansal", "Sandhu"]
+
+
+def _students() -> list[Student]:
+    """Dummy student list: 60 per section, first half batch B1, second half B2.
+
+    Login email pattern: <section id without dash>.<nn>@demo.timetabl.ai, e.g. cse3a.01@demo.timetabl.ai
+    """
+    out = []
+    for sec in SECTIONS:
+        code = sec.id.replace("-", "")
+        for n in range(1, sec.strength + 1):
+            batch = sec.batches[0] if n <= sec.batches[0].strength else sec.batches[1]
+            name = f"{FIRST_NAMES[(n * 7 + len(code)) % len(FIRST_NAMES)]} {LAST_NAMES[(n * 3) % len(LAST_NAMES)]}"
+            out.append(Student(
+                id=f"{code}-{n:02d}", roll_no=f"{code.upper()}{n:02d}", name=name,
+                email=f"{code}.{n:02d}@demo.timetabl.ai", section_id=sec.id, batch_id=batch.id,
+            ))
+    return out
+
+
+def empty_college(name: str) -> College:
+    """A new college before setup: Mon-Fri, one day shift of 7 periods. The setup wizard edits all of it."""
+    slots = [("09:00", "09:50"), ("09:50", "10:40"), ("10:40", "11:30"), ("11:30", "12:20"),
+             ("13:00", "13:50"), ("13:50", "14:40"), ("14:40", "15:30")]  # lunch 12:20-13:00
+    periods = [Period(start=a, end=b) for a, b in slots]
+    return College(
+        id="new", name=name, days=["Mon", "Tue", "Wed", "Thu", "Fri"], lab_periods=2,
+        shifts=[Shift(id="day", name="Day", periods=periods)],
+        departments=[], venues=[], sections=[], teachers=[], subjects=[], allotments=[],
     )

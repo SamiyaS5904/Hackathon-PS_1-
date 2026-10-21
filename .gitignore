@@ -21,3 +21,7 @@ Thumbs.db
 *.log
 .vscode/
 .idea/
+
+# local database
+*.db
+*.db-journal
