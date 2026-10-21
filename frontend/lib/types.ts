@@ -133,3 +133,18 @@ export interface Rule {
   enabled: boolean; department_id: string | null; years: number[]; days: string[];
   after: string | null; before: string | null; max_periods: number | null;
 }
+
+// ---- Stage 6: assistant ----
+export interface Insight { kind: string; severity: "info" | "warn"; title: string; detail: string; ask: string }
+export interface OneDayAction {
+  session_id: string; date: string; kind: "cancel" | "move"; to_date?: string; start_period?: number;
+  reason: string; summary: string;
+}
+export type ChatCard = { type: "proposal"; proposal: Proposal } | { type: "one_day"; action: OneDayAction };
+export type ChatEvent =
+  | { type: "start"; conversation_id: string }
+  | { type: "token"; text: string }
+  | { type: "tool"; name: string; label: string; status: "start" | "done" | "error" }
+  | { type: "card"; card: ChatCard }
+  | { type: "error"; message: string }
+  | { type: "done" };

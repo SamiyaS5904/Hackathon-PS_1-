@@ -17,7 +17,9 @@ export function ProposalDialog({
   onDiscard: () => void;
 }) {
   const applyRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => applyRef.current?.focus(), []);
+  useEffect(() => {
+    applyRef.current?.focus();
+  }, []);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onDiscard();
     window.addEventListener("keydown", onKey);

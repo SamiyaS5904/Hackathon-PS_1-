@@ -2,7 +2,9 @@
 
 import { Loader2 } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { ChatPanel } from "@/components/chat/ChatPanel";
 import { PUBLIC_PATHS, useAuth } from "@/lib/auth";
+import { ChatPageProvider } from "@/lib/chat-context";
 import { TimetableProvider } from "@/lib/timetable-context";
 import { AppShell } from "./AppShell";
 
@@ -33,7 +35,10 @@ export function Gate({ children }: { children: React.ReactNode }) {
   }
   return (
     <TimetableProvider key={member.org_id}>
-      <AppShell>{children}</AppShell>
+      <ChatPageProvider>
+        <AppShell>{children}</AppShell>
+        <ChatPanel />
+      </ChatPageProvider>
     </TimetableProvider>
   );
 }

@@ -12,6 +12,7 @@ import { type OccurrenceMeta, TimetableGrid } from "@/components/timetable/Timet
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
+import { useChatPage } from "@/lib/chat-context";
 import { useTimetable } from "@/lib/timetable-context";
 import type { Occurrence, OverrideOut, Session, ViewKind, WeekOut } from "@/lib/types";
 
@@ -104,6 +105,19 @@ export default function TimetablePage() {
   }, [college, view, isTeacher, member]);
 
   const entityId = picked[view] || options[0]?.[1][0]?.id || "";
+
+  // Tell the assistant what's on screen ("move this class", "is this room free").
+  const { setPage } = useChatPage();
+  const entityName = useMemo(() => {
+    if (!college) return "";
+    if (view === "section") return college.sections.find((s) => s.id === entityId)?.name ?? "";
+    if (view === "teacher") return college.teachers.find((t) => t.id === entityId)?.name ?? "";
+    return college.venues.find((v) => v.id === entityId)?.name ?? "";
+  }, [college, view, entityId]);
+  useEffect(() => {
+    setPage({ view, entity: entityName, mode });
+    return () => setPage({});
+  }, [view, entityName, mode, setPage]);
 
   const subtitle = useMemo(() => {
     if (!college || !entityId) return "";

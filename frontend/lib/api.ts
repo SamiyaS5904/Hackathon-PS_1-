@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, College, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -8,6 +8,11 @@ const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
 
 /** Set by AuthProvider: the login token and the college currently open. */
 const session = { token: "", org: "", onUnauthorized: () => {} };
+
+/** Token + college for other services (the assistant). */
+export function getSession(): { token: string; org: string } {
+  return { token: session.token, org: session.org };
+}
 
 export function setSession(token: string, org: string, onUnauthorized: () => void) {
   session.token = token;
@@ -128,6 +133,7 @@ export const api = {
   },
   saveSectionShifts: (shifts: Record<string, string>) =>
     request<SetupSaved>(`${org()}/section-shifts`, { method: "PUT", body: JSON.stringify({ shifts }) }),
+  insights: () => request<Insight[]>(`${org()}/insights`),
   rules: () => request<Rule[]>(`${org()}/rules`),
   saveRules: (rules: Rule[]) => request<SetupSaved>(`${org()}/rules`, { method: "PUT", body: JSON.stringify({ rules }) }),
   myBlocked: () => request<{ blocked: TimeBlock[]; message: string }>(`${org()}/me/blocked`),
