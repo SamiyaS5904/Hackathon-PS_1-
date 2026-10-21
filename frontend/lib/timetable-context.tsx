@@ -15,6 +15,7 @@ interface State {
   job: Job | null;
   generate: () => Promise<void>;
   reload: () => Promise<void>;
+  setData: (d: TimetableOut) => void;
 }
 
 const Ctx = createContext<State | null>(null);
@@ -85,7 +86,7 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
   }, [loadTimetable]);
 
   return (
-    <Ctx.Provider value={{ college, data, precheck, loading, error, job, generate, reload }}>
+    <Ctx.Provider value={{ college, data, precheck, loading, error, job, generate, reload, setData }}>
       {children}
     </Ctx.Provider>
   );

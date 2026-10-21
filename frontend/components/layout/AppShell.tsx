@@ -1,17 +1,18 @@
 "use client";
 
 import clsx from "clsx";
-import { CalendarDays, Database, LayoutDashboard, Loader2 } from "lucide-react";
+import { CalendarDays, Database, History, LayoutDashboard, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isGenerating, useTimetable } from "@/lib/timetable-context";
 
-// Core-first order (root CLAUDE.md §2A). Secondary items go below a divider once they exist.
+// Core-first order (root CLAUDE.md §2A). Secondary items sit below a divider.
 const CORE = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/timetable", label: "Timetable", icon: CalendarDays },
   { href: "/data", label: "College data", icon: Database },
 ];
+const SECONDARY = [{ href: "/activity", label: "Activity", icon: History }];
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
@@ -33,7 +34,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex flex-col gap-0.5">
-          {CORE.map(({ href, label, icon: Icon }) => {
+          {[...CORE, null, ...SECONDARY].map((item) => {
+            if (!item) return <hr key="divider" className="my-2 border-border" />;
+            const { href, label, icon: Icon } = item;
             const active = href === "/" ? path === "/" : path.startsWith(href);
             return (
               <Link
@@ -63,7 +66,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         <header className="flex items-center gap-2 border-b border-border bg-surface px-4 py-3 md:hidden">
           <span className="font-semibold">Timetabl.ai</span>
           <nav className="ml-auto flex gap-1">
-            {CORE.map(({ href, label }) => (
+            {[...CORE, ...SECONDARY].map(({ href, label }) => (
               <Link key={href} href={href} className="rounded px-2 py-1 text-sm text-muted hover:bg-surface-2">
                 {label}
               </Link>

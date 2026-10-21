@@ -3,7 +3,7 @@
 import clsx from "clsx";
 import { FlaskConical, Utensils } from "lucide-react";
 import { useMemo } from "react";
-import type { College, Session, Timetable, ViewKind } from "@/lib/types";
+import type { College, MoveOption, Session, Timetable, ViewKind } from "@/lib/types";
 
 const toMin = (t: string) => {
   const [h, m] = t.split(":").map(Number);
@@ -26,16 +26,27 @@ interface Row {
   breakBefore: string | null;
 }
 
+export interface EditState {
+  movingId: string | null;
+  options: Map<string, MoveOption> | null; // key: `${day}|${start}`
+  busy: boolean;
+  changedIds: Set<string>;
+  onPick: (s: Session) => void;
+  onDrop: (day: string, start: string) => void;
+}
+
 export function TimetableGrid({
   college,
   timetable,
   view,
   entityId,
+  edit,
 }: {
   college: College;
   timetable: Timetable;
   view: ViewKind;
   entityId: string;
+  edit?: EditState;
 }) {
   const lookup = useMemo(
     () => ({
@@ -81,12 +92,11 @@ export function TimetableGrid({
     return out;
   }, [view, entityId, college.shifts, lookup, timetable.lunches]);
 
-  const cell = (day: string, row: Row) =>
-    sessions.filter((s) => s.day === day && toMin(s.start) < row.e && row.s < toMin(s.end));
-
   if (rows.length === 0) {
     return <p className="p-6 text-sm text-muted">Nothing scheduled here.</p>;
   }
+
+  const moving = edit?.movingId ? timetable.sessions.find((s) => s.id === edit.movingId) : undefined;
 
   return (
     <div className="overflow-x-auto rounded-xl border border-border bg-surface">
@@ -103,15 +113,27 @@ export function TimetableGrid({
         </thead>
         <tbody>
           {rows.map((row) => (
-            <RowView key={`${row.start}-${row.end}`} row={row} days={college.days} cell={cell} render={(s) => (
-              <SessionCard
-                key={s.id}
-                session={s}
-                view={view}
-                startsHere={s.start === row.start}
-                lookup={lookup}
-              />
-            )} />
+            <GridRow key={`${row.start}-${row.end}`} row={row} days={college.days}>
+              {(day) => {
+                const items = sessions.filter((s) => s.day === day && toMin(s.start) < row.e && row.s < toMin(s.end));
+                const opt = moving ? edit?.options?.get(`${day}|${row.start}`) : undefined;
+                const isOrigin = moving && moving.day === day && moving.start === row.start;
+                return (
+                  <TargetCell option={opt} origin={!!isOrigin} edit={edit} day={day} start={row.start}>
+                    {items.map((s) => (
+                      <SessionCard
+                        key={s.id}
+                        session={s}
+                        view={view}
+                        startsHere={s.start === row.start}
+                        lookup={lookup}
+                        edit={edit}
+                      />
+                    ))}
+                  </TargetCell>
+                );
+              }}
+            </GridRow>
           ))}
         </tbody>
       </table>
@@ -119,17 +141,7 @@ export function TimetableGrid({
   );
 }
 
-function RowView({
-  row,
-  days,
-  cell,
-  render,
-}: {
-  row: Row;
-  days: string[];
-  cell: (day: string, row: Row) => Session[];
-  render: (s: Session) => React.ReactNode;
-}) {
+function GridRow({ row, days, children }: { row: Row; days: string[]; children: (day: string) => React.ReactNode }) {
   return (
     <>
       {row.breakBefore && (
@@ -153,8 +165,8 @@ function RowView({
           </td>
         ) : (
           days.map((d) => (
-            <td key={d} className="h-[68px] px-1.5 py-1.5 align-top">
-              <div className="flex h-full flex-col gap-1">{cell(d, row).map(render)}</div>
+            <td key={d} className="h-[68px] p-1 align-top">
+              {children(d)}
             </td>
           ))
         )}
@@ -163,11 +175,71 @@ function RowView({
   );
 }
 
+function TargetCell({
+  option,
+  origin,
+  edit,
+  day,
+  start,
+  children,
+}: {
+  option?: MoveOption;
+  origin: boolean;
+  edit?: EditState;
+  day: string;
+  start: string;
+  children: React.ReactNode;
+}) {
+  const active = !!edit?.movingId;
+  const droppable = active && option && option.status !== "blocked";
+  const label = option
+    ? option.status === "free"
+      ? `Free slot${option.reason ? `: ${option.reason}` : ""}`
+      : option.reason
+    : undefined;
+  return (
+    <div
+      className={clsx(
+        "relative flex h-full flex-col gap-1 rounded-md p-0.5 transition",
+        active && option?.status === "free" && "bg-ok-soft ring-2 ring-ok/60",
+        active && option?.status === "repair" && "bg-warn-soft ring-2 ring-warn/50",
+        active && option?.status === "blocked" && "bg-danger-soft/60",
+        active && origin && "ring-2 ring-accent",
+        droppable && "cursor-pointer",
+      )}
+      title={active ? label : undefined}
+      onDragOver={(e) => droppable && e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault();
+        if (droppable) edit?.onDrop(day, start);
+      }}
+      onClick={() => droppable && edit?.onDrop(day, start)}
+      role={droppable ? "button" : undefined}
+      aria-label={droppable ? `Move here: ${day} ${start}. ${label ?? ""}` : undefined}
+      tabIndex={droppable ? 0 : undefined}
+      onKeyDown={(e) => droppable && (e.key === "Enter" || e.key === " ") && edit?.onDrop(day, start)}
+    >
+      {children}
+      {active && option && option.status !== "free" && (
+        <span
+          className={clsx(
+            "pointer-events-none absolute bottom-0.5 right-1 text-[10px] font-medium",
+            option.status === "repair" ? "text-warn" : "text-danger",
+          )}
+        >
+          {option.status === "repair" ? "others shift" : "blocked"}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function SessionCard({
   session: s,
   view,
   startsHere,
   lookup,
+  edit,
 }: {
   session: Session;
   view: ViewKind;
@@ -178,6 +250,7 @@ function SessionCard({
     venue: Map<string, { name: string }>;
     section: Map<string, { name: string; batches: { id: string; name: string }[] }>;
   };
+  edit?: EditState;
 }) {
   const subj = lookup.subject.get(s.subject_id);
   const hue = subjectHue(s.subject_id);
@@ -189,6 +262,8 @@ function SessionCard({
   const who = view === "teacher" ? sections : lookup.teacher.get(s.teacher_id)?.name;
   const where = view === "venue" ? sections : lookup.venue.get(s.venue_id)?.name;
   const title = `${subj?.name} · ${s.start}–${s.end} · ${lookup.teacher.get(s.teacher_id)?.name} · ${lookup.venue.get(s.venue_id)?.name} · ${sections}${batch ? ` (${batch})` : ""}`;
+  const isMoving = edit?.movingId === s.id;
+  const changed = edit?.changedIds.has(s.id);
 
   if (!startsHere) {
     return (
@@ -204,13 +279,38 @@ function SessionCard({
 
   return (
     <div
-      className={clsx("subj flex-1 rounded-md border px-2 py-1.5 leading-tight", s.kind === "lab" && "border-l-4")}
+      draggable={!!edit && !edit.busy}
+      onDragStart={(e) => {
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", s.id);
+        edit?.onPick(s);
+      }}
+      onClick={(e) => {
+        if (!edit || edit.busy) return;
+        // While moving another class, let the click reach the cell (drop target).
+        if (edit.movingId && edit.movingId !== s.id) return;
+        e.stopPropagation();
+        edit.onPick(s); // pick, or cancel when it's the class being moved
+      }}
+      role={edit ? "button" : undefined}
+      tabIndex={edit ? 0 : undefined}
+      aria-pressed={edit ? isMoving : undefined}
+      aria-label={edit ? `${subj?.name}, ${s.day} ${s.start}. Press to move.` : undefined}
+      onKeyDown={(e) => edit && (e.key === "Enter" || e.key === " ") && (e.preventDefault(), edit.onPick(s))}
+      className={clsx(
+        "subj flex-1 rounded-md border px-2 py-1.5 leading-tight",
+        s.kind === "lab" && "border-l-4",
+        edit && "cursor-grab active:cursor-grabbing hover:shadow-sm",
+        isMoving && "opacity-50 ring-2 ring-accent",
+        changed && "ring-2 ring-accent/70",
+      )}
       style={{ "--h": hue } as React.CSSProperties}
       title={title}
     >
       <div className="flex items-center gap-1">
         <span className="truncate text-[13px] font-semibold">{subj?.code}</span>
         {s.kind === "lab" && <FlaskConical size={12} aria-label="Lab" className="shrink-0" />}
+        {changed && <span className="rounded bg-accent px-1 text-[9px] font-semibold uppercase text-white dark:text-bg">new</span>}
         {batch && <span className="ml-auto shrink-0 rounded bg-white/60 px-1 text-[10px] font-medium dark:bg-black/30">{batch}</span>}
       </div>
       <div className="truncate text-[11px] opacity-90">{subj?.name}</div>

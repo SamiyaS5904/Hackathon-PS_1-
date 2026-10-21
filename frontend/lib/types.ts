@@ -48,3 +48,16 @@ export interface Job { id: string; status: "running" | "done" | "failed"; elapse
 export interface Precheck { problems: string[]; warnings: string[] }
 
 export type ViewKind = "section" | "teacher" | "venue";
+
+export interface MoveOption {
+  day: string; start_period: number; start: string; end: string;
+  status: "free" | "repair" | "blocked"; reason: string; venue_id: string | null; conflicts: string[];
+}
+export interface Change { session_id: string; subject: string; sections: string; before: string; after: string }
+export interface Proposal {
+  id: string; message: string; changes: Change[]; quality_before: number | null; quality_after: number | null;
+}
+export interface AuditEntry {
+  id: string; at: number; action: string; source: string; actor: string; changes: Change[];
+  undone: boolean; can_undo: boolean;
+}

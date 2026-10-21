@@ -1,12 +1,14 @@
 "use client";
 
 import clsx from "clsx";
-import { Printer } from "lucide-react";
+import { Loader2, Move, Printer, Undo2, X } from "lucide-react";
 import { useMemo, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
+import { ProposalDialog } from "@/components/timetable/ProposalDialog";
+import { useMoveEditor } from "@/components/timetable/useMoveEditor";
 import { TimetableGrid } from "@/components/timetable/TimetableGrid";
-import { Button, Card, PageHeader, Skeleton } from "@/components/ui";
+import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { useTimetable } from "@/lib/timetable-context";
 import type { ViewKind } from "@/lib/types";
 
@@ -17,9 +19,10 @@ const VIEWS: { id: ViewKind; label: string }[] = [
 ];
 
 export default function TimetablePage() {
-  const { college, data, loading, error } = useTimetable();
+  const { college, data, loading, error, reload } = useTimetable();
   const [view, setView] = useState<ViewKind>("section");
   const [picked, setPicked] = useState<Record<ViewKind, string>>({ section: "", teacher: "", venue: "" });
+  const editor = useMoveEditor();
 
   const options = useMemo(() => {
     if (!college) return [];
@@ -76,12 +79,10 @@ export default function TimetablePage() {
       />
 
       <GenerationProgress />
-      {error && (
-        <Card className="mb-4 border-danger/30 bg-danger-soft p-4 text-sm text-danger">{error}</Card>
-      )}
+      {error && <ErrorCard message={error} onRetry={reload} />}
 
       {loading || !college ? (
-        <Skeleton className="h-[520px] w-full" />
+        error ? null : <Skeleton className="h-[520px] w-full" />
       ) : !data ? (
         <EmptyState />
       ) : data.timetable.sessions.length === 0 ? (
@@ -136,10 +137,71 @@ export default function TimetablePage() {
             <span className="text-sm text-muted">{subtitle}</span>
           </div>
 
-          <TimetableGrid college={college} timetable={data.timetable} view={view} entityId={entityId} />
+          <EditBar editor={editor} college={college} />
+          <TimetableGrid college={college} timetable={data.timetable} view={view} entityId={entityId} edit={editor.edit} />
         </>
       )}
     </div>
+  );
+}
+
+function EditBar({ editor, college }: { editor: ReturnType<typeof useMoveEditor>; college: NonNullable<ReturnType<typeof useTimetable>["college"]> }) {
+  const { moving, options, busy, proposal, apply, discard, cancel, undo, toast, setToast } = editor;
+  const subject = moving ? college.subjects.find((s) => s.id === moving.subject_id)?.name : null;
+  const counts = options
+    ? [...options.values()].reduce((a, o) => ({ ...a, [o.status]: (a[o.status] ?? 0) + 1 }), {} as Record<string, number>)
+    : null;
+  return (
+    <>
+      <div className="no-print mb-3 min-h-[44px]" aria-live="polite">
+        {moving ? (
+          <div className="flex flex-wrap items-center gap-3 rounded-lg border border-accent/30 bg-accent-soft px-4 py-2.5 text-sm text-accent-text">
+            {busy || !options ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Move size={16} aria-hidden />}
+            <span>
+              Moving <b>{subject}</b> ({moving.day} {moving.start}).{" "}
+              {busy ? "Finding the best way to fit it…" : "Drop it on a highlighted slot, or click one."}
+            </span>
+            {counts && !busy && (
+              <span className="flex gap-3 text-xs">
+                <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-ok/70" />{counts.free ?? 0} free</span>
+                <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-warn/70" />{counts.repair ?? 0} others shift</span>
+                <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-danger/50" />{counts.blocked ?? 0} blocked</span>
+              </span>
+            )}
+            <button onClick={cancel} className="ml-auto inline-flex items-center gap-1 rounded px-2 py-1 text-xs hover:bg-accent/10">
+              <X size={14} aria-hidden /> Cancel (Esc)
+            </button>
+          </div>
+        ) : (
+          <p className="px-1 py-3 text-xs text-muted">
+            Tip: drag any class to a new slot, or click it and then click a slot. Green = free, amber = other classes
+            will shift to make room, red = not allowed. You always see the result before it&apos;s applied.
+          </p>
+        )}
+      </div>
+
+      {proposal && <ProposalDialog proposal={proposal} busy={busy} onApply={apply} onDiscard={discard} />}
+
+      {toast && (
+        <div
+          className={clsx(
+            "fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg px-4 py-3 text-sm shadow-lg",
+            toast.tone === "danger" ? "bg-danger text-white" : "bg-text text-bg",
+          )}
+          role="status"
+        >
+          {toast.text}
+          {toast.undo && (
+            <button onClick={() => { setToast(null); undo(); }} className="inline-flex items-center gap-1 font-semibold underline-offset-2 hover:underline">
+              <Undo2 size={14} aria-hidden /> Undo
+            </button>
+          )}
+          <button onClick={() => setToast(null)} aria-label="Dismiss" className="opacity-70 hover:opacity-100">
+            <X size={14} />
+          </button>
+        </div>
+      )}
+    </>
   );
 }
 

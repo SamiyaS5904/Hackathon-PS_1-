@@ -5,14 +5,14 @@ import { Button } from "@/components/ui";
 import { GENERATE_SECONDS, isGenerating, useTimetable } from "@/lib/timetable-context";
 
 export function GenerateButton({ label }: { label?: string }) {
-  const { generate, job, data, precheck } = useTimetable();
+  const { generate, job, data, precheck, college } = useTimetable();
   const running = isGenerating(job);
   const blocked = (precheck?.problems.length ?? 0) > 0;
   return (
     <Button
       variant="primary"
       onClick={generate}
-      disabled={running || blocked}
+      disabled={running || blocked || !college}
       title={blocked ? "Fix the data problems first" : undefined}
     >
       {running ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Sparkles size={16} aria-hidden />}

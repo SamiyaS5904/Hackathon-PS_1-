@@ -4,15 +4,16 @@ import { AlertTriangle, ArrowRight, Info } from "lucide-react";
 import Link from "next/link";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
-import { Button, Card, PageHeader, Skeleton } from "@/components/ui";
+import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { useTimetable } from "@/lib/timetable-context";
 
 export default function Dashboard() {
-  const { college, data, precheck, loading, error } = useTimetable();
+  const { college, data, precheck, loading, error, reload } = useTimetable();
 
   if (loading || !college) {
     return (
       <div className="mx-auto max-w-5xl space-y-4">
+        {error && !loading && <ErrorCard message={error} onRetry={reload} />}
         <Skeleton className="h-10 w-64" />
         <Skeleton className="h-36 w-full" />
         <Skeleton className="h-24 w-full" />
@@ -28,7 +29,7 @@ export default function Dashboard() {
     <div className="mx-auto max-w-5xl">
       <PageHeader title="Dashboard" subtitle={college.name} />
       <GenerationProgress />
-      {error && <Card className="mb-4 border-danger/30 bg-danger-soft p-4 text-sm text-danger">{error}</Card>}
+      {error && <ErrorCard message={error} onRetry={reload} />}
 
       {/* Core first: the next step is always the first thing on the page. */}
       <Card className="mb-6 p-6">

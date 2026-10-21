@@ -28,3 +28,35 @@ def test_generate_and_read_timetable():
         assert out["violations"] == []
         assert out["timetable"]["sessions"]
         assert 0 <= out["quality"]["score"] <= 100
+
+        # Stage 3: move a class through the API, apply, check audit, undo.
+        sessions = out["timetable"]["sessions"]
+        target = None
+        for s in sessions:
+            opts = client.get(f"/api/orgs/demo/timetable/sessions/{s['id']}/options").json()
+            target = next((o for o in opts if o["status"] == "repair"), None)
+            if target:
+                break
+        assert target, "expected a slot where other classes must shift"
+        r = client.post("/api/orgs/demo/proposals",
+                        json={"session_id": s["id"], "day": target["day"], "start_period": target["start_period"]})
+        assert r.status_code == 201, r.text
+        proposal = r.json()
+        assert proposal["changes"] and proposal["changes"][0]["session_id"] == s["id"]
+
+        discard = client.post("/api/orgs/demo/proposals",
+                              json={"session_id": s["id"], "day": target["day"], "start_period": target["start_period"]})
+        assert client.delete(f"/api/orgs/demo/proposals/{discard.json()['id']}").status_code == 204
+
+        applied = client.post(f"/api/orgs/demo/proposals/{proposal['id']}/apply").json()
+        assert applied["violations"] == []
+        moved = next(x for x in applied["timetable"]["sessions"] if x["id"] == s["id"])
+        assert (moved["day"], moved["start_period"]) == (target["day"], target["start_period"])
+
+        audit = client.get("/api/orgs/demo/audit").json()
+        assert audit[0]["source"] == "drag" and audit[0]["can_undo"]
+        undone = client.post("/api/orgs/demo/audit/undo").json()
+        back = next(x for x in undone["timetable"]["sessions"] if x["id"] == s["id"])
+        assert (back["day"], back["start_period"]) == (s["day"], s["start_period"])
+        # A stale proposal can't be applied after the timetable changed.
+        assert client.post(f"/api/orgs/demo/proposals/{proposal['id']}/apply").status_code == 409

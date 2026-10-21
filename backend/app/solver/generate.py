@@ -55,6 +55,15 @@ W_STUDENT_PEAK = 2
 W_LIGHT_DAY = 6
 
 
+@dataclass(frozen=True)
+class Pin:
+    """Force one placement of an allotment: on `day` at period `start`, in `venue_id` (or any fitting room)."""
+
+    day: str
+    start: int
+    venue_id: str | None = None
+
+
 @dataclass
 class Unit:
     """One allotment to be placed ``count`` times a week."""
@@ -153,23 +162,103 @@ def _m(hhmm: str) -> int:
     return int(h) * 60 + int(mm)
 
 
-def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: bool = False) -> Timetable:
+def generate(
+    college: College,
+    time_limit: float = 30.0,
+    workers: int = 8,
+    log: bool = False,
+    pins: dict[str, list[Pin]] | None = None,
+    lunch_pins: dict[tuple[str, int], int] | None = None,
+) -> Timetable:
+    """Build a timetable.
+
+    Full generation runs in two stages for speed and quality:
+      A. times only (day + period for every class), with a room-count check so enough
+         suitable rooms are always free;
+      B. rooms for the fixed times (room fit, home room, own department first).
+    If B can't place every class, the full model (times + rooms) is solved from A's times.
+
+    ``pins`` fix placements per allotment (used by repair); then the full model is used directly,
+    and an allotment pinned as many times as it meets a week is fully frozen.
+    """
     t0 = time.perf_counter()
     problems = feasibility.check(college)
     if problems:
         return Timetable(college_id=college.id, status="invalid_input", messages=problems)
-
     notes = feasibility.warnings(college)
     units = build_units(college)
+
+    def done(tt: Timetable) -> Timetable:
+        tt.warnings = notes
+        tt.solve_seconds = round(time.perf_counter() - t0, 2)
+        return tt
+
+    if pins:
+        return done(_solve(college, units, time_limit, workers, log, pins, lunch_pins or {}, with_venues=True))
+
+    stage_a = _solve(college, units, time_limit * 0.8, workers, log, {}, lunch_pins or {}, with_venues=False)
+    if not stage_a.sessions:
+        return done(stage_a)
+    remaining = max(time_limit - (time.perf_counter() - t0), 5.0)
+    roomed = assign_rooms(college, units, stage_a.sessions, remaining, workers)
+    if roomed is not None:
+        stage_a.sessions = roomed
+        return done(stage_a)
+
+    # Rare: rooms couldn't be matched to A's times; solve times + rooms together, starting from A.
+    hints = {(s.allotment_id, s.day, s.start_period) for s in stage_a.sessions}
+    lunch = {(ln.shift_id, ln.year): ln.period for ln in stage_a.lunches}
+    return done(_solve(college, units, max(remaining, 20.0), workers, log, {}, lunch, with_venues=True, hints=hints))
+
+
+def _solver(limit: float, workers: int, log: bool) -> cp_model.CpSolver:
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = max(limit, 1.0)
+    solver.parameters.num_search_workers = workers
+    solver.parameters.log_search_progress = log
+    # Allotment-level variables already remove most symmetry, and heavy presolve
+    # (symmetry, probing) costs more time than it saves here: spend it on search.
+    solver.parameters.symmetry_level = 0
+    solver.parameters.cp_model_probing_level = 0
+    solver.parameters.max_presolve_iterations = 1
+    return solver
+
+
+def _solve(
+    college: College,
+    units: list[Unit],
+    time_limit: float,
+    workers: int,
+    log: bool,
+    pins: dict[str, list[Pin]],
+    lunch_pins: dict[tuple[str, int], int],
+    with_venues: bool,
+    hints: set[tuple[str, str, int]] | None = None,
+) -> Timetable:
+    t0 = time.perf_counter()
     model = cp_model.CpModel()
     days = college.days
+
+    def fail(status: str, msg: str) -> Timetable:
+        return Timetable(college_id=college.id, status=status, messages=[msg])
 
     # All period start times (minutes) across every shift: overlap checkpoints.
     checkpoints = sorted({p.start_min for sh in college.shifts for p in sh.periods})
 
-    x: dict[tuple[int, int, int, str], cp_model.IntVar] = {}
+    # Room classes for the times-only stage: every distinct set of rooms a unit could use.
+    venue_sets: list[frozenset[str]] = []
+    unit_vset: dict[int, frozenset[str]] = {}
+    for ui, u in enumerate(units):
+        vs = frozenset(v for v, _ in _candidate_venues(college, u))
+        unit_vset[ui] = vs
+        if vs not in venue_sets:
+            venue_sets.append(vs)
+    subset_of = {ui: [k for k, S in enumerate(venue_sets) if vs <= S] for ui, vs in unit_vset.items()}
+
+    x: dict[tuple[int, int, int, str | None], cp_model.IntVar] = {}
     unit_day: dict[tuple[int, int], list] = defaultdict(list)
     cover: dict[tuple[str, int, int], list] = defaultdict(list)  # (resource, day, minute)
+    room_cover: dict[tuple[int, int, int], list] = defaultdict(list)  # (room class, day, minute)
     teacher_day: dict[tuple[str, int], list] = defaultdict(list)
     room_use: dict[tuple[str, str], list] = defaultdict(list)  # (section, venue) -> lecture vars
     group_day: dict[tuple[str, int], list] = defaultdict(list)  # (group, day) -> (var, periods)
@@ -177,25 +266,39 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
 
     for ui, u in enumerate(units):
         shift = college.shift(u.shift_id)
-        venues = _candidate_venues(college, u)
+        venues = _candidate_venues(college, u) if with_venues else [(None, 0)]
+        my_pins = pins.get(u.allotment_id, [])
+        frozen = len(my_pins) >= u.count  # fully pinned: only create the pinned placements
         for d, day in enumerate(days):
             for s in _candidate_starts(college, u, day):
+                if frozen and not any(p.day == day and p.start == s for p in my_pins):
+                    continue
                 begin = shift.periods[s].start_min
                 end = shift.periods[s + u.length - 1].end_min
                 points = [c for c in checkpoints if begin <= c < end]
                 for vid, cost in venues:
+                    if frozen and not any(
+                        p.day == day and p.start == s and p.venue_id in (None, vid) for p in my_pins
+                    ):
+                        continue
                     var = model.NewBoolVar(f"u{ui}_d{d}_s{s}_{vid}")
                     x[(ui, d, s, vid)] = var
+                    if hints is not None:
+                        model.AddHint(var, (u.allotment_id, day, s) in hints)
                     unit_day[(ui, d)].append(var)
                     for c in points:
                         cover[(f"t:{u.teacher_id}", d, c)].append(var)
-                        cover[(f"v:{vid}", d, c)].append(var)
                         for g in u.groups:
                             cover[(f"g:{g}", d, c)].append(var)
+                        if vid is not None:
+                            cover[(f"v:{vid}", d, c)].append(var)
+                        else:
+                            for k in subset_of[ui]:
+                                room_cover[(k, d, c)].append(var)
                     teacher_day[(u.teacher_id, d)].append((var, u.length))
                     for g in u.groups:
                         group_day[(g, d)].append((var, u.length))
-                    if u.kind == Kind.lecture:
+                    if vid is not None and u.kind == Kind.lecture:
                         for sid in u.section_ids:
                             room_use[(sid, vid)].append(var)
                     if cost:
@@ -207,22 +310,36 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
         if sum(1 for vs in per_day if vs) < u.count:
             subj = college.subject(u.subject_id)
             secs = ", ".join(college.section(i).name for i in u.section_ids)
-            return Timetable(
-                college_id=college.id,
-                status="invalid_input",
-                messages=[f"{subj.name} ({secs}) needs {u.count} days a week but has legal slots on fewer days "
-                          "(check shift, breaks, teacher blocked times, rooms)."],
-                solve_seconds=time.perf_counter() - t0,
-            )
+            return fail("invalid_input", f"{subj.name} ({secs}) needs {u.count} days a week but has legal slots on "
+                        "fewer days (check shift, breaks, teacher blocked times, rooms).")
         for vs in per_day:
             if len(vs) > 1:
                 model.AddAtMostOne(vs)
         model.Add(sum(v for vs in per_day for v in vs) == u.count)
 
+    # Pinned placements (repair keeps everything else exactly where it is).
+    for ui, u in enumerate(units):
+        for p in pins.get(u.allotment_id, []):
+            d = days.index(p.day) if p.day in days else -1
+            options = [
+                var for (vi, vd, vs, vid), var in x.items()
+                if vi == ui and vd == d and vs == p.start and p.venue_id in (None, vid)
+            ] if d >= 0 else []
+            if not options:
+                subj = college.subject(u.subject_id)
+                return fail("infeasible", f"{subj.name} can't be placed on {p.day} at that time (break, shift, "
+                            "teacher blocked, or no suitable room).")
+            model.Add(sum(options) == 1)
+
     # No double booking of any teacher / venue / student group.
     for vars_ in cover.values():
         if len(vars_) > 1:
             model.AddAtMostOne(vars_)
+
+    # Times-only stage: at every moment, classes that need rooms from a set never outnumber that set.
+    for (k, _, _), vars_ in room_cover.items():
+        if len(vars_) > len(venue_sets[k]):
+            model.Add(sum(vars_) <= len(venue_sets[k]))
 
     # Flexible lunch: pick one period per (shift, year) inside the mess window and
     # keep every student group of that year free then, on every day.
@@ -234,6 +351,8 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
         for y in sorted({s.year for s in college.sections if s.shift_id == sh.id}):
             choice = {p: model.NewBoolVar(f"lunch_{sh.id}_{y}_{p}") for p in cands}
             model.AddExactlyOne(choice.values())
+            if (sh.id, y) in lunch_pins and lunch_pins[(sh.id, y)] in choice:
+                model.Add(choice[lunch_pins[(sh.id, y)]] == 1)
             lunch_vars[(sh.id, y)] = choice
             for sec in (s for s in college.sections if s.shift_id == sh.id and s.year == y):
                 for g in group_ids(sec):
@@ -304,38 +423,17 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
                     prev = o
 
     model.Minimize(sum(cost_terms))
-
-    solver = cp_model.CpSolver()
-    solver.parameters.max_time_in_seconds = max(time_limit - (time.perf_counter() - t0), 1.0)
-    solver.parameters.num_search_workers = workers
-    solver.parameters.log_search_progress = log
-    # Allotment-level variables already remove most symmetry, and heavy presolve
-    # (symmetry, probing) costs more time than it saves here: spend it on search.
-    solver.parameters.symmetry_level = 0
-    solver.parameters.cp_model_probing_level = 0
-    solver.parameters.max_presolve_iterations = 1
+    solver = _solver(time_limit - (time.perf_counter() - t0), workers, log)
     status = solver.Solve(model)
-    elapsed = time.perf_counter() - t0
 
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
-        msg = (
-            "No clash-free timetable exists with the current data and rules."
-            if status == cp_model.INFEASIBLE
-            else f"No timetable found within {time_limit:.0f}s. Try a longer time limit or fewer rules."
-        )
-        return Timetable(
-            college_id=college.id,
-            status="infeasible" if status == cp_model.INFEASIBLE else "timeout",
-            messages=[msg],
-            warnings=notes,
-            solve_seconds=round(elapsed, 2),
-        )
-    value = solver.Value
-    objective = solver.ObjectiveValue()
+        if status == cp_model.INFEASIBLE:
+            return fail("infeasible", "No clash-free timetable exists with the current data and rules.")
+        return fail("timeout", f"No timetable found within {time_limit:.0f}s. Try a longer time limit or fewer rules.")
 
     sessions: list[Session] = []
     for (ui, d, s, vid), var in x.items():
-        if not value(var):
+        if not solver.Value(var):
             continue
         u = units[ui]
         shift = college.shift(u.shift_id)
@@ -345,7 +443,7 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
                 allotment_id=u.allotment_id,
                 subject_id=u.subject_id,
                 teacher_id=u.teacher_id,
-                venue_id=vid,
+                venue_id=vid or "",
                 kind=u.kind,
                 section_ids=u.section_ids,
                 batch_id=u.batch_id,
@@ -360,7 +458,7 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
 
     lunches = []
     for (sh_id, y), choice in lunch_vars.items():
-        p = next(p for p, v in choice.items() if value(v))
+        p = next(p for p, v in choice.items() if solver.Value(v))
         per = college.shift(sh_id).periods[p]
         lunches.append(Lunch(shift_id=sh_id, year=y, period=p, start=per.start, end=per.end))
 
@@ -369,7 +467,53 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
         status="optimal" if status == cp_model.OPTIMAL else "feasible",
         sessions=sessions,
         lunches=lunches,
-        warnings=notes,
-        solve_seconds=round(elapsed, 2),
-        objective=objective,
+        objective=solver.ObjectiveValue(),
     )
+
+
+def assign_rooms(
+    college: College, units: list[Unit], sessions: list[Session], time_limit: float, workers: int = 8,
+) -> list[Session] | None:
+    """Stage B: give every timed class a room. Returns None if some class can't get one."""
+    model = cp_model.CpModel()
+    by_allotment = {u.allotment_id: u for u in units}
+    checkpoints = sorted({p.start_min for sh in college.shifts for p in sh.periods})
+    y: dict[tuple[int, str], cp_model.IntVar] = {}
+    cover: dict[tuple[str, str, int], list] = defaultdict(list)
+    room_use: dict[tuple[str, str], list] = defaultdict(list)
+    cost_terms = []
+    for i, s in enumerate(sessions):
+        u = by_allotment[s.allotment_id]
+        begin, end = _m(s.start), _m(s.end)
+        points = [c for c in checkpoints if begin <= c < end]
+        options = _candidate_venues(college, u)
+        if not options:
+            return None
+        for vid, cost in options:
+            var = model.NewBoolVar(f"r{i}_{vid}")
+            y[(i, vid)] = var
+            for c in points:
+                cover[(vid, s.day, c)].append(var)
+            if s.kind == Kind.lecture:
+                for sid in s.section_ids:
+                    room_use[(sid, vid)].append(var)
+            if cost:
+                cost_terms.append(cost * var)
+        model.AddExactlyOne(y[(i, vid)] for vid, _ in options)
+    for vars_ in cover.values():
+        if len(vars_) > 1:
+            model.AddAtMostOne(vars_)
+    for vars_ in room_use.values():
+        used = model.NewBoolVar("")
+        for v in vars_:
+            model.AddImplication(v, used)
+        cost_terms.append(W_ROOM_SPREAD * used)
+    model.Minimize(sum(cost_terms))
+    solver = _solver(time_limit, workers, False)
+    if solver.Solve(model) not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return None
+    out = []
+    for i, s in enumerate(sessions):
+        vid = next(v for (j, v), var in y.items() if j == i and solver.Value(var))
+        out.append(s.model_copy(update={"venue_id": vid}))
+    return out
