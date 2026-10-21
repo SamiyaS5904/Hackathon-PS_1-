@@ -236,3 +236,32 @@ def test_regenerated_draft_keeps_the_published_one_for_students(client, admin):
     # Undoing the regeneration brings the published timetable back as the live one.
     client.post("/api/orgs/demo/audit/undo", headers=admin)
     assert store.org("demo").published is store.org("demo").timetable
+
+
+def test_exports_excel_and_pdf_with_role_limits(client, admin):
+    import io
+
+    from openpyxl import load_workbook
+
+    r = client.get("/api/orgs/demo/export?format=xlsx&view=section", headers=admin)
+    assert r.status_code == 200 and "attachment" in r.headers["content-disposition"]
+    wb = load_workbook(io.BytesIO(r.content))
+    assert len(wb.sheetnames) == 12 and "CSE-3A" in wb.sheetnames
+    ws = wb["CSE-3A"]
+    assert ws.merged_cells.ranges  # labs span several periods
+    text = " ".join(str(c.value) for row in ws.iter_rows() for c in row if c.value)
+    assert "Lunch" in text and "Break" in text
+    pdf = client.get("/api/orgs/demo/export?format=pdf&view=teacher", headers=admin)
+    assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
+    room = client.get("/api/orgs/demo/export?format=pdf&view=venue&id=lh-101", headers=admin)
+    assert room.status_code in (200, 404)
+
+    st = login(client, "cse3a.01@demo.timetabl.ai")
+    own = client.get("/api/orgs/demo/export?format=xlsx&view=section&id=cse-3a", headers=st)
+    assert own.status_code == 200
+    assert client.get("/api/orgs/demo/export?format=xlsx&view=section&id=cse-3b", headers=st).status_code == 403
+    assert client.get("/api/orgs/demo/export?format=xlsx&view=section", headers=st).status_code == 403
+    # A student's own sheet shows only their batch's labs.
+    mine = " ".join(str(c.value) for row in load_workbook(io.BytesIO(own.content)).active.iter_rows()
+                    for c in row if c.value)
+    assert "[B2]" not in mine

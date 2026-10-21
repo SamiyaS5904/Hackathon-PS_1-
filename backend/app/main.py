@@ -6,6 +6,7 @@ and every action checks the role rules in app/permissions.py.
 
 from __future__ import annotations
 
+import re
 import threading
 import time
 from contextlib import asynccontextmanager
@@ -37,6 +38,7 @@ from app.edits.oneday import DayInfo, Occurrence, add_override, day_options, occ
 from app.io.excel import RowError
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
+from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
 from app.models.domain import College, Department, Rule, TimeBlock, Timetable, Venue
 from app.permissions import (
     can_edit_one_day,
@@ -313,6 +315,40 @@ def _timetable_out(ctx: Ctx) -> TimetableOut:
 @app.get("/api/orgs/{org}/timetable", response_model=TimetableOut)
 def get_timetable(ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
     return _timetable_out(ctx)
+
+
+@app.get("/api/orgs/{org}/export")
+def export_timetable(format: Literal["xlsx", "pdf"] = "xlsx", view: Literal["section", "teacher", "venue"] = "section",
+                     id: str | None = None, ctx: Ctx = Depends(org_ctx)) -> Response:
+    """Weekly timetable as Excel or PDF. Without ``id``: every section / teacher / room (staff only).
+    Teachers and students only ever get classes they can see in the app."""
+    state = _current(ctx)
+    college, tt = state.college, state.timetable
+    role = ctx.member.role
+    if id is None:
+        allow("" if role in ("admin", "coordinator") else "You can download your own timetable.")
+        ids = {"section": [s.id for s in college.sections], "teacher": [t.id for t in college.teachers],
+               "venue": [v.id for v in college.venues]}[view]
+    else:
+        known = {"section": {s.id for s in college.sections}, "teacher": {t.id for t in college.teachers},
+                 "venue": {v.id for v in college.venues}}[view]
+        if id not in known:
+            raise HTTPException(404, "Not found in this college.")
+        if role == "student" and (view != "section" or id != ctx.member.section_id):
+            raise HTTPException(403, "You can download your own section's timetable.")
+        ids = [id]
+    sessions = visible_sessions(ctx.member, college, tt)
+    if view == "teacher" and id is None:  # skip teachers with nothing to print
+        ids = [i for i in ids if any(s.teacher_id == i for s in sessions)]
+    grids = [build_grid(college, tt, sessions, view, i) for i in ids]
+    name = entity_name(college, view, id) if id else {"section": "all sections", "teacher": "all teachers",
+                                                      "venue": "all rooms"}[view]
+    filename = re.sub(r"[^A-Za-z0-9]+", "-", f"{college.name} {name}").strip("-") + f".{format}"
+    if format == "xlsx":
+        body, media = to_xlsx(college, tt, grids), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    else:
+        body, media = to_pdf(college, tt, grids), "application/pdf"
+    return Response(body, media_type=media, headers={"Content-Disposition": f'attachment; filename="{filename}"'})
 
 
 @app.post("/api/orgs/{org}/timetable/publish", response_model=TimetableOut)
