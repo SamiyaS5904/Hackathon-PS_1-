@@ -12,6 +12,7 @@ from pydantic import BaseModel
 
 from app.models.domain import College, Kind, Lunch, Session
 from app.solver.feasibility import available_periods, group_ids
+from app.solver.generate import session_groups
 
 
 class QualityItem(BaseModel):
@@ -36,10 +37,7 @@ def score(college: College, sessions: list[Session], lunches: list[Lunch] | None
     # Student gaps: empty available periods between a group's first and last class of the day.
     occupied: dict[tuple[str, str], set[int]] = defaultdict(set)
     for s in sessions:
-        groups = [s.batch_id] if s.batch_id else [
-            g for sid in s.section_ids for g in group_ids(college.section(sid))
-        ]
-        for g in groups:
+        for g in session_groups(college, s):
             for p in range(s.start_period, s.start_period + s.length):
                 occupied[(g, s.day)].add(p)
     total_gaps, n_groups = 0, 0
@@ -89,7 +87,8 @@ def score(college: College, sessions: list[Session], lunches: list[Lunch] | None
         if s.kind != Kind.lecture:
             continue
         cap = college.venue(s.venue_id).capacity
-        strength = sum(college.section(i).strength for i in s.section_ids)
+        strength = (len(college.elective_group(s.elective_slot_id, s.group_id).student_ids) if s.elective_slot_id
+                    else sum(college.section(i).strength for i in s.section_ids))
         waste += (cap - strength) / cap
         n_lect += 1
     waste_avg = waste / max(n_lect, 1)
@@ -97,7 +96,7 @@ def score(college: College, sessions: list[Session], lunches: list[Lunch] | None
     # Home room: distinct lecture rooms per section (1 = always the same room).
     rooms: dict[str, set[str]] = defaultdict(set)
     for s in sessions:
-        if s.kind == Kind.lecture and len(s.section_ids) == 1:
+        if s.kind == Kind.lecture and len(s.section_ids) == 1 and not s.elective_slot_id:
             rooms[s.section_ids[0]].add(s.venue_id)
     rooms_avg = sum(len(v) for v in rooms.values()) / max(len(rooms), 1)
 

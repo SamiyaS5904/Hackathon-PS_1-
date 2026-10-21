@@ -17,6 +17,8 @@ from app.models.domain import (
     Batch,
     College,
     Department,
+    ElectiveGroup,
+    ElectiveSlot,
     Kind,
     LunchRule,
     Period,
@@ -272,8 +274,41 @@ def build_demo_college() -> College:
     anita = next(t for t in teachers if t.id == "t-anita")
     anita.blocked = [TimeBlock(day="Wed", start="08:30", end="10:10")]
 
+    # 3rd-year open elective: students of 4 sections (3 departments) split into 3 groups,
+    # each taught by a teacher of a different department in that department's rooms.
+    elective_teachers = [
+        ("t-gurpreet", "Dr. Gurpreet Sidhu", "me"),
+        ("t-neeraj", "Prof. Neeraj Kohli", "cse"),
+        ("t-alka", "Dr. Alka Jain", "ece"),
+    ]
+    for tid, tname, dept in elective_teachers:
+        teachers.append(Teacher(id=tid, name=tname, department_id=dept, shift_ids=["evening"], max_per_day=5))
+    elective_subjects = [("oe301", "OE301", "Robotics", "me"), ("oe302", "OE302", "Cloud Computing", "cse"),
+                         ("oe303", "OE303", "IoT Systems", "ece")]
+    for sid, code, name, dept in elective_subjects:
+        subjects.append(Subject(id=sid, code=code, name=name, department_id=dept, year=3, lectures_per_week=0))
+    students = _students()
+    third = [sec.id for sec in SECTIONS if sec.year == 3]
+    members: dict[str, list[str]] = {"robotics": [], "cloud": [], "iot": []}
+    for st in students:
+        if st.section_id in third:
+            n = int(st.id.split("-")[-1])
+            members["robotics" if n <= 15 else "cloud" if n <= 37 else "iot"].append(st.id)
+    elective = ElectiveSlot(
+        id="oe-3", name="Open Elective (3rd year)", section_ids=third, lectures_per_week=2,
+        groups=[
+            ElectiveGroup(id="robotics", name="Robotics", subject_id="oe301", teacher_id="t-gurpreet",
+                          student_ids=members["robotics"]),
+            ElectiveGroup(id="cloud", name="Cloud Computing", subject_id="oe302", teacher_id="t-neeraj",
+                          student_ids=members["cloud"]),
+            ElectiveGroup(id="iot", name="IoT Systems", subject_id="oe303", teacher_id="t-alka",
+                          student_ids=members["iot"]),
+        ],
+    )
+
     return College(
-        students=_students(),
+        students=students,
+        elective_slots=[elective],
         id="demo",
         name="Demo Institute of Technology",
         days=DAYS,

@@ -77,8 +77,15 @@ def visible_sessions(m: Member, college: College, tt: Timetable) -> list[Session
         return [s for s in tt.sessions
                 if s.teacher_id == m.teacher_id or m.department_id in _session_departments(college, s)]
     if m.role == "student":
-        return [s for s in tt.sessions
-                if m.section_id in s.section_ids and (s.batch_id is None or s.batch_id == m.batch_id)]
+        me = next((st.id for st in college.students if st.email == m.email), None)
+        out = []
+        for s in tt.sessions:
+            if s.elective_slot_id:
+                if me and me in college.elective_group(s.elective_slot_id, s.group_id).student_ids:
+                    out.append(s)
+            elif m.section_id in s.section_ids and (s.batch_id is None or s.batch_id == m.batch_id):
+                out.append(s)
+        return out
     return []
 
 

@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 
 PW = "demo1234"
+DEMO_CLASSES = 232 + 6  # regular classes + open elective (3 groups x 2 meetings)
 WEEKDAY_DATE = {"Mon": "2026-10-19", "Tue": "2026-10-20", "Wed": "2026-10-21", "Thu": "2026-10-22", "Fri": "2026-10-23"}
 
 
@@ -50,7 +51,7 @@ def test_login_errors_and_me(client):
 
 def test_admin_reads_everything(client, admin):
     out = client.get("/api/orgs/demo/timetable", headers=admin).json()
-    assert out["violations"] == [] and len(out["timetable"]["sessions"]) == 232
+    assert out["violations"] == [] and len(out["timetable"]["sessions"]) == DEMO_CLASSES
     assert len(client.get("/api/orgs/demo/college", headers=admin).json()["students"]) == 720
 
 
@@ -138,17 +139,23 @@ def test_invites(client, admin):
 
 def test_admin_edit_apply_undo(client, admin):
     sessions = client.get("/api/orgs/demo/timetable", headers=admin).json()["timetable"]["sessions"]
-    target = s = None
+    # "repair" (amber) means other classes must shift; some such moves have no clash-free answer,
+    # so try amber slots until one can be repaired, like a user would.
+    proposal = target = s = None
     for s in sessions:
+        if s["elective_slot_id"]:
+            continue
         opts = client.get(f"/api/orgs/demo/timetable/sessions/{s['id']}/options", headers=admin).json()
-        target = next((o for o in opts if o["status"] == "repair"), None)
-        if target:
+        for target in [o for o in opts if o["status"] == "repair"][:3]:
+            body = {"session_id": s["id"], "day": target["day"], "start_period": target["start_period"]}
+            r = client.post("/api/orgs/demo/proposals", json=body, headers=admin)
+            if r.status_code == 201:
+                proposal = r.json()
+                break
+            assert r.status_code == 422, r.text  # refused with a reason, never an error
+        if proposal:
             break
-    assert target
-    body = {"session_id": s["id"], "day": target["day"], "start_period": target["start_period"]}
-    proposal = client.post("/api/orgs/demo/proposals", json=body, headers=admin)
-    assert proposal.status_code == 201, proposal.text
-    proposal = proposal.json()
+    assert proposal, "expected at least one repairable move"
     assert proposal["changes"][0]["session_id"] == s["id"]
     # Someone else can't apply your proposal.
     co = login(client, "cse.coordinator@demo.timetabl.ai")
@@ -172,5 +179,5 @@ def test_state_survives_restart(client, admin):
     fresh = Store()
     fresh.load()
     st = fresh.org("demo")
-    assert st.timetable is not None and len(st.timetable.sessions) == 232
+    assert st.timetable is not None and len(st.timetable.sessions) == DEMO_CLASSES
     assert st.audit and st.audit[0].source == "generate"

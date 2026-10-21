@@ -9,8 +9,13 @@ already legal on their own (right shift, no fixed break, teacher not blocked,
 venue of the right type and size, lab block contiguous). Deciding per allotment
 instead of per identical lecture removes symmetry and keeps the search fast.
 
+Each *elective slot* is one more unit ``z[slot, day, start]``: when it meets, all its
+groups meet (one teacher and room each, any department) and every participating
+section is busy.
+
 Hard constraints
   * each allotment placed exactly ``count`` times a week, at most once a day
+  * each elective slot meets ``lectures_per_week`` times, at most once a day
   * no overlap per teacher, per venue and per student group (batch) -- checked at
     every period start time of every shift, so overlapping shifts that share
     venues/teachers are handled correctly
@@ -24,26 +29,20 @@ Soft objective (minimised)
   * a section's lectures spread over many rooms (prefer a home room)
   * uneven student weeks: heavy days, and days with a single class
 
-The result is always re-checked by ``app.validator`` (independent code).
+Generation runs in two stages (times, then rooms); repairs use the full model with
+everything except the affected classes pinned. The result is always re-checked by
+``app.validator`` (independent code).
 """
 
 from __future__ import annotations
 
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ortools.sat.python import cp_model
 
-from app.models.domain import (
-    College,
-    Kind,
-    Lunch,
-    Session,
-    Timetable,
-    VenueType,
-    to_hhmm,
-)
+from app.models.domain import College, ElectiveSlot, Kind, Lunch, Session, Timetable, VenueType, to_hhmm
 from app.solver import feasibility
 from app.solver.feasibility import available_periods, group_ids, lab_starts
 
@@ -84,6 +83,20 @@ class Unit:
     years: set[int]
 
 
+@dataclass
+class ElectiveUnit:
+    """One elective slot: all groups meet together, all participating sections are busy."""
+
+    slot: ElectiveSlot
+    shift_id: str
+    years: set[int]
+    groups: list[str]  # student groups (batches) of every participating section
+    teacher_ids: list[str]
+    count: int
+    # per elective group: (group id, candidate venues with cost)
+    rooms: list[tuple[str, list[tuple[str, int]]]] = field(default_factory=list)
+
+
 def build_units(college: College) -> list[Unit]:
     units: list[Unit] = []
     for a in college.allotments:
@@ -122,39 +135,89 @@ def build_units(college: College) -> list[Unit]:
     return units
 
 
-def _candidate_starts(college: College, u: Unit, day: str) -> list[int]:
-    shift = college.shift(u.shift_id)
-    if u.kind == Kind.lab:
-        starts = set.intersection(*(set(lab_starts(college, u.shift_id, y)) for y in u.years))
+def build_elective_units(college: College) -> list[ElectiveUnit]:
+    out = []
+    for slot in college.elective_slots:
+        if slot.lectures_per_week == 0 or not slot.groups:
+            continue
+        sections = [college.section(sid) for sid in slot.section_ids]
+        eu = ElectiveUnit(
+            slot=slot,
+            shift_id=sections[0].shift_id,
+            years={s.year for s in sections},
+            groups=[g for s in sections for g in group_ids(s)],
+            teacher_ids=[g.teacher_id for g in slot.groups],
+            count=slot.lectures_per_week,
+        )
+        for g in slot.groups:
+            home = college.teacher(g.teacher_id).department_id  # e.g. an ME teacher teaches in ME rooms
+            eu.rooms.append((g.id, _venues_for(college, len(g.student_ids), Kind.lecture, None, home)))
+        out.append(eu)
+    return out
+
+
+def _starts(college: College, shift_id: str, years: set[int], length: int, teacher_ids: list[str],
+            day: str) -> list[int]:
+    shift = college.shift(shift_id)
+    if length > 1:
+        starts = set.intersection(*(set(lab_starts(college, shift_id, y)) for y in years))
     else:
-        starts = set.intersection(*(set(available_periods(college, u.shift_id, y)) for y in u.years))
-    teacher = college.teacher(u.teacher_id)
+        starts = set.intersection(*(set(available_periods(college, shift_id, y)) for y in years))
+    teachers = [college.teacher(t) for t in teacher_ids]
     out = []
     for s in sorted(starts):
         begin = shift.periods[s].start_min
-        end = shift.periods[s + u.length - 1].end_min
-        if any(b.day == day and begin < _m(b.end) and _m(b.start) < end for b in teacher.blocked):
+        end = shift.periods[s + length - 1].end_min
+        if any(b.day == day and begin < _m(b.end) and _m(b.start) < end for t in teachers for b in t.blocked):
             continue
         out.append(s)
     return out
 
 
-def _candidate_venues(college: College, u: Unit) -> list[tuple[str, int]]:
+def _candidate_starts(college: College, u: Unit, day: str) -> list[int]:
+    return _starts(college, u.shift_id, u.years, u.length, [u.teacher_id], day)
+
+
+def _venues_for(college: College, strength: int, kind: Kind, lab_tag: str | None,
+                home_department: str) -> list[tuple[str, int]]:
     """(venue_id, cost) pairs; cost = wasted seats (per 10) + borrowing penalty."""
     out = []
     for v in college.venues:
-        if v.capacity < u.strength:
+        if v.capacity < strength:
             continue
-        if u.kind == Kind.lab:
-            if v.type != VenueType.lab or (u.lab_tag and u.lab_tag not in v.tags):
+        if kind == Kind.lab:
+            if v.type != VenueType.lab or (lab_tag and lab_tag not in v.tags):
                 continue
         elif v.type not in (VenueType.lecture, VenueType.seminar):
             continue
-        cost = (v.capacity - u.strength) // 10
-        if v.department_id is not None and v.department_id != u.home_department:
+        cost = (v.capacity - strength) // 10
+        if v.department_id is not None and v.department_id != home_department:
             cost += W_FOREIGN_ROOM
         out.append((v.id, cost))
     return out
+
+
+def _candidate_venues(college: College, u: Unit) -> list[tuple[str, int]]:
+    return _venues_for(college, u.strength, u.kind, u.lab_tag, u.home_department)
+
+
+def session_venues(college: College, s: Session, units: dict[str, Unit]) -> list[tuple[str, int]]:
+    """Rooms a placed session could use (elective groups size their room by members)."""
+    if s.elective_slot_id:
+        g = college.elective_group(s.elective_slot_id, s.group_id)
+        return _venues_for(college, len(g.student_ids), Kind.lecture, None,
+                           college.teacher(g.teacher_id).department_id)
+    return _candidate_venues(college, units[s.allotment_id])
+
+
+def session_groups(college: College, s: Session) -> list[str]:
+    """Student groups a session keeps busy. Elective sessions block every participating section."""
+    if s.elective_slot_id:
+        slot = college.elective_slot(s.elective_slot_id)
+        return [g for sid in slot.section_ids for g in group_ids(college.section(sid))]
+    if s.batch_id:
+        return [s.batch_id]
+    return [g for sid in s.section_ids for g in group_ids(college.section(sid))]
 
 
 def _m(hhmm: str) -> int:
@@ -169,17 +232,19 @@ def generate(
     log: bool = False,
     pins: dict[str, list[Pin]] | None = None,
     lunch_pins: dict[tuple[str, int], int] | None = None,
+    fixed: list[Session] | None = None,
 ) -> Timetable:
     """Build a timetable.
 
     Full generation runs in two stages for speed and quality:
-      A. times only (day + period for every class), with a room-count check so enough
-         suitable rooms are always free;
+      A. times only (day + period for every class and elective slot), with a room-count
+         check so enough suitable rooms are always free;
       B. rooms for the fixed times (room fit, home room, own department first).
     If B can't place every class, the full model (times + rooms) is solved from A's times.
 
-    ``pins`` fix placements per allotment (used by repair); then the full model is used directly,
-    and an allotment pinned as many times as it meets a week is fully frozen.
+    ``pins`` fix placements per allotment (used by repair); ``fixed`` sessions (elective
+    groups during a repair) stay exactly as they are and block their teachers, rooms and
+    students. Both use the full model directly.
     """
     t0 = time.perf_counter()
     problems = feasibility.check(college)
@@ -187,16 +252,22 @@ def generate(
         return Timetable(college_id=college.id, status="invalid_input", messages=problems)
     notes = feasibility.warnings(college)
     units = build_units(college)
+    eunits = build_elective_units(college)
 
     def done(tt: Timetable) -> Timetable:
         tt.warnings = notes
         tt.solve_seconds = round(time.perf_counter() - t0, 2)
         return tt
 
-    if pins:
-        return done(_solve(college, units, time_limit, workers, log, pins, lunch_pins or {}, with_venues=True))
+    if pins is not None:
+        tt = _solve(college, units, [], time_limit, workers, log, pins, lunch_pins or {}, with_venues=True,
+                    blockers=fixed or [])
+        if tt.sessions:
+            tt.sessions = tt.sessions + list(fixed or [])
+        return done(tt)
 
-    stage_a = _solve(college, units, time_limit * 0.8, workers, log, {}, lunch_pins or {}, with_venues=False)
+    stage_a = _solve(college, units, eunits, time_limit * 0.8, workers, log, {}, lunch_pins or {},
+                     with_venues=False)
     if not stage_a.sessions:
         return done(stage_a)
     remaining = max(time_limit - (time.perf_counter() - t0), 5.0)
@@ -205,10 +276,21 @@ def generate(
         stage_a.sessions = roomed
         return done(stage_a)
 
-    # Rare: rooms couldn't be matched to A's times; solve times + rooms together, starting from A.
-    hints = {(s.allotment_id, s.day, s.start_period) for s in stage_a.sessions}
+    # Rare: rooms couldn't be matched to A's times. Keep the elective slots (with rooms of their
+    # own), then solve the regular classes' times + rooms together, starting from A.
+    electives = assign_rooms(college, units, [s for s in stage_a.sessions if s.elective_slot_id], 10.0, workers)
+    if electives is None:
+        stage_a.sessions = []
+        stage_a.status = "infeasible"
+        stage_a.messages = ["The elective groups can't all get a big-enough room at the same time."]
+        return done(stage_a)
+    hints = {(s.allotment_id, s.day, s.start_period) for s in stage_a.sessions if not s.elective_slot_id}
     lunch = {(ln.shift_id, ln.year): ln.period for ln in stage_a.lunches}
-    return done(_solve(college, units, max(remaining, 20.0), workers, log, {}, lunch, with_venues=True, hints=hints))
+    full = _solve(college, units, [], max(remaining, 20.0), workers, log, {}, lunch, with_venues=True,
+                  hints=hints, blockers=electives)
+    if full.sessions:
+        full.sessions = full.sessions + electives
+    return done(full)
 
 
 def _solver(limit: float, workers: int, log: bool) -> cp_model.CpSolver:
@@ -227,6 +309,7 @@ def _solver(limit: float, workers: int, log: bool) -> cp_model.CpSolver:
 def _solve(
     college: College,
     units: list[Unit],
+    eunits: list[ElectiveUnit],
     time_limit: float,
     workers: int,
     log: bool,
@@ -234,10 +317,12 @@ def _solve(
     lunch_pins: dict[tuple[str, int], int],
     with_venues: bool,
     hints: set[tuple[str, str, int]] | None = None,
+    blockers: list[Session] | None = None,
 ) -> Timetable:
     t0 = time.perf_counter()
     model = cp_model.CpModel()
     days = college.days
+    blockers = blockers or []
 
     def fail(status: str, msg: str) -> Timetable:
         return Timetable(college_id=college.id, status=status, messages=[msg])
@@ -245,15 +330,36 @@ def _solve(
     # All period start times (minutes) across every shift: overlap checkpoints.
     checkpoints = sorted({p.start_min for sh in college.shifts for p in sh.periods})
 
-    # Room classes for the times-only stage: every distinct set of rooms a unit could use.
+    # Fixed sessions (repairs: elective groups) block their teacher, room and students.
+    busy: dict[tuple[str, str], list[tuple[int, int]]] = defaultdict(list)  # (resource, day) -> intervals
+    fixed_load: dict[tuple[str, int], int] = defaultdict(int)  # (teacher or group, day index) -> periods
+    for b in blockers:
+        span = (_m(b.start), _m(b.end))
+        busy[(f"t:{b.teacher_id}", b.day)].append(span)
+        busy[(f"v:{b.venue_id}", b.day)].append(span)
+        fixed_load[(f"t:{b.teacher_id}", days.index(b.day))] += b.length
+        for g in session_groups(college, b):
+            if span not in busy[(f"g:{g}", b.day)]:
+                busy[(f"g:{g}", b.day)].append(span)
+                fixed_load[(f"g:{g}", days.index(b.day))] += b.length
+
+    def is_busy(resource: str, day: str, begin: int, end: int) -> bool:
+        return any(a < end and begin < z for a, z in busy.get((resource, day), ()))
+
+    # Room classes for the times-only stage: every distinct set of rooms a class could use.
     venue_sets: list[frozenset[str]] = []
-    unit_vset: dict[int, frozenset[str]] = {}
-    for ui, u in enumerate(units):
-        vs = frozenset(v for v, _ in _candidate_venues(college, u))
-        unit_vset[ui] = vs
+
+    def vset_index(options: list[tuple[str, int]]) -> list[int]:
+        vs = frozenset(v for v, _ in options)
         if vs not in venue_sets:
             venue_sets.append(vs)
-    subset_of = {ui: [k for k, S in enumerate(venue_sets) if vs <= S] for ui, vs in unit_vset.items()}
+        return [k for k, S in enumerate(venue_sets) if vs <= S]
+
+    unit_vsets = {ui: frozenset(v for v, _ in _candidate_venues(college, u)) for ui, u in enumerate(units)}
+    for vs in list(unit_vsets.values()) + [frozenset(v for v, _ in opts) for eu in eunits for _, opts in eu.rooms]:
+        if vs not in venue_sets:
+            venue_sets.append(vs)
+    subset_of = {ui: [k for k, S in enumerate(venue_sets) if vs <= S] for ui, vs in unit_vsets.items()}
 
     x: dict[tuple[int, int, int, str | None], cp_model.IntVar] = {}
     unit_day: dict[tuple[int, int], list] = defaultdict(list)
@@ -275,11 +381,17 @@ def _solve(
                     continue
                 begin = shift.periods[s].start_min
                 end = shift.periods[s + u.length - 1].end_min
+                if is_busy(f"t:{u.teacher_id}", day, begin, end) or any(
+                    is_busy(f"g:{g}", day, begin, end) for g in u.groups
+                ):
+                    continue
                 points = [c for c in checkpoints if begin <= c < end]
                 for vid, cost in venues:
                     if frozen and not any(
                         p.day == day and p.start == s and p.venue_id in (None, vid) for p in my_pins
                     ):
+                        continue
+                    if vid is not None and is_busy(f"v:{vid}", day, begin, end):
                         continue
                     var = model.NewBoolVar(f"u{ui}_d{d}_s{s}_{vid}")
                     x[(ui, d, s, vid)] = var
@@ -303,6 +415,40 @@ def _solve(
                             room_use[(sid, vid)].append(var)
                     if cost:
                         cost_terms.append(cost * var)
+
+    # Elective slots (times-only stage): one variable per day/start; every group meets then.
+    z: dict[tuple[int, int, int], cp_model.IntVar] = {}
+    for ei, eu in enumerate(eunits):
+        shift = college.shift(eu.shift_id)
+        group_classes = [vset_index(opts) for _, opts in eu.rooms]
+        per_day = []
+        for d, day in enumerate(days):
+            vars_today = []
+            for s in _starts(college, eu.shift_id, eu.years, 1, eu.teacher_ids, day):
+                begin, end = shift.periods[s].start_min, shift.periods[s].end_min
+                var = model.NewBoolVar(f"e{ei}_d{d}_s{s}")
+                z[(ei, d, s)] = var
+                vars_today.append(var)
+                points = [c for c in checkpoints if begin <= c < end]
+                for c in points:
+                    for t in eu.teacher_ids:
+                        cover[(f"t:{t}", d, c)].append(var)
+                    for g in eu.groups:
+                        cover[(f"g:{g}", d, c)].append(var)
+                    for classes in group_classes:  # each group needs one room from its class
+                        for k in classes:
+                            room_cover[(k, d, c)].append(var)
+                for t in eu.teacher_ids:
+                    teacher_day[(t, d)].append((var, 1))
+                for g in eu.groups:
+                    group_day[(g, d)].append((var, 1))
+            if len(vars_today) > 1:
+                model.AddAtMostOne(vars_today)
+            per_day.append(vars_today)
+        if sum(1 for v in per_day if v) < eu.count:
+            return fail("invalid_input", f"Elective slot '{eu.slot.name}' needs {eu.count} days a week but its "
+                        "teachers and sections are free on fewer days.")
+        model.Add(sum(v for vs in per_day for v in vs) == eu.count)
 
     # Each allotment: `count` times a week, at most once a day.
     for ui, u in enumerate(units):
@@ -356,11 +502,14 @@ def _solve(
             lunch_vars[(sh.id, y)] = choice
             for sec in (s for s in college.sections if s.shift_id == sh.id and s.year == y):
                 for g in group_ids(sec):
-                    for d in range(len(days)):
+                    for d, day in enumerate(days):
                         for p, lv in choice.items():
-                            busy = cover.get((f"g:{g}", d, sh.periods[p].start_min), [])
-                            if busy:
-                                model.Add(sum(busy) + lv <= 1)
+                            per = sh.periods[p]
+                            if is_busy(f"g:{g}", day, per.start_min, per.end_min):
+                                model.Add(lv == 0)
+                            busy_vars = cover.get((f"g:{g}", d, per.start_min), [])
+                            if busy_vars:
+                                model.Add(sum(busy_vars) + lv <= 1)
 
     # Home room: each extra lecture room a section uses costs a little.
     for vars_ in room_use.values():
@@ -377,7 +526,7 @@ def _solve(
             items = teacher_day.get((t.id, d))
             if not items:
                 continue
-            load = sum(v * ln for v, ln in items)
+            load = sum(v * ln for v, ln in items) + fixed_load.get((f"t:{t.id}", d), 0)
             model.Add(load <= t.max_per_day)
             model.Add(peak >= load)
             used = True
@@ -393,7 +542,7 @@ def _solve(
                 items = group_day.get((g, d))
                 if not items:
                     continue
-                load = sum(v * ln for v, ln in items)
+                load = sum(v * ln for v, ln in items) + fixed_load.get((f"g:{g}", d), 0)
                 model.Add(peak >= load)
                 has = model.NewBoolVar("")
                 model.Add(load >= has)
@@ -409,12 +558,13 @@ def _solve(
         chain = available_periods(college, s.shift_id, s.year)
         lunch = lunch_vars.get((s.shift_id, s.year), {})
         for g in group_ids(s):
-            for d in range(len(days)):
-                # Lunch counts as "occupied" so it never looks like a gap.
-                occ = [
-                    sum(cover.get((f"g:{g}", d, shift.periods[p].start_min), [])) + lunch.get(p, 0)
-                    for p in chain
-                ]
+            for d, day in enumerate(days):
+                # Lunch counts as "occupied" so it never looks like a gap; fixed sessions are occupied too.
+                occ = []
+                for p in chain:
+                    per = shift.periods[p]
+                    fixed = 1 if is_busy(f"g:{g}", day, per.start_min, per.end_min) else 0
+                    occ.append(sum(cover.get((f"g:{g}", d, per.start_min), [])) + lunch.get(p, 0) + fixed)
                 prev = 0
                 for o in occ:
                     st = model.NewBoolVar("")
@@ -432,29 +582,32 @@ def _solve(
         return fail("timeout", f"No timetable found within {time_limit:.0f}s. Try a longer time limit or fewer rules.")
 
     sessions: list[Session] = []
+
+    def add(**fields) -> None:
+        sessions.append(Session(id=f"s{len(sessions) + 1}", **fields))
+
     for (ui, d, s, vid), var in x.items():
         if not solver.Value(var):
             continue
         u = units[ui]
         shift = college.shift(u.shift_id)
-        sessions.append(
-            Session(
-                id=f"s{len(sessions) + 1}",
-                allotment_id=u.allotment_id,
-                subject_id=u.subject_id,
-                teacher_id=u.teacher_id,
-                venue_id=vid or "",
-                kind=u.kind,
-                section_ids=u.section_ids,
-                batch_id=u.batch_id,
-                day=days[d],
-                shift_id=u.shift_id,
-                start_period=s,
-                length=u.length,
-                start=to_hhmm(shift.periods[s].start_min),
-                end=to_hhmm(shift.periods[s + u.length - 1].end_min),
-            )
-        )
+        add(allotment_id=u.allotment_id, subject_id=u.subject_id, teacher_id=u.teacher_id, venue_id=vid or "",
+            kind=u.kind, section_ids=u.section_ids, batch_id=u.batch_id, day=days[d], shift_id=u.shift_id,
+            start_period=s, length=u.length, start=to_hhmm(shift.periods[s].start_min),
+            end=to_hhmm(shift.periods[s + u.length - 1].end_min))
+
+    student_section = {st.id: st.section_id for st in college.students}
+    for (ei, d, s), var in z.items():
+        if not solver.Value(var):
+            continue
+        eu = eunits[ei]
+        shift = college.shift(eu.shift_id)
+        for g in eu.slot.groups:
+            secs = sorted({student_section[i] for i in g.student_ids if i in student_section}) or eu.slot.section_ids
+            add(allotment_id=f"elective:{eu.slot.id}:{g.id}", subject_id=g.subject_id, teacher_id=g.teacher_id,
+                venue_id="", kind=Kind.lecture, section_ids=secs, batch_id=None, day=days[d], shift_id=eu.shift_id,
+                start_period=s, length=1, start=to_hhmm(shift.periods[s].start_min),
+                end=to_hhmm(shift.periods[s].end_min), elective_slot_id=eu.slot.id, group_id=g.id)
 
     lunches = []
     for (sh_id, y), choice in lunch_vars.items():
@@ -483,10 +636,9 @@ def assign_rooms(
     room_use: dict[tuple[str, str], list] = defaultdict(list)
     cost_terms = []
     for i, s in enumerate(sessions):
-        u = by_allotment[s.allotment_id]
         begin, end = _m(s.start), _m(s.end)
         points = [c for c in checkpoints if begin <= c < end]
-        options = _candidate_venues(college, u)
+        options = session_venues(college, s, by_allotment)
         if not options:
             return None
         for vid, cost in options:
@@ -494,7 +646,7 @@ def assign_rooms(
             y[(i, vid)] = var
             for c in points:
                 cover[(vid, s.day, c)].append(var)
-            if s.kind == Kind.lecture:
+            if s.kind == Kind.lecture and not s.elective_slot_id:
                 for sid in s.section_ids:
                     room_use[(sid, vid)].append(var)
             if cost:

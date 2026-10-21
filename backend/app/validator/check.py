@@ -42,6 +42,7 @@ def validate(
     subjects = {s.id: s for s in college.subjects}
     shifts = {s.id: s for s in college.shifts}
     allotments = {a.id: a for a in college.allotments}
+    slots = {e.id: e for e in college.elective_slots}
 
     def bad(kind: str, msg: str, *ss: Session) -> None:
         out.append(Violation(type=kind, message=msg, session_ids=[s.id for s in ss]))
@@ -51,14 +52,21 @@ def validate(
     groups_of: dict[str, list[str]] = {}
 
     for s in sessions:
+        slot = slots.get(s.elective_slot_id) if s.elective_slot_id else None
+        grp = next((g for g in slot.groups if g.id == s.group_id), None) if slot else None
         a = allotments.get(s.allotment_id)
-        if a is None or s.teacher_id not in teachers or s.venue_id not in venues or s.shift_id not in shifts:
+        known = grp is not None if s.elective_slot_id else a is not None
+        if not known or s.teacher_id not in teachers or s.venue_id not in venues or s.shift_id not in shifts \
+                or s.subject_id not in subjects:
             bad("unknown_reference", f"Session {s.id} refers to something that doesn't exist.", s)
             continue
         if s.day not in college.days:
             bad("bad_day", f"Session {s.id} is on {s.day}, which is not a working day.", s)
             continue
-        if (a.teacher_id, a.subject_id, sorted(a.section_ids), a.batch_id, a.kind) != (
+        if grp is not None:
+            if (grp.teacher_id, grp.subject_id, Kind.lecture) != (s.teacher_id, s.subject_id, s.kind):
+                bad("allotment_mismatch", f"Session {s.id} doesn't match elective group {grp.name}.", s)
+        elif (a.teacher_id, a.subject_id, sorted(a.section_ids), a.batch_id, a.kind) != (
             s.teacher_id, s.subject_id, sorted(s.section_ids), s.batch_id, s.kind,
         ):
             bad("allotment_mismatch", f"Session {s.id} doesn't match its allotment {a.id}.", s)
@@ -67,7 +75,7 @@ def validate(
         subj = subjects[s.subject_id]
         teacher = teachers[s.teacher_id]
         venue = venues[s.venue_id]
-        secs = [sections[i] for i in s.section_ids]
+        secs = [sections[i] for i in (slot.section_ids if slot else s.section_ids) if i in sections]
         name = f"{subj.name} ({', '.join(x.name for x in secs)})"
 
         # Periods exist and are back-to-back.
@@ -100,7 +108,9 @@ def validate(
                 bad("teacher_blocked", f"{teacher.name} is blocked on {s.day} {blk.start}-{blk.end}.", s)
 
         # Venue fit.
-        if s.batch_id:
+        if grp is not None:  # elective group: room holds its members; every participating section is busy
+            strength, groups = len(grp.student_ids), [g for x in secs for g in _groups(x)]
+        elif s.batch_id:
             batch = next((b for b in secs[0].batches if b.id == s.batch_id), None)
             if batch is None:
                 bad("unknown_reference", f"{name}: unknown batch {s.batch_id}.", s)
@@ -139,6 +149,30 @@ def validate(
                     )
                 )
 
+    # Elective slots: every group meets the slot's weekly count, all groups at the same times,
+    # and no student is in two groups of one slot.
+    if check_counts:
+        for slot in college.elective_slots:
+            times = {}
+            for g in slot.groups:
+                mine = sorted((s.day, s.start_period) for s in sessions
+                              if s.elective_slot_id == slot.id and s.group_id == g.id)
+                times[g.id] = mine
+                if len(mine) != slot.lectures_per_week:
+                    out.append(Violation(type="wrong_count", message=f"Elective {g.name} ({slot.name}) meets "
+                                         f"{len(mine)} time(s) a week; needs {slot.lectures_per_week}."))
+            if len({tuple(t) for t in times.values()}) > 1:
+                out.append(Violation(type="elective_split",
+                                     message=f"The groups of {slot.name} don't all meet at the same times."))
+    for slot in college.elective_slots:
+        seen: dict[str, str] = {}
+        for g in slot.groups:
+            for sid in g.student_ids:
+                if sid in seen and seen[sid] != g.id:
+                    out.append(Violation(type="student_in_two_groups",
+                                         message=f"Student {sid} is in two groups of {slot.name}."))
+                seen[sid] = g.id
+
     # Clashes: same day, overlapping time, shared teacher / venue / student group.
     by_day: dict[str, list[Session]] = defaultdict(list)
     for s in sessions:
@@ -154,6 +188,8 @@ def validate(
                 bad("teacher_clash", f"{teachers[a.teacher_id].name} is double-booked on {when}.", a, b)
             if a.venue_id == b.venue_id:
                 bad("venue_clash", f"{venues[a.venue_id].name} is double-booked on {when}.", a, b)
+            if a.elective_slot_id and a.elective_slot_id == b.elective_slot_id:
+                continue  # groups of one slot run in parallel by design (members checked above)
             shared = set(groups_of.get(a.id, [])) & set(groups_of.get(b.id, []))
             if shared:
                 bad("student_clash", f"Students of {_group_label(college, shared)} have two classes on {when}.", a, b)

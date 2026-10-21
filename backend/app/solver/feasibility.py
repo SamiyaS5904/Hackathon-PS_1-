@@ -50,7 +50,7 @@ def _m(hhmm: str) -> int:
 
 def check(college: College) -> list[str]:
     problems: list[str] = []
-    if not college.allotments:
+    if not college.allotments and not college.elective_slots:
         return ["No classes to schedule yet: add departments, sections, subjects and teachers "
                 "(or load the sample college) first."]
     ids = {
@@ -158,6 +158,8 @@ def check(college: College) -> list[str]:
             group_demand[g] += count * length
         teacher_demand[a.teacher_id] += count * length
 
+    problems += _elective_problems(college, group_demand, teacher_demand)
+
     # Capacity per student group.
     for s in college.sections:
         lunch = 1 if college.shift(s.shift_id).lunch else 0
@@ -179,6 +181,72 @@ def check(college: College) -> list[str]:
             )
 
     problems += _room_capacity_problems(college)
+    return problems
+
+
+def _elective_problems(college: College, group_demand: dict, teacher_demand: dict) -> list[str]:
+    """Elective slots and pooled groups: membership, teachers, rooms, shifts. Adds their demand."""
+    problems = []
+    sections = {s.id: s for s in college.sections}
+    teachers = {t.id: t for t in college.teachers}
+    subjects = {s.id for s in college.subjects}
+    students = {st.id: st for st in college.students}
+    for slot in college.elective_slots:
+        label = f"Elective slot '{slot.name}'"
+        missing = [sid for sid in slot.section_ids if sid not in sections]
+        if missing or not slot.section_ids:
+            problems.append(f"{label} refers to unknown section(s) {', '.join(missing) or '(none)'}.")
+            continue
+        secs = [sections[i] for i in slot.section_ids]
+        if len({x.shift_id for x in secs}) > 1:
+            problems.append(f"{label}: its sections are in different shifts, so they can't all meet together.")
+            continue
+        shift_id = secs[0].shift_id
+        if not slot.groups:
+            problems.append(f"{label} has no groups.")
+            continue
+        if slot.lectures_per_week > len(college.days):
+            problems.append(f"{label}: {slot.lectures_per_week} meetings a week but only {len(college.days)} "
+                            "working days (at most one a day).")
+        used_teachers: dict[str, str] = {}
+        member_of: dict[str, str] = {}
+        for g in slot.groups:
+            if g.subject_id not in subjects or g.teacher_id not in teachers:
+                problems.append(f"{label}: group '{g.name}' refers to an unknown subject or teacher.")
+                continue
+            t = teachers[g.teacher_id]
+            if g.teacher_id in used_teachers:
+                problems.append(f"{label}: {t.name} teaches both '{used_teachers[g.teacher_id]}' and '{g.name}', "
+                                "but all groups meet at the same time.")
+            used_teachers[g.teacher_id] = g.name
+            if shift_id not in t.shift_ids:
+                problems.append(f"{label}: {t.name} doesn't teach in the {college.shift(shift_id).name} shift.")
+            if not g.student_ids:
+                problems.append(f"{label}: group '{g.name}' has no students.")
+            for sid in g.student_ids:
+                st = students.get(sid)
+                if st is None:
+                    problems.append(f"{label}: group '{g.name}' lists unknown student {sid}.")
+                elif st.section_id not in slot.section_ids:
+                    problems.append(f"{label}: {st.name} ({st.roll_no}) is in group '{g.name}' but their section "
+                                    "isn't part of this slot.")
+                elif sid in member_of and member_of[sid] != g.name:
+                    problems.append(f"{label}: {st.name} ({st.roll_no}) is in both '{member_of[sid]}' and '{g.name}'.")
+                member_of[sid] = g.name
+            size = len(g.student_ids)
+            if size and not any(v.type in (VenueType.lecture, VenueType.seminar) and v.capacity >= size
+                                for v in college.venues):
+                problems.append(f"{label}: no room holds group '{g.name}' ({size} students).")
+            teacher_demand[g.teacher_id] = teacher_demand.get(g.teacher_id, 0) + slot.lectures_per_week
+        # Everyone in the participating sections must be in a group (nobody is left free).
+        for sec in secs:
+            listed = [st for st in college.students if st.section_id == sec.id]
+            left = [st for st in listed if st.id not in member_of]
+            if left:
+                names = ", ".join(st.roll_no for st in left[:5]) + (" ..." if len(left) > 5 else "")
+                problems.append(f"{label}: {len(left)} student(s) of {sec.name} aren't in any group ({names}).")
+            for gid in group_ids(sec):
+                group_demand[gid] += slot.lectures_per_week
     return problems
 
 
@@ -227,6 +295,19 @@ def _room_demand(college: College) -> list[dict]:
             "department_id": sections[0].department_id, "shift_id": shift.id,
             "periods": periods, "minutes": periods * period_min,
         })
+    for slot in college.elective_slots:
+        try:
+            shift = college.shift(college.section(slot.section_ids[0]).shift_id)
+            homes = {g.id: college.teacher(g.teacher_id).department_id for g in slot.groups}
+        except (StopIteration, IndexError):
+            continue
+        period_min = sum(p.end_min - p.start_min for p in shift.periods) / max(len(shift.periods), 1)
+        for g in slot.groups:
+            rows.append({
+                "kind": Kind.lecture, "tag": None, "strength": len(g.student_ids), "department_id": homes[g.id],
+                "shift_id": shift.id, "periods": slot.lectures_per_week,
+                "minutes": slot.lectures_per_week * period_min,
+            })
     return rows
 
 

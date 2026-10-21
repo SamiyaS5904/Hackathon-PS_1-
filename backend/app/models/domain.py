@@ -179,6 +179,41 @@ class Allotment(BaseModel):
         return self
 
 
+class ElectiveGroup(BaseModel):
+    """One option inside an elective slot, or a pooled class.
+
+    Taught by any department's teacher; members are individual students from the
+    slot's sections (several departments). The room must hold ``len(student_ids)``.
+    """
+
+    id: str
+    name: str
+    subject_id: str
+    teacher_id: str
+    student_ids: list[str]
+
+
+class ElectiveSlot(BaseModel):
+    """A fixed time when every student of ``section_ids`` is in one of the groups.
+
+    All groups meet at the same time(s); the home sections don't meet then.
+    """
+
+    id: str
+    name: str
+    section_ids: list[str]
+    lectures_per_week: int
+    groups: list[ElectiveGroup]
+
+
+class TeacherSubject(BaseModel):
+    """A subject a teacher can teach (entered by the Department Coordinator). 1 = most preferred."""
+
+    teacher_id: str
+    subject_id: str
+    preference: int = 2
+
+
 class College(BaseModel):
     id: str
     name: str
@@ -192,6 +227,8 @@ class College(BaseModel):
     subjects: list[Subject]
     allotments: list[Allotment]
     students: list[Student] = Field(default_factory=list)
+    elective_slots: list[ElectiveSlot] = Field(default_factory=list)
+    teacher_subjects: list[TeacherSubject] = Field(default_factory=list)
 
     # ---- lookups -------------------------------------------------------
     def shift(self, shift_id: str) -> Shift:
@@ -208,6 +245,12 @@ class College(BaseModel):
 
     def venue(self, venue_id: str) -> Venue:
         return next(v for v in self.venues if v.id == venue_id)
+
+    def elective_slot(self, slot_id: str) -> ElectiveSlot:
+        return next(e for e in self.elective_slots if e.id == slot_id)
+
+    def elective_group(self, slot_id: str, group_id: str) -> ElectiveGroup:
+        return next(g for g in self.elective_slot(slot_id).groups if g.id == group_id)
 
 
 class Session(BaseModel):
@@ -227,6 +270,9 @@ class Session(BaseModel):
     length: int  # number of periods
     start: str
     end: str
+    # Elective group sessions: section_ids = sections that have members in this group.
+    elective_slot_id: str | None = None
+    group_id: str | None = None
 
 
 class Lunch(BaseModel):

@@ -145,6 +145,8 @@ def add_override(
         return (new, f"{subj} is cancelled on {label(d)} only. The weekly plan is unchanged.",
                 f"Cancelled {subj} ({secs}) on {label(d)}")
 
+    if s.elective_slot_id:
+        return None, "Elective groups meet together, so one group can't be moved on its own. Cancel it instead.", ""
     if kind != "move" or to_date is None or start_period is None:
         return None, "Choose a day and time to move the class to.", ""
     opt = next((o for o in day_options(college, tt, session_id, d, to_date) if o.start_period == start_period), None)

@@ -11,8 +11,7 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from app.models.domain import College, Kind, Session, Timetable, VenueType
-from app.solver.feasibility import group_ids
-from app.solver.generate import Pin, generate
+from app.solver.generate import Pin, generate, session_groups
 from app.validator.check import validate
 
 
@@ -41,9 +40,7 @@ class Change(BaseModel):
 
 
 def _groups(college: College, s: Session) -> set[str]:
-    if s.batch_id:
-        return {s.batch_id}
-    return {g for sid in s.section_ids for g in group_ids(college.section(sid))}
+    return set(session_groups(college, s))
 
 
 def _fits(college: College, s: Session, venue_id: str) -> bool:
@@ -131,6 +128,12 @@ def move_options(college: College, tt: Timetable, session_id: str) -> list[MoveO
     shift = college.shift(s.shift_id)
     others = [x for x in tt.sessions if x.id != s.id]
     out: list[MoveOption] = []
+    if s.elective_slot_id:  # all groups of an elective slot move together: change it in setup
+        slot = college.elective_slot(s.elective_slot_id)
+        return [MoveOption(day=d, start_period=p, start=per.start, end=per.end, status="blocked",
+                           reason=f"{slot.name} groups meet together; change the slot in setup.")
+                for d in college.days for p, per in enumerate(shift.periods)
+                if not (d == s.day and p == s.start_period)]
     for day in college.days:
         for p in range(len(shift.periods)):
             if day == s.day and p == s.start_period:
@@ -224,12 +227,16 @@ def repair_move(
 
     def attempt(free_ids: set[str]) -> Timetable | None:
         pins: dict[str, list[Pin]] = defaultdict(list)
+        electives = [s for s in tt.sessions if s.elective_slot_id]
         for s in tt.sessions:
+            if s.elective_slot_id:
+                continue
             if s.id == session_id:
                 pins[s.allotment_id].append(Pin(day=day, start=start_period, venue_id=venue_id or opt.venue_id))
             elif s.id not in free_ids:
                 pins[s.allotment_id].append(Pin(day=s.day, start=s.start_period, venue_id=s.venue_id))
-        result = generate(college, time_limit=time_limit, pins=dict(pins), lunch_pins=lunch_pins)
+        result = generate(college, time_limit=time_limit, pins=dict(pins), lunch_pins=lunch_pins,
+                          fixed=electives)
         if result.status in ("optimal", "feasible") and not validate(college, result.sessions, result.lunches):
             return result
         return None
