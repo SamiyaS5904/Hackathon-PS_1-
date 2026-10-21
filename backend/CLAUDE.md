@@ -63,7 +63,9 @@ backend/
 | `teacher_blocks` | teacher_id, day/date, slots, status (`confirmed` auto if clash-free) |
 | `venues` | name, type, capacity, tags[], owner_department_id? (null = shared) |
 | `subjects` | code, name, department_id, year_level_id, lecture_hours, tutorial_hours, lab_hours, lab_venue_tag? |
-| `elective_groups` | year_level_id, name, subject_ids[] (run in parallel) |
+| `elective_slots` | name, section_ids[] (participating sections, can span departments), meetings_per_week |
+| `elective_groups` | elective_slot_id, subject_id, teacher_id, venue requirement, member student_ids[] (from the student-level list) |
+| `teacher_subjects` | teacher_id, subject_id, preference (1 = most wanted); entered by the Coordinator; drives allotment suggestions |
 | `allotments` | subject_id, section_ids[] (combined) or batch_id, teacher_id, status (`suggested`/`approved`) |
 | `department_status` | department_id, ready (bool), ready_at |
 | `rules` | scope (`college`/`department`), department_id?, type, params (json), mode (`must`/`try`), weight, enabled |
@@ -96,7 +98,7 @@ backend/
 3. Venue type matches (lab ↔ lab tag), capacity ≥ total strength (combined sections summed).
 4. Section only inside its **shift** window (strict); teacher only in their allowed shift(s).
 5. Labs = consecutive slots of the college lab length, within one block (no break inside). Batches of the same section may run different labs in parallel.
-6. **Elective group** subjects occupy the same slot(s) in different venues.
+6. **Elective slots**: all groups of a slot meet at the same time(s), each in its own room with its own teacher (any department). Every participating section is blocked for the whole slot (no student is free; home sections don't meet). Each group's room must hold its member count. Pooled cross-department groups use the same mechanism.
 7. Combined classes: all member sections free at that slot.
 8. Teacher **block times** respected.
 9. **Flexible lunch**: one period per (shift, year) inside the mess window, chosen by the solver; that year's students are free then every day.

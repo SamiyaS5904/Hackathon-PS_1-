@@ -41,6 +41,11 @@ chatbot/
 └── tests/                   tool permission tests, loop tests with mocked model, scenario evals
 ```
 
+## Voice input
+- V1: the chat panel's mic button uses the **browser's built-in speech recognition** (Web Speech API; Chrome / Edge; `en-IN`). The recognised text fills the input box, the user can fix it, then sends. Replies are text.
+- The chatbot must be just as good **without** voice: typing is always available, and the mic button hides itself when the browser has no speech support.
+- V2: **OpenAI Whisper** as a second option side by side (frontend records audio → `POST /transcribe` on this service → Whisper → text). Key `OPENAI_API_KEY` lives only in this service. Speech-to-text is behind one `transcribe()` interface so providers can be swapped.
+
 ## Request contract
 `POST /chat` (SSE) body: `{conversation_id?, message, page_context}`. `page_context` = `{view: "section"|"teacher"|"venue"|"dashboard"|…, entity_id?, date?, selected_session_id?}`, so "move **this** class to Friday" resolves.
 
@@ -66,6 +71,7 @@ Keep answers short, structured (bullets / small tables), and cite concrete slots
 |---|---|---|---|---|---|
 | `get_my_schedule(date?)` | the user's own classes for a day/week | ✅ | ✅ | ✅ | ✅ |
 | `get_next_class()` | next class for the user | ✅ | ✅ | ✅ | ✅ |
+| `my_free_slots(from, to)` | the user's free periods on real dates (for planning meetings) | ✅ | ✅ | ✅ | ✅ |
 | `free_venues(date?, slot?)` | free rooms now / at a time | ✅ | ✅ | ✅ | ✅ |
 | `teacher_location_now(teacher)` | where a teacher is per timetable right now | ✅ | ✅ | ✅ | ✅ |
 | `query_timetable(filters)` | sessions by section/teacher/venue/day | ✅ all | ✅ dept | own + dept | own section |
@@ -78,7 +84,13 @@ Keep answers short, structured (bullets / small tables), and cite concrete slots
 | `find_makeup_slot(session)` *(if time)* | makeup slots after a cancellation | ✅ | ✅ | ✅ own | ❌ |
 
 V2 tools: `add_rule_from_text`, `book_meeting`, `notify`.
-The **student** assistant is read-only and student-level only: "When is my next DSA lab?", "What do I have tomorrow?", "Anything cancelled today?", "Which class is free now?", "Where is Dr. Kaur right now?". Never other sections' or private data.
+The **student** assistant is read-only and student-level only, answering from the student's **real timetable** (weekly plan + this week's one-day changes + their elective groups):
+- "When is my next DSA lab?", "What do I have tomorrow?", "Anything cancelled today?"
+- "When am I free next Tuesday?", "I need to fix a meeting next week, which slots am I free?" (tool `my_free_slots(date_range)`)
+- "Why is my lab on Friday?" (plain-language reason from `explain_placement`)
+- "Which class is free now?", "Where is Dr. Kaur right now?"
+
+Answers are short, clear and concrete (day, time, room). Never other sections' or private data.
 
 ## System prompt principles (per role)
 - Who you are: Timetabl.ai assistant for *{college}*; the user is *{name}*, *{role}* of *{department}*.

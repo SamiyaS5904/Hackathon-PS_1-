@@ -131,7 +131,8 @@ Hierarchy: **Super Admin (platform)** → **College Admin** → **Department Coo
 | Lab batch | Sub-group of a section for labs (A1/A2), runs in parallel |
 | Subject | Code, dept, year, lecture/tutorial/lab hours per week |
 | Allotment | Subject + section(s)/batch + teacher. Several sections = combined class |
-| Elective group | Parallel options in the same slot (ML / Cloud / IoT), students split by choice |
+| Elective slot | A fixed time when **every student of the participating sections** (e.g. all final-year sections of 5 departments) is in one of the slot's elective groups. Home sections don't meet then. All groups of a slot run at the **same time**, each with its own teacher and room (any department). Membership comes from the student-level list |
+| Elective / pooled group | One option inside an elective slot (ML / Cloud / IoT), or a **pooled class**: students from several departments taught together by another department's teacher in that department's room. Room capacity = number of members |
 | Session | One scheduled class in the **weekly template** (slot, venue, teacher, section/batch) |
 | Override | A **date-specific** change on top of the template (reschedule / cancel / extra class) |
 | Occurrence | Template session ⊕ overrides on a real date; has a stable `occurrence_id` (future attendance hooks onto it) |
@@ -176,7 +177,9 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - ✅ Students of one department **taught in another department's rooms or by another department's teachers** (e.g. first-year common subjects).
 - ✅ **Combined classes** across departments need a room for the total strength; combined sections in different shifts → error.
 - ✅ Lab batches whose strengths don't add up to the section; batch bigger than every suitable lab → error.
-- 🔜 Electives where students of several sections split into parallel groups (5).
+- 🔜 **Elective slots** across departments: CSE students in a group taught by an ME teacher in an ME room; all groups of a slot at the same time; home sections blocked; room fits members, not sections (5).
+- 🔜 **Pooled groups**: a few students from 5 departments taught together in a 6th department (5).
+- 🔜 Student-level lists: every student of a participating section must be in exactly one group of each elective slot; missing or double-assigned students → row-level error (5).
 - 🔜 Auto-sectioning a whole-year list that doesn't divide evenly (V2).
 
 **Rooms**
@@ -211,18 +214,20 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - Setup wizard (shifts incl. 2-shift strict, lecture/lab length, breaks per year, holidays list, semester dates)
 - Venues, departments, sections, subjects, teachers; Excel import with row-level error preview
 - Coordinator Ready flow + admin readiness checklist dashboard
-- CP-SAT college-wide generation + validator + quality score; labs as blocks with parallel batches; **parallel elective groups**
+- **Teacher allotment suggestions**: the Coordinator enters which subjects each teacher can teach (+ preferences); the system suggests teacher → subject → section fairly; the Coordinator approves
+- CP-SAT college-wide generation + validator + quality score; labs as blocks with parallel batches; **elective slots and pooled cross-department groups** (student-level lists)
 - **Rules page** (college + dept rule cards)
 - Section / teacher / room views, colour-coded; publish; Excel + PDF export
 - Drag & drop with live clash check; one-day overrides; teacher one-day instant / permanent needs approval; **teacher block times** (auto-confirm if clash-free)
 - Audit log with undo; in-app notifications
 - Chatbot side panel: role-scoped Q&A (student read-only) + edits via solver repair + diff preview + **proactive insights after generation**
+- **Voice input** for the chatbot via the browser's built-in speech recognition (answers in text; typing always works)
 
 **V1: if time** (in this order)
-Teacher allotment suggestion · substitutes on leave · makeup / extra class finder · email notifications · Now & Next TV board
+Substitutes on leave · makeup / extra class finder · email notifications · Now & Next TV board
 
 **V2: roadmap**
-Super admin panel · Google login for students · Hinglish chatbot · auto-sectioning from year list · mid-semester regenerate with minimal change · NAAC/NBA workload report · Google Calendar sync · QR posters · teacher booking (doubt slots, meetings) · WhatsApp/SMS · plain-language rules via chatbot · book/makeup/notify via chat · timetable version compare · **attendance** (per-college rule, e.g. 75%, shown beside the student timetable)
+OpenAI Whisper as a second voice option (side by side with browser speech) · calendar invites (`.ics`) after the schedule is set · Super admin panel · Google login for students · Hinglish chatbot · auto-sectioning from year list · mid-semester regenerate with minimal change · NAAC/NBA workload report · Google Calendar sync · QR posters · teacher booking (doubt slots, meetings) · WhatsApp/SMS · plain-language rules via chatbot · book/makeup/notify via chat · timetable version compare · **attendance** (per-college rule, e.g. 75%, shown beside the student timetable)
 
 ---
 
