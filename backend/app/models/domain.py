@@ -232,7 +232,8 @@ class Timetable(BaseModel):
     status: str  # "optimal" | "feasible" | "infeasible" | "invalid_input" | "timeout"
     sessions: list[Session] = Field(default_factory=list)
     lunches: list[Lunch] = Field(default_factory=list)
-    messages: list[str] = Field(default_factory=list)
+    messages: list[str] = Field(default_factory=list)  # blocking problems
+    warnings: list[str] = Field(default_factory=list)  # worth knowing, not blocking
     solve_seconds: float = 0.0
     objective: float | None = None
 

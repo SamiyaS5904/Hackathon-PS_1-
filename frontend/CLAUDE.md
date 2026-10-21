@@ -82,6 +82,12 @@ Show **live feasibility hints** from the backend (e.g. "CSE needs 34 lab periods
 - **InsightCard** for proactive insights after generation (e.g. "Dr. Kaur has 6 lectures on Monday. Rebalance?").
 - Suggested prompts per role on empty state (English in V1; Hinglish is V2).
 
+## Core vs secondary placement (see root CLAUDE.md §2A)
+- **Sidebar order:** Dashboard → Timetable → Setup / Data (venues, departments, sections, teachers, subjects) → Changes. Secondary items (Rules, Audit, Reports, Settings) sit below a divider.
+- **Primary button** (filled, accent) only for the core action of the screen: *Generate*, *Publish*, *Apply*, *Continue* in the wizard. Everything else is outline/ghost.
+- **Timetable grid** takes the main area. Chat opens as a right drawer beside it; notifications live behind the bell; exports in a "Download" menu.
+- **Dashboard top:** a "Next step" card (e.g. "2 departments not Ready", "Generate timetable") and timetable health (clashes = 0, quality score). Insights and activity go below.
+
 ## Design system
 - Clean SaaS look (Linear / Notion): neutral greys, one accent colour, generous whitespace, 8px radius, subtle borders, no heavy shadows/gradients.
 - Light + dark mode via CSS variables (shadcn theming). Every colour must work in both.

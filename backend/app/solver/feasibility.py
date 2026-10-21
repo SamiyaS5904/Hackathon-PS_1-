@@ -119,6 +119,11 @@ def check(college: College) -> list[str]:
 
         if a.kind == Kind.lecture:
             count, length = subj.lectures_per_week, 1
+            if count > len(college.days):
+                problems.append(
+                    f"{label}: {count} lectures a week but only {len(college.days)} working days, and a subject "
+                    "is taught at most one a day."
+                )
             ok_venue = any(
                 v.type in (VenueType.lecture, VenueType.seminar) and v.capacity >= strength
                 for v in college.venues
@@ -127,6 +132,9 @@ def check(college: College) -> list[str]:
                 problems.append(f"{label}: no lecture room holds {strength} students.")
         else:
             count, length = subj.labs_per_week, college.lab_periods
+            if count > len(college.days):
+                problems.append(f"{label}: {count} labs a week but only {len(college.days)} working days "
+                                "(at most one a day).")
             ok_venue = any(
                 v.type == VenueType.lab
                 and v.capacity >= strength
@@ -167,7 +175,122 @@ def check(college: College) -> list[str]:
                 f"({cap}/week). Raise the limit or move some classes to another teacher."
             )
 
+    problems += _room_capacity_problems(college)
     return problems
+
+
+# ---------------------------------------------------------------------------
+# Room capacity: college-wide (hard) and per department (warning).
+# ---------------------------------------------------------------------------
+
+def _window_minutes(college: College, shift_ids: set[str]) -> int:
+    """Minutes per day covered by the union of these shifts' periods."""
+    spans = sorted((p.start_min, p.end_min) for sh in college.shifts if sh.id in shift_ids for p in sh.periods)
+    total, cur_s, cur_e = 0, None, None
+    for s, e in spans:
+        if cur_e is None or s > cur_e:
+            if cur_e is not None:
+                total += cur_e - cur_s
+            cur_s, cur_e = s, e
+        else:
+            cur_e = max(cur_e, e)
+    if cur_e is not None:
+        total += cur_e - cur_s
+    return total
+
+
+def _room_demand(college: College) -> list[dict]:
+    """One row per allotment: what kind of room it needs, for how many minutes a week."""
+    rows = []
+    for a in college.allotments:
+        try:
+            subj = college.subject(a.subject_id)
+            sections = [college.section(sid) for sid in a.section_ids]
+        except StopIteration:
+            continue
+        shift = college.shift(sections[0].shift_id)
+        period_min = sum(p.end_min - p.start_min for p in shift.periods) / max(len(shift.periods), 1)
+        if a.batch_id:
+            batch = next((b for b in sections[0].batches if b.id == a.batch_id), None)
+            strength = batch.strength if batch else 0
+        else:
+            strength = sum(s.strength for s in sections)
+        if a.kind == Kind.lecture:
+            periods = subj.lectures_per_week
+        else:
+            periods = subj.labs_per_week * college.lab_periods
+        rows.append({
+            "kind": a.kind, "tag": subj.lab_tag if a.kind == Kind.lab else None, "strength": strength,
+            "department_id": sections[0].department_id, "shift_id": shift.id,
+            "periods": periods, "minutes": periods * period_min,
+        })
+    return rows
+
+
+def _fits(v, kind, tag) -> bool:
+    if kind == Kind.lab:
+        return v.type == VenueType.lab and (tag is None or tag in v.tags)
+    return v.type in (VenueType.lecture, VenueType.seminar)
+
+
+def _room_capacity_problems(college: College) -> list[str]:
+    """College-wide: for every group size, are there enough big-enough rooms?
+
+    Rooms can be used in any shift, so supply = rooms x days x minutes covered by all shifts.
+    Checked as nested thresholds (groups of 120+ need rooms of 120+, and so on).
+    """
+    problems = []
+    rows = _room_demand(college)
+    window = _window_minutes(college, {sh.id for sh in college.shifts}) * len(college.days)
+    keys = {(r["kind"], r["tag"]) for r in rows}
+    for kind, tag in keys:
+        mine = [r for r in rows if r["kind"] == kind and r["tag"] == tag]
+        for k in sorted({r["strength"] for r in mine}):
+            need = sum(r["minutes"] for r in mine if r["strength"] >= k)
+            rooms = [v for v in college.venues if _fits(v, kind, tag) and v.capacity >= k]
+            have = len(rooms) * window
+            if rooms and need > have:
+                what = "lectures" if kind == Kind.lecture else f"labs{f' ({tag})' if tag else ''}"
+                problems.append(
+                    f"Not enough rooms: {what} for groups of {k}+ students need {need / 60:.0f} hours a week, "
+                    f"but rooms that size are only open {have / 60:.0f} hours. Add rooms, split big groups "
+                    "or reduce weekly hours."
+                )
+                break
+    return problems
+
+
+def warnings(college: College) -> list[str]:
+    """Not errors, but worth telling the admin before generating."""
+    out = []
+    rows = _room_demand(college)
+    dept_name = {d.id: d.short for d in college.departments}
+
+    # A department needs more lecture-room time than its own rooms give: it will borrow.
+    for dept in college.departments:
+        mine = [r for r in rows if r["department_id"] == dept.id and r["kind"] == Kind.lecture]
+        if not mine:
+            continue
+        own = [v for v in college.venues if v.department_id == dept.id and _fits(v, Kind.lecture, None)]
+        window = _window_minutes(college, {r["shift_id"] for r in mine}) * len(college.days)
+        need, have = sum(r["minutes"] for r in mine), len(own) * window
+        if need > have:
+            out.append(
+                f"{dept.short} needs about {need / 60:.0f} lecture-room hours a week but its own rooms give "
+                f"{have / 60:.0f}. About {(need - have) / 60:.0f} hours will be placed in shared rooms or "
+                "other departments' free rooms."
+            )
+
+    # A section is bigger than every room its department owns.
+    for s in college.sections:
+        own = [v.capacity for v in college.venues if v.department_id == s.department_id
+               and _fits(v, Kind.lecture, None)]
+        if own and s.strength > max(own):
+            out.append(
+                f"{s.name} has {s.strength} students but the largest {dept_name.get(s.department_id, '')} room "
+                f"holds {max(own)}. Its lectures will use shared or other departments' bigger rooms."
+            )
+    return out
 
 
 def group_ids(section) -> list[str]:

@@ -37,6 +37,27 @@ A college signs up, answers a guided setup (shifts, periods, breaks, venues, dep
 8. **Small working commits** after every step (see §10). Never leave `main` broken.
 9. **Ask the user before big decisions** (architecture, new dependencies, scope changes). Explain options in plain language; the user prefers numbered plain-text questions.
 10. Terminology: the department-level role is **Department Coordinator** (never "HOD").
+11. **Core first (80/20), see §2A.** The core loop gets the prime place in the UI and the first share of build time. Secondary features never crowd it out.
+
+---
+
+## 2A. Core vs secondary (80/20): placement rule
+
+**~80% of the value is the core loop: set up data → generate a clash-free timetable → view it → change it safely.**
+Everything else is secondary. This decides **where a feature lives in the UI** and **what gets built and polished first**.
+
+| | Core (prime placement) | Secondary (one level down) |
+|---|---|---|
+| **Features** | Setup data (wizard / Excel), **Generate**, timetable grid (section / teacher / venue), drag & drop + clash check, one-day changes, publish | Chatbot panel, insights, notifications, audit log, exports, rules page, approvals inbox, TV board, reports |
+| **UI placement** | Main sidebar items + the **one primary button** on each screen (e.g. *Generate*, *Publish*, *Apply*). Dashboard top = "next step" card + timetable health | Toolbar icons, side panel (chat), bell (notifications), "More" menus, settings pages, secondary buttons |
+| **Build order** | Built first, works end-to-end before anything secondary starts | Built only after the core loop works on the demo college |
+| **Polish** | Empty / loading / error states, keyboard use, mobile view: always | Good enough first, polished if time |
+
+Rules of thumb:
+- **One primary action per screen**, and it is always a core action. Secondary actions use secondary button styles.
+- The timetable grid is the hero: it gets the most screen space; panels (chat, details) slide over or beside it and never replace it.
+- A secondary feature may *point to* the core (chat proposes a change → user applies it in the grid) but never duplicates or hides it.
+- If time runs short, cut from the secondary column, never from the core.
 
 ---
 
@@ -138,9 +159,45 @@ Drag & drop / chatbot / teacher request / leave → **solver repair** (freeze ev
 ## 7. Scheduling model (summary; full spec in `backend/CLAUDE.md`)
 
 - **Algorithm:** Google OR-Tools **CP-SAT** for generation; **LNS repair** (re-solve a small neighbourhood with everything else fixed, minimise number of changes) for edits; **independent validator** after both.
-- **Hard:** no teacher / venue / section / batch double-booking; venue type + capacity; shift windows (strict); breaks & holidays; teacher block times; labs as consecutive blocks of the college lab length, batches in parallel; combined classes & elective groups together; all *Must* rules.
-- **Soft (quality score):** balanced teacher load (max per day, max consecutive), minimal student gaps, same subject ≤1/day, venue size fit / utilisation, all *Try* rules with weights.
+- **Hard:** no teacher / venue / section / batch double-booking (also across overlapping shifts); venue type + capacity; shift windows (strict); breaks & holidays; flexible lunch inside the mess window; teacher block times + daily limit; labs as consecutive blocks of the college lab length, batches in parallel; same subject at most once a day; combined classes & elective groups together; all *Must* rules.
+- **Soft (quality score):** compact student days (few gaps), balanced teacher load, right-sized rooms, **home room** (few room changes per section), own department's rooms before borrowed ones, all *Try* rules with weights. Goal: highest quality and most efficient venue use.
 - Infeasible input → explain which rule group conflicts in plain language (never a silent failure).
+
+---
+
+## 7A. Edge cases checklist
+
+Every feature must keep these in mind. ✅ = handled + tested in the engine · 🔜 = planned (stage in brackets). Add new cases here when found.
+
+**Students & sections**
+- ✅ A department has **more students than its own rooms can hold** → lectures automatically use shared rooms or other departments' free rooms (first-come); admin gets a warning with the hours that will be borrowed.
+- ✅ A section is **bigger than every room its department owns** → uses a bigger shared/other room; warning shown.
+- ✅ A section is **bigger than every room in the college** → blocking error with the fix (split the section or add a hall).
+- ✅ Students of one department **taught in another department's rooms or by another department's teachers** (e.g. first-year common subjects).
+- ✅ **Combined classes** across departments need a room for the total strength; combined sections in different shifts → error.
+- ✅ Lab batches whose strengths don't add up to the section; batch bigger than every suitable lab → error.
+- 🔜 Electives where students of several sections split into parallel groups (5).
+- 🔜 Auto-sectioning a whole-year list that doesn't divide evenly (V2).
+
+**Rooms**
+- ✅ **Not enough big-enough room time college-wide** (checked per group size: 120+, 60+, ...) → error before solving.
+- ✅ No lab with the required equipment tag → error.
+- ✅ The same room used by two shifts whose timings overlap.
+- 🔜 Room temporarily unavailable (maintenance, exams) (3).
+
+**Teachers**
+- ✅ Teacher in two departments or both shifts; overlapping shift times checked.
+- ✅ Weekly load above `max_per_day × days` → error; blocked times respected.
+- 🔜 Teacher on leave → substitutes (if time); teacher leaves mid-semester → re-allotment (V2).
+
+**Time**
+- ✅ Lab can't cross a break; mess window without a full period → error; more weekly lectures than working days → error.
+- 🔜 Holidays and one-day overrides on real dates (3); semester dates moved (5).
+
+**Data & scale**
+- ✅ Unknown references (section, teacher, subject, shift) → error naming the row.
+- 🔜 Duplicate names / codes in Excel import (5).
+- 🔜 Large colleges (50+ sections): solve time grows; plan: progress bar + time limit, then solve per shift / per year with shared rooms fixed (later).
 
 ---
 

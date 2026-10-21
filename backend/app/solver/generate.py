@@ -156,6 +156,7 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
     if problems:
         return Timetable(college_id=college.id, status="invalid_input", messages=problems)
 
+    notes = feasibility.warnings(college)
     units = build_units(college)
     model = cp_model.CpModel()
     days = college.days
@@ -301,6 +302,7 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
             college_id=college.id,
             status="infeasible" if status == cp_model.INFEASIBLE else "timeout",
             messages=[msg],
+            warnings=notes,
             solve_seconds=round(elapsed, 2),
         )
     value = solver.Value
@@ -342,6 +344,7 @@ def generate(college: College, time_limit: float = 30.0, workers: int = 8, log: 
         status="optimal" if status == cp_model.OPTIMAL else "feasible",
         sessions=sessions,
         lunches=lunches,
+        warnings=notes,
         solve_seconds=round(elapsed, 2),
         objective=objective,
     )

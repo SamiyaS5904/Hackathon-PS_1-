@@ -54,6 +54,8 @@ def main() -> None:
     print(f"Status: {tt.status} in {tt.solve_seconds}s, {len(tt.sessions)} sessions")
     for m in tt.messages:
         print(" -", m)
+    for w in tt.warnings:
+        print(" ~", w)
     if not tt.sessions:
         return
 
