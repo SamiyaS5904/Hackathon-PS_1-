@@ -4,14 +4,41 @@
     {
       "name": "backend",
       "runtimeExecutable": "D:\\Hackathon\\backend\\.venv\\Scripts\\python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "app.main:app", "--port", "8000", "--app-dir", "D:\\Hackathon\\backend"],
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--port",
+        "8000",
+        "--app-dir",
+        "D:\\Hackathon\\backend"
+      ],
       "port": 8000
     },
     {
       "name": "frontend",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "D:\\Hackathon\\frontend", "run", "dev"],
+      "runtimeArgs": [
+        "--prefix",
+        "D:\\Hackathon\\frontend",
+        "run",
+        "dev"
+      ],
       "port": 3000
+    },
+    {
+      "name": "chatbot",
+      "runtimeExecutable": "D:\\Hackathon\\chatbot\\.venv\\Scripts\\python.exe",
+      "runtimeArgs": [
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--port",
+        "8001",
+        "--app-dir",
+        "D:\\Hackathon\\chatbot"
+      ],
+      "port": 8001
     }
   ]
 }

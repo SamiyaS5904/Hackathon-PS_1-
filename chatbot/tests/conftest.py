@@ -1,0 +1,113 @@
+import json
+import sys
+from pathlib import Path
+
+import httpx
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.backend import Backend  # noqa: E402
+
+PERIODS = [{"start": a, "end": b} for a, b in [("09:00", "10:00"), ("10:00", "11:00"), ("11:00", "12:00"),
+                                                ("12:00", "13:00"), ("13:00", "14:00"), ("14:00", "15:00")]]
+COLLEGE = {
+    "id": "c", "name": "Sunrise College", "days": ["Mon", "Tue", "Wed", "Thu", "Fri"], "lab_periods": 2,
+    "shifts": [{"id": "day", "name": "Day", "periods": PERIODS, "lunch": {"window_start": "12:00", "window_end": "14:00"}}],
+    "departments": [{"id": "cse", "name": "CSE", "short": "CSE"}],
+    "venues": [{"id": "r1", "name": "Room 1", "type": "lecture", "capacity": 60, "tags": [], "department_id": "cse"},
+               {"id": "lab", "name": "Lab", "type": "lab", "capacity": 30, "tags": ["computers"], "department_id": "cse"}],
+    "sections": [{"id": "s1", "name": "CSE-1A", "department_id": "cse", "year": 1, "strength": 60, "shift_id": "day",
+                  "batches": [{"id": "b1", "name": "B1", "strength": 30}, {"id": "b2", "name": "B2", "strength": 30}]}],
+    "teachers": [{"id": "t1", "name": "Dr. Anita Sharma", "department_id": "cse", "shift_ids": ["day"], "max_per_day": 5},
+                 {"id": "t2", "name": "Prof. Ravi Kumar", "department_id": "cse", "shift_ids": ["day"], "max_per_day": 5}],
+    "subjects": [{"id": "ma", "code": "MA", "name": "Maths", "department_id": "cse", "year": 1, "lectures_per_week": 3,
+                  "labs_per_week": 0, "lab_tag": None},
+                 {"id": "cs", "code": "CS", "name": "Programming", "department_id": "cse", "year": 1,
+                  "lectures_per_week": 2, "labs_per_week": 1, "lab_tag": "computers"}],
+    "students": [], "teacher_subjects": [], "elective_slots": [], "holidays": [], "rules": [],
+    "department_status": {}, "revision": 1,
+}
+
+
+def session(sid, subject, teacher, venue, day, start, end, period, kind="lecture", batch=None):
+    return {"id": sid, "allotment_id": "a", "subject_id": subject, "teacher_id": teacher, "venue_id": venue,
+            "kind": kind, "section_ids": ["s1"], "batch_id": batch, "day": day, "shift_id": "day",
+            "start_period": period, "length": 2 if kind == "lab" else 1, "start": start, "end": end,
+            "elective_slot_id": None, "group_id": None}
+
+
+SESSIONS = [
+    session("m1", "ma", "t1", "r1", "Mon", "09:00", "10:00", 0),
+    session("p1", "cs", "t2", "r1", "Mon", "10:00", "11:00", 1),
+    session("l1", "cs", "t2", "lab", "Mon", "14:00", "15:00", 5, kind="lecture"),
+    session("m2", "ma", "t1", "r1", "Tue", "11:00", "12:00", 2),
+]
+TIMETABLE = {"timetable": {"sessions": SESSIONS, "lunches": [{"shift_id": "day", "year": 1, "period": 3,
+                                                               "start": "12:00", "end": "13:00"}], "overrides": []},
+             "quality": {"score": 88, "items": []}, "violations": [], "stale": False}
+
+
+def week(start):
+    days = [{"date": d, "day": n, "label": n, "working": True, "holiday": None}
+            for d, n in [("2026-10-19", "Mon"), ("2026-10-20", "Tue"), ("2026-10-21", "Wed"),
+                         ("2026-10-22", "Thu"), ("2026-10-23", "Fri")]]
+    date_of = {d["day"]: d["date"] for d in days}
+    occ = [{"session": s, "date": date_of[s["day"]], "status": "normal", "override_id": None, "note": ""} for s in SESSIONS]
+    return {"days": days, "occurrences": occ}
+
+
+class FakeBackend:
+    """Serves canned responses and records every request (method, path, json)."""
+
+    def __init__(self):
+        self.calls = []
+
+    def handler(self, request: httpx.Request) -> httpx.Response:
+        path = request.url.path
+        body = json.loads(request.content) if request.content else None
+        self.calls.append((request.method, path, body))
+        if path.endswith("/college"):
+            return httpx.Response(200, json=COLLEGE)
+        if path.endswith("/timetable/week"):
+            return httpx.Response(200, json=week(request.url.params["start"]))
+        if path.endswith("/timetable"):
+            return httpx.Response(200, json=TIMETABLE)
+        if path.endswith("/options"):
+            return httpx.Response(200, json=[
+                {"day": "Wed", "start_period": 0, "start": "09:00", "end": "10:00", "status": "free", "reason": "",
+                 "venue_id": "r1", "conflicts": []},
+                {"day": "Mon", "start_period": 3, "start": "12:00", "end": "13:00", "status": "blocked",
+                 "reason": "That's the lunch period for these students.", "venue_id": None, "conflicts": []}])
+        if path.endswith("/proposals"):
+            return httpx.Response(201, json={"id": "p-1", "message": "Moved. Nothing else had to change.",
+                                             "changes": [{"session_id": "m1", "subject": "Maths", "sections": "CSE-1A",
+                                                          "before": "Mon 09:00-10:00", "after": "Wed 09:00-10:00"}],
+                                             "quality_before": 88, "quality_after": 88})
+        if path.endswith("/day-options"):
+            return httpx.Response(200, json=[
+                {"day": "Mon", "start_period": 2, "start": "11:00", "end": "12:00", "status": "free", "reason": "",
+                 "venue_id": "r1", "conflicts": []}])
+        if path.endswith("/free-rooms"):
+            return httpx.Response(200, json=[{"venue_id": "lab", "name": "Lab", "type": "lab", "capacity": 30,
+                                              "department": "cse", "free_until": None}])
+        if "/teachers/" in path:
+            return httpx.Response(200, json={"teacher": "Dr. Anita Sharma", "date": "Mon 19 Oct", "time": "09:30",
+                                             "status": "teaching", "subject": "Maths", "room": "Room 1",
+                                             "sections": "CSE-1A", "until": "10:00", "next_class": None})
+        return httpx.Response(404, json={"detail": "not found"})
+
+
+@pytest.fixture
+def fake():
+    return FakeBackend()
+
+
+@pytest.fixture
+def backend(fake):
+    return Backend("tok", "c", transport=httpx.MockTransport(fake.handler))
+
+
+STUDENT = {"role": "student", "name": "Aarav", "section_id": "s1", "batch_id": "b1", "teacher_id": None}
+TEACHER = {"role": "teacher", "name": "Dr. Anita Sharma", "teacher_id": "t1", "department_id": "cse"}
+ADMIN = {"role": "admin", "name": "Principal", "teacher_id": None}
