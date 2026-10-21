@@ -99,13 +99,14 @@ backend/
 6. **Elective group** subjects occupy the same slot(s) in different venues.
 7. Combined classes: all member sections free at that slot.
 8. Teacher **block times** respected.
-9. Admin-fixed / locked sessions (common classes, manually pinned) are fixed.
-10. Every enabled rule with mode `must`.
+9. **Flexible lunch**: one period per (shift, year) inside the mess window, chosen by the solver; that year's students are free then every day.
+10. Admin-fixed / locked sessions (common classes, manually pinned) are fixed.
+11. Every enabled rule with mode `must`.
 
 **Soft objective (minimise weighted penalties → quality score 0–100)**
 - Teacher load: over `max_per_day`, > 3 consecutive periods, uneven spread across days.
 - Students: idle gaps between classes in a day; same subject more than once a day (labs excepted).
-- Venue fit: big hall for small class (wasted seats); prefer the department's own venues before shared/borrowed.
+- Venue fit: big hall for small class (wasted seats); prefer the department's own venues before shared/borrowed; **home room**: keep each section's lectures in as few rooms as possible.
 - Every enabled rule with mode `try` × its weight.
 Report each penalty component separately so the UI/chatbot can explain the score.
 

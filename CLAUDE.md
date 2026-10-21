@@ -104,7 +104,7 @@ Hierarchy: **Super Admin (platform)** → **College Admin** → **Department Coo
 | Organization (org) | One college = one tenant |
 | Structure levels | Configurable per college: **Program → Department → Year/Semester → Section → Lab batch** (Program, Section, Batch optional) |
 | Shift | 1 or 2 per college (morning / evening). Sections belong strictly to one shift. Teachers are Morning / Evening / Both. Venues are reused across shifts |
-| Time grid | Working days, shift timings, lecture duration, **one lab duration for the whole college**, breaks (time + length, **may differ per year**) |
+| Time grid | Working days, shift timings, lecture duration, **one lab duration for the whole college**, fixed breaks, and a **flexible lunch**: admin gives the mess window per shift, the solver picks each year's lunch period inside it (same every day) for the best timetable and venue use |
 | Venue | Room with type (lecture hall / lab / seminar / auditorium), capacity, tags, owner dept or *Shared* |
 | Section | A group of students that always sits together (atomic). Room capacity ≥ strength |
 | Lab batch | Sub-group of a section for labs (A1/A2), runs in parallel |

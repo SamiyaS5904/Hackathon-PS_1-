@@ -1,0 +1,286 @@
+"""A realistic demo college used for development, tests and the hackathon demo.
+
+Deliberately exercises the hard cases:
+  * 2 shifts that overlap in time (Morning: 1st years, Evening: 2nd & 3rd years)
+    and share venues and some teachers
+  * staggered lunch per year inside the Evening shift
+  * combined classes (Engineering Maths for two sections in one big hall)
+  * labs as 2-period blocks, split into parallel batches
+  * shared venues (Seminar Hall, Physics/Chemistry labs) and department-owned ones
+  * a teacher who teaches in both shifts, and a teacher with a blocked time
+"""
+
+from __future__ import annotations
+
+from app.models.domain import (
+    Allotment,
+    Batch,
+    College,
+    Department,
+    Kind,
+    LunchRule,
+    Period,
+    Section,
+    Shift,
+    Subject,
+    Teacher,
+    TimeBlock,
+    Venue,
+    VenueType,
+)
+
+DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+
+MORNING = Shift(
+    id="morning",
+    name="Morning",
+    periods=[
+        Period(start="08:30", end="09:20"),
+        Period(start="09:20", end="10:10"),
+        Period(start="10:10", end="11:00"),
+        Period(start="11:00", end="11:50"),
+        # lunch 11:50-12:30
+        Period(start="12:30", end="13:20"),
+        Period(start="13:20", end="14:10"),
+        Period(start="14:10", end="15:00"),
+    ],
+)
+
+EVENING = Shift(
+    id="evening",
+    name="Evening",
+    periods=[
+        Period(start="11:00", end="11:50"),
+        Period(start="11:50", end="12:40"),
+        Period(start="12:40", end="13:30"),
+        Period(start="13:30", end="14:20"),
+        # tea break 14:20-14:40
+        Period(start="14:40", end="15:30"),
+        Period(start="15:30", end="16:20"),
+        Period(start="16:20", end="17:10"),
+    ],
+    # Mess serves 12:40-14:20; the solver picks each year's lunch period inside it.
+    lunch=LunchRule(window_start="12:40", window_end="14:20"),
+)
+
+DEPARTMENTS = [
+    Department(id="cse", name="Computer Science & Engineering", short="CSE"),
+    Department(id="ece", name="Electronics & Communication", short="ECE"),
+    Department(id="me", name="Mechanical Engineering", short="ME"),
+    Department(id="as", name="Applied Sciences", short="AS"),
+]
+
+VENUES = [
+    Venue(id="sem-hall", name="Seminar Hall", type=VenueType.seminar, capacity=150),
+    Venue(id="lt-1", name="Lecture Theatre 1", type=VenueType.lecture, capacity=130),
+    Venue(id="phy-lab", name="Physics Lab", type=VenueType.lab, capacity=32, tags=["physics"]),
+    Venue(id="chem-lab", name="Chemistry Lab", type=VenueType.lab, capacity=32, tags=["chemistry"]),
+    Venue(id="lh-101", name="LH-101", type=VenueType.lecture, capacity=66, department_id="cse"),
+    Venue(id="lh-102", name="LH-102", type=VenueType.lecture, capacity=66, department_id="cse"),
+    Venue(id="lh-103", name="LH-103", type=VenueType.lecture, capacity=66, department_id="cse"),
+    Venue(id="cse-lab-1", name="CSE Lab 1", type=VenueType.lab, capacity=32, tags=["computers"], department_id="cse"),
+    Venue(id="cse-lab-2", name="CSE Lab 2", type=VenueType.lab, capacity=32, tags=["computers"], department_id="cse"),
+    Venue(id="lh-201", name="LH-201", type=VenueType.lecture, capacity=66, department_id="ece"),
+    Venue(id="lh-202", name="LH-202", type=VenueType.lecture, capacity=66, department_id="ece"),
+    Venue(id="ece-lab", name="Electronics Lab", type=VenueType.lab, capacity=32, tags=["electronics"], department_id="ece"),
+    Venue(id="lh-301", name="LH-301", type=VenueType.lecture, capacity=66, department_id="me"),
+    Venue(id="lh-302", name="LH-302", type=VenueType.lecture, capacity=66, department_id="me"),
+    Venue(id="me-shop", name="ME Workshop", type=VenueType.lab, capacity=32, tags=["mechanical"], department_id="me"),
+]
+
+
+def _section(dept: str, year: int, letter: str, shift: str, strength: int = 60) -> Section:
+    sid = f"{dept}-{year}{letter.lower()}"
+    half = strength // 2
+    return Section(
+        id=sid,
+        name=f"{dept.upper()}-{year}{letter}",
+        department_id=dept,
+        year=year,
+        strength=strength,
+        shift_id=shift,
+        batches=[
+            Batch(id=f"{sid}-b1", name="B1", strength=half),
+            Batch(id=f"{sid}-b2", name="B2", strength=strength - half),
+        ],
+    )
+
+
+SECTIONS = [
+    _section("cse", 1, "A", "morning"),
+    _section("cse", 1, "B", "morning"),
+    _section("ece", 1, "A", "morning"),
+    _section("me", 1, "A", "morning"),
+    _section("cse", 2, "A", "evening"),
+    _section("cse", 2, "B", "evening"),
+    _section("ece", 2, "A", "evening"),
+    _section("me", 2, "A", "evening"),
+    _section("cse", 3, "A", "evening"),
+    _section("cse", 3, "B", "evening"),
+    _section("ece", 3, "A", "evening"),
+    _section("me", 3, "A", "evening"),
+]
+
+# (code, name, lectures/week, labs/week, lab tag)
+UPPER_YEAR_SUBJECTS = {
+    ("cse", 2): [
+        ("CS201", "Data Structures", 3, 1, "computers"),
+        ("CS202", "Database Systems", 3, 1, "computers"),
+        ("CS203", "Operating Systems", 3, 0, None),
+        ("CS204", "Discrete Mathematics", 3, 0, None),
+        ("CS205", "Computer Organisation", 3, 0, None),
+    ],
+    ("cse", 3): [
+        ("CS301", "Computer Networks", 3, 1, "computers"),
+        ("CS302", "Machine Learning", 3, 1, "computers"),
+        ("CS303", "Software Engineering", 3, 0, None),
+        ("CS304", "Theory of Computation", 3, 0, None),
+        ("CS305", "Compiler Design", 3, 0, None),
+    ],
+    ("ece", 2): [
+        ("EC201", "Analog Circuits", 3, 1, "electronics"),
+        ("EC202", "Digital Electronics", 3, 1, "electronics"),
+        ("EC203", "Signals & Systems", 3, 0, None),
+        ("EC204", "Network Theory", 3, 0, None),
+        ("EC205", "Electromagnetics", 3, 0, None),
+    ],
+    ("ece", 3): [
+        ("EC301", "Microprocessors", 3, 1, "electronics"),
+        ("EC302", "Communication Systems", 3, 1, "electronics"),
+        ("EC303", "Control Systems", 3, 0, None),
+        ("EC304", "VLSI Design", 3, 0, None),
+        ("EC305", "Antennas", 3, 0, None),
+    ],
+    ("me", 2): [
+        ("ME201", "Thermodynamics", 3, 1, "mechanical"),
+        ("ME202", "Manufacturing Processes", 3, 1, "mechanical"),
+        ("ME203", "Strength of Materials", 3, 0, None),
+        ("ME204", "Fluid Mechanics", 3, 0, None),
+        ("ME205", "Kinematics", 3, 0, None),
+    ],
+    ("me", 3): [
+        ("ME301", "Heat Transfer", 3, 1, "mechanical"),
+        ("ME302", "Machine Design", 3, 1, "mechanical"),
+        ("ME303", "Dynamics of Machines", 3, 0, None),
+        ("ME304", "IC Engines", 3, 0, None),
+        ("ME305", "Industrial Engineering", 3, 0, None),
+    ],
+}
+
+FIRST_YEAR_SUBJECTS = [
+    ("MA101", "Engineering Maths", 4, 0, None),
+    ("PH101", "Physics", 3, 1, "physics"),
+    ("CY101", "Chemistry", 3, 1, "chemistry"),
+    ("CS101", "Programming in C", 3, 1, "computers"),
+    ("ME101", "Engineering Graphics", 3, 0, None),
+]
+
+TEACHER_NAMES = [
+    "Dr. Harpreet Kaur", "Prof. Rohit Bansal", "Dr. Neha Arora", "Prof. Amit Malhotra",
+    "Dr. Simran Gill", "Prof. Karan Mehra", "Dr. Priya Nair", "Prof. Sandeep Joshi",
+    "Dr. Ritu Saini", "Prof. Manish Tiwari", "Dr. Kavita Rao", "Prof. Deepak Chauhan",
+    "Dr. Jaspreet Sandhu", "Prof. Nikhil Kapoor", "Dr. Sunita Yadav", "Prof. Arjun Reddy",
+    "Dr. Meenakshi Iyer", "Prof. Gaurav Sethi", "Dr. Anjali Bhatt", "Prof. Varun Khanna",
+    "Dr. Shalini Dutta", "Prof. Mohit Aggarwal", "Dr. Rekha Pillai", "Prof. Tarun Grover",
+    "Dr. Nidhi Chawla", "Prof. Ankit Saxena", "Dr. Pallavi Desai", "Prof. Sahil Dhillon",
+    "Dr. Monika Bedi", "Prof. Yash Thakur",
+]
+
+
+def build_demo_college() -> College:
+    subjects: list[Subject] = []
+    teachers: list[Teacher] = []
+    allotments: list[Allotment] = []
+    names = iter(TEACHER_NAMES)
+
+    def add_allotments(subj: Subject, teacher_id: str, section_groups: list[list[Section]]) -> None:
+        for group in section_groups:
+            if subj.lectures_per_week:
+                allotments.append(
+                    Allotment(
+                        id=f"a{len(allotments) + 1}",
+                        subject_id=subj.id,
+                        teacher_id=teacher_id,
+                        kind=Kind.lecture,
+                        section_ids=[s.id for s in group],
+                    )
+                )
+            if subj.labs_per_week:
+                for sec in group:
+                    for b in sec.batches:
+                        allotments.append(
+                            Allotment(
+                                id=f"a{len(allotments) + 1}",
+                                subject_id=subj.id,
+                                teacher_id=teacher_id,
+                                kind=Kind.lab,
+                                section_ids=[sec.id],
+                                batch_id=b.id,
+                            )
+                        )
+
+    # Upper years: one teacher per subject, teaching every section of that dept-year.
+    for (dept, year), rows in UPPER_YEAR_SUBJECTS.items():
+        secs = [s for s in SECTIONS if s.department_id == dept and s.year == year]
+        for code, name, lec, lab, tag in rows:
+            subj = Subject(id=code.lower(), code=code, name=name, department_id=dept, year=year,
+                           lectures_per_week=lec, labs_per_week=lab, lab_tag=tag)
+            subjects.append(subj)
+            tid = f"t{len(teachers) + 1}"
+            teachers.append(Teacher(id=tid, name=next(names), department_id=dept, shift_ids=["evening"], max_per_day=5))
+            add_allotments(subj, tid, [[s] for s in secs])
+
+    # First year (Morning shift): common subjects, mostly Applied Sciences.
+    fy = [s for s in SECTIONS if s.year == 1]
+    pairs = [[fy[0], fy[1]], [fy[2], fy[3]]]  # CSE-1A+1B, ECE-1A+ME-1A
+    first_year_teachers = {
+        "MA101": [("t-anita", "Dr. Anita Sharma", "as")],
+        "PH101": [("t-rajesh", "Dr. Rajesh Kumar", "as"), ("t-meena", "Dr. Meena Gupta", "as")],
+        "CY101": [("t-pooja", "Dr. Pooja Verma", "as"), ("t-arun", "Dr. Arun Mehta", "as")],
+        "CS101": [("t-vikram", "Prof. Vikram Singh", "cse"), ("t-raman", "Prof. Ramandeep Kaur", "cse")],
+        "ME101": [("t-lakhwinder", "Prof. Lakhwinder Singh", "me")],
+    }
+    for code, name, lec, lab, tag in FIRST_YEAR_SUBJECTS:
+        dept = {"CS101": "cse", "ME101": "me"}.get(code, "as")
+        subj = Subject(id=code.lower(), code=code, name=name, department_id=dept, year=1,
+                       lectures_per_week=lec, labs_per_week=lab, lab_tag=tag)
+        subjects.append(subj)
+        staff = first_year_teachers[code]
+        for tid, tname, tdept in staff:
+            if not any(t.id == tid for t in teachers):
+                teachers.append(Teacher(id=tid, name=tname, department_id=tdept, shift_ids=["morning"], max_per_day=5))
+        if code == "MA101":
+            add_allotments(subj, staff[0][0], pairs)  # combined classes in big halls
+        elif len(staff) == 2:
+            add_allotments(subj, staff[0][0], [[fy[0]], [fy[1]]])
+            add_allotments(subj, staff[1][0], [[fy[2]], [fy[3]]])
+        else:
+            add_allotments(subj, staff[0][0], [[s] for s in fy])
+
+    # Prof. Vikram Singh also teaches Compiler Design to 3rd years: works both shifts.
+    vikram = next(t for t in teachers if t.id == "t-vikram")
+    vikram.shift_ids = ["morning", "evening"]
+    vikram.max_per_day = 6
+    compiler_teacher = next(a.teacher_id for a in allotments if a.subject_id == "cs305")
+    teachers[:] = [t for t in teachers if t.id != compiler_teacher]
+    for a in allotments:
+        if a.teacher_id == compiler_teacher:
+            a.teacher_id = "t-vikram"
+
+    # Dr. Anita Sharma has a standing commitment on Wednesday mornings.
+    anita = next(t for t in teachers if t.id == "t-anita")
+    anita.blocked = [TimeBlock(day="Wed", start="08:30", end="10:10")]
+
+    return College(
+        id="demo",
+        name="Demo Institute of Technology",
+        days=DAYS,
+        lab_periods=2,
+        shifts=[MORNING, EVENING],
+        departments=DEPARTMENTS,
+        venues=VENUES,
+        sections=SECTIONS,
+        teachers=teachers,
+        subjects=subjects,
+        allotments=allotments,
+    )
