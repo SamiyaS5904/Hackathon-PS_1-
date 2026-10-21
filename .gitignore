@@ -1,0 +1,23 @@
+# env & secrets
+.env
+.env.*
+!.env.example
+
+# node / next
+node_modules/
+.next/
+out/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# misc
+.DS_Store
+Thumbs.db
+*.log
+.vscode/
+.idea/
