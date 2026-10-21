@@ -27,6 +27,7 @@ from app.models.domain import (
     Student,
     Subject,
     Teacher,
+    TeacherSubject,
     TimeBlock,
     Venue,
     VenueType,
@@ -306,9 +307,28 @@ def build_demo_college() -> College:
         ],
     )
 
+    # Who can teach what: everyone's current subjects (1st choice) plus one more subject
+    # from their department (2nd choice), so suggestions have real alternatives.
+    teacher_subjects: list[TeacherSubject] = []
+    seen: set[tuple[str, str]] = set()
+    for a in allotments:
+        if (a.teacher_id, a.subject_id) not in seen:
+            seen.add((a.teacher_id, a.subject_id))
+            teacher_subjects.append(TeacherSubject(teacher_id=a.teacher_id, subject_id=a.subject_id, preference=1))
+    for t in teachers:
+        mine = {sid for tid, sid in seen if tid == t.id}
+        extra = next((sub.id for sub in subjects if sub.department_id == t.department_id and sub.id not in mine
+                      and sub.lectures_per_week and (t.id, sub.id) not in seen), None)
+        if extra:
+            seen.add((t.id, extra))
+            teacher_subjects.append(TeacherSubject(teacher_id=t.id, subject_id=extra, preference=2))
+    for g in elective.groups:
+        teacher_subjects.append(TeacherSubject(teacher_id=g.teacher_id, subject_id=g.subject_id, preference=1))
+
     return College(
         students=students,
         elective_slots=[elective],
+        teacher_subjects=teacher_subjects,
         id="demo",
         name="Demo Institute of Technology",
         days=DAYS,

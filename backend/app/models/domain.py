@@ -165,7 +165,7 @@ class Allotment(BaseModel):
 
     id: str
     subject_id: str
-    teacher_id: str
+    teacher_id: str | None  # None until the Coordinator assigns one (or accepts a suggestion)
     kind: Kind
     section_ids: list[str]
     batch_id: str | None = None

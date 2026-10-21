@@ -82,9 +82,15 @@ def check(college: College) -> list[str]:
     # Per-allotment checks + demand per resource.
     group_demand: dict[str, int] = defaultdict(int)  # batch-resource -> periods needed
     teacher_demand: dict[str, int] = defaultdict(int)
+    unassigned = [a for a in college.allotments if a.teacher_id is None]
+    if unassigned:
+        problems.append(f"{len(unassigned)} class(es) have no teacher yet. Use 'Suggest teachers' in the "
+                        "department workspace, or pick a teacher for each.")
     for a in college.allotments:
         if a.subject_id not in ids["subject"]:
             problems.append(f"Allotment {a.id} refers to an unknown subject.")
+            continue
+        if a.teacher_id is None:
             continue
         if a.teacher_id not in ids["teacher"]:
             problems.append(f"Allotment {a.id} refers to an unknown teacher.")
