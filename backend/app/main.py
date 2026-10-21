@@ -9,6 +9,7 @@ from __future__ import annotations
 import threading
 import time
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import Depends, FastAPI, HTTPException, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -320,6 +321,7 @@ class ProposalRequest(BaseModel):
     day: str
     start_period: int
     venue_id: str | None = None
+    via: Literal["app", "chatbot"] = "app"  # only labels the activity log; never affects permissions
 
 
 class ProposalOut(BaseModel):
@@ -389,7 +391,7 @@ def create_proposal(body: ProposalRequest, ctx: Ctx = Depends(org_ctx)) -> Propo
     secs = " + ".join(state.college.section(i).name for i in moved.section_ids)
     when = f"{body.day} {state.college.shift(moved.shift_id).periods[body.start_period].start}"
     p = store.add_proposal(state.id, candidate, changes, message, action=f"Moved {subj} ({secs}) to {when}",
-                           created_by=ctx.user.id)
+                           created_by=ctx.user.id, source="chatbot" if body.via == "chatbot" else "drag")
     return ProposalOut(id=p.id, message=message, changes=changes, quality_before=before, quality_after=after)
 
 
@@ -405,7 +407,7 @@ def apply_proposal(proposal_id: str, ctx: Ctx = Depends(org_ctx)) -> TimetableOu
     store.pop_proposal(state.id, proposal_id)
     if validate(state.college, p.timetable.sessions, p.timetable.lunches):  # golden rule #1, re-checked
         raise HTTPException(409, "This change would create a clash, so it wasn't applied.")
-    store.set_timetable(state.id, p.timetable, action=p.action, source="drag", actor=ctx.user.name,
+    store.set_timetable(state.id, p.timetable, action=p.action, source=p.source, actor=ctx.user.name,
                         changes=p.changes)
     return _timetable_out(ctx)
 
@@ -455,6 +457,7 @@ class OverrideRequest(BaseModel):
     to_date: str | None = None
     start_period: int | None = None
     reason: str = ""
+    via: Literal["app", "chatbot"] = "app"  # only labels the activity log; never affects permissions
 
 
 class OverrideOut(BaseModel):
@@ -491,7 +494,7 @@ def create_override(body: OverrideRequest, ctx: Ctx = Depends(org_ctx)) -> Overr
                                         body.to_date, body.start_period, body.reason, actor=ctx.user.name)
     if new is None:
         raise HTTPException(422, message)
-    source = "teacher" if ctx.member.role == "teacher" else "one-day"
+    source = "chatbot" if body.via == "chatbot" else "teacher" if ctx.member.role == "teacher" else "one-day"
     store.set_timetable(state.id, new, action=action, source=source, actor=ctx.user.name)
     return OverrideOut(message=message, timetable=_timetable_out(ctx))
 

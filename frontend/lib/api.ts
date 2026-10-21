@@ -83,7 +83,7 @@ export const api = {
   dayOptions: (sessionId: string, date: string, toDate: string) =>
     request<MoveOption[]>(`${org()}/timetable/sessions/${sessionId}/day-options?date=${date}&to_date=${toDate}`),
   addOverride: (body: {
-    session_id: string; date: string; kind: "cancel" | "move"; to_date?: string; start_period?: number; reason?: string;
+    session_id: string; date: string; kind: "cancel" | "move"; to_date?: string; start_period?: number; reason?: string; via?: "app" | "chatbot";
   }) => request<OverrideOut>(`${org()}/overrides`, post(body)),
   removeOverride: (id: string) => request<OverrideOut>(`${org()}/overrides/${id}`, { method: "DELETE" }),
   members: () => request<Member[]>(`${org()}/members`),

@@ -113,3 +113,15 @@ def test_student_cannot_ask_for_others_free_time(backend):
     ctx = ToolContext(backend=backend, member=STUDENT, today="2026-10-19", now="08:00")
     with pytest.raises(ToolError, match="own free time"):
         asyncio.run(run_tool(ctx, "free_time", {"from_date": "2026-10-19", "who": "Prof. Ravi Kumar"}))
+
+
+def test_text_from_separate_steps_gets_a_paragraph_break(backend):
+    client = FakeClient([
+        (SimpleNamespace(stop_reason="tool_use", content=[text("Let me look."), tool_use("free_rooms", {})]),
+         ["Let me look."]),
+        (SimpleNamespace(stop_reason="end_turn", content=[text("LH-101 is free.")]), ["LH-101 ", "is free."]),
+    ])
+    ctx = ToolContext(backend=backend, member=STUDENT, today="2026-10-19", now="08:00")
+    events = asyncio.run(collect(run_turn(client, Conversation("u", "c"), ctx, "S", "free rooms?", "Context")))
+    tokens = [e["text"] for e in events if e["type"] == "token"]
+    assert tokens == ["Let me look.", "\n\nLH-101 ", "is free."]

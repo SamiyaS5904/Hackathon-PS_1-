@@ -271,7 +271,7 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parame
       } else {
         const a = card.action;
         const out = await api.addOverride({ session_id: a.session_id, date: a.date, kind: a.kind, to_date: a.to_date,
-          start_period: a.start_period, reason: a.reason });
+          start_period: a.start_period, reason: a.reason, via: "chatbot" });
         onApplied(out.timetable);
         setMessage(out.message);
       }

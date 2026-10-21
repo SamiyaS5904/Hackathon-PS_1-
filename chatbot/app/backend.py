@@ -82,4 +82,5 @@ class Backend:
     # ---- proposals (never applied here: the user applies them in the app) ----
     async def propose(self, session_id: str, day: str, start_period: int) -> dict:
         return await self._call("POST", self._o("/proposals"),
-                                json={"session_id": session_id, "day": day, "start_period": start_period})
+                                json={"session_id": session_id, "day": day, "start_period": start_period,
+                                      "via": "chatbot"})

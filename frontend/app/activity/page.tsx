@@ -13,6 +13,7 @@ const SOURCE: Record<string, { label: string; tone: "neutral" | "accent" | "ok" 
   drag: { label: "Manual edit", tone: "neutral" },
   chatbot: { label: "Assistant", tone: "accent" },
   teacher: { label: "Teacher", tone: "warn" },
+  "one-day": { label: "One-day change", tone: "warn" },
   undo: { label: "Undo", tone: "neutral" },
 };
 

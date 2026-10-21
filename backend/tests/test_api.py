@@ -181,3 +181,20 @@ def test_state_survives_restart(client, admin):
     st = fresh.org("demo")
     assert st.timetable is not None and len(st.timetable.sessions) == DEMO_CLASSES
     assert st.audit and st.audit[0].source == "generate"
+
+
+def test_assistant_changes_are_labelled_in_the_activity_log(client, admin):
+    sessions = client.get("/api/orgs/demo/timetable", headers=admin).json()["timetable"]["sessions"]
+    for s in sessions:
+        if s["elective_slot_id"]:
+            continue
+        opts = client.get(f"/api/orgs/demo/timetable/sessions/{s['id']}/options", headers=admin).json()
+        free = [o for o in opts if o["status"] == "free"]
+        if free:
+            break
+    body = {"session_id": s["id"], "day": free[0]["day"], "start_period": free[0]["start_period"], "via": "chatbot"}
+    proposal = client.post("/api/orgs/demo/proposals", json=body, headers=admin).json()
+    client.post(f"/api/orgs/demo/proposals/{proposal['id']}/apply", headers=admin)
+    audit = client.get("/api/orgs/demo/audit", headers=admin).json()
+    assert audit[0]["source"] == "chatbot"
+    client.post("/api/orgs/demo/audit/undo", headers=admin)
