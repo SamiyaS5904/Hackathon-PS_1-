@@ -86,7 +86,7 @@ The **student** assistant is read-only and student-level only: "When is my next 
 - Use the college's own words: section, period, venue, Department Coordinator. No solver jargon.
 - Always use tools for facts; ask one short clarifying question if a request is ambiguous (which section? which date? one-day or permanent?).
 - For changes: say what will move, who is affected, whether it's one-day or permanent, and whether approval is needed.
-- Reply in the user's language: **English or Hinglish** (mirror the user; "kal 10:30 wala DBMS lecture Friday shift karo" must work).
+- Reply in **English** (V1). Hinglish (e.g. "kal 10:30 wala DBMS lecture Friday shift karo") is V2.
 - Refuse politely (and say who can do it) when the role can't perform an action.
 
 ## Proactive insights (V1)
@@ -105,7 +105,7 @@ Show as InsightCards on the admin/coordinator dashboard and at the top of the ch
 ## Testing
 - Tool registry: each role gets exactly the tools in the table (unit test).
 - Loop with a mocked model: tool results feed back correctly; max-step cutoff works; invalid proposal triggers re-plan.
-- Scenario evals (real model, run manually before demo): ~15 scripted questions/edits per role on the demo college, including Hinglish and forbidden actions; check grounded answers and valid proposals.
+- Scenario evals (real model, run manually before demo): ~15 scripted questions/edits per role on the demo college, including forbidden actions; check grounded answers and valid proposals.
 
 ## Definition of done (chatbot)
 Role filtering tested · every change goes through `propose_change` → backend validator · streaming works in the panel · grounded answers on the demo college · friendly failure when the API is down · committed.

@@ -159,13 +159,13 @@ Drag & drop / chatbot / teacher request / leave → **solver repair** (freeze ev
 - Section / teacher / room views, colour-coded; publish; Excel + PDF export
 - Drag & drop with live clash check; one-day overrides; teacher one-day instant / permanent needs approval; **teacher block times** (auto-confirm if clash-free)
 - Audit log with undo; in-app notifications
-- Chatbot side panel: role-scoped Q&A (student read-only) + edits via solver repair + diff preview + **proactive insights after generation** + **Hinglish**
+- Chatbot side panel: role-scoped Q&A (student read-only) + edits via solver repair + diff preview + **proactive insights after generation**
 
 **V1: if time** (in this order)
 Teacher allotment suggestion · substitutes on leave · makeup / extra class finder · email notifications · Now & Next TV board
 
 **V2: roadmap**
-Super admin panel · Google login for students · auto-sectioning from year list · mid-semester regenerate with minimal change · NAAC/NBA workload report · Google Calendar sync · QR posters · teacher booking (doubt slots, meetings) · WhatsApp/SMS · plain-language rules via chatbot · book/makeup/notify via chat · timetable version compare · **attendance** (per-college rule, e.g. 75%, shown beside the student timetable)
+Super admin panel · Google login for students · Hinglish chatbot · auto-sectioning from year list · mid-semester regenerate with minimal change · NAAC/NBA workload report · Google Calendar sync · QR posters · teacher booking (doubt slots, meetings) · WhatsApp/SMS · plain-language rules via chatbot · book/makeup/notify via chat · timetable version compare · **attendance** (per-college rule, e.g. 75%, shown beside the student timetable)
 
 ---
 
@@ -206,11 +206,18 @@ Super admin panel · Google login for students · auto-sectioning from year list
 - Names in code use the glossary terms above (`venue`, `section`, `batch`, `session`, `override`, `coordinator`).
 - Times are stored as slot indices + the org's time grid; dates in the org's timezone.
 
-**Build order** (if time runs short, cut from the bottom)
-1. Repo + docs → DB schema + RLS → solver + validator + tests → demo seed
-2. Auth + roles shell → setup wizard + Excel import → Ready flow → generate → grid views → publish
-3. Chatbot (Q&A → edits with diff) → drag & drop + repair → overrides & approvals → notifications + audit → exports → deploy
-4. "V1 if time" list in order
+**Build stages** (simple MVP first, then grow; each stage ends in a working, committed state)
+
+| Stage | Goal | Done when |
+|---|---|---|
+| **1. Engine** | `backend/`: domain models, demo college, CP-SAT generator, independent validator, quality score, feasibility pre-check, CLI, pytest. No DB, no UI | `pytest` green; demo college generates with **0 violations** |
+| **2. See it** | FastAPI endpoints (in-memory store) + Next.js grid: section / teacher / venue views, Generate button | Open browser → click Generate → readable clash-free timetable |
+| **3. Edit it** | Drag & drop with live clash check, LNS repair, diff preview, one-day overrides, audit log + undo | Move a class in the UI; nothing else breaks |
+| **4. Real SaaS** | Supabase DB + RLS, auth, roles, invites, student dummy-email login, multi-college | Two colleges isolated; each role sees only its part |
+| **5. Set it up** | Setup wizard (shifts, periods, breaks, holidays), Excel import, Coordinator Ready flow, rules page, electives, teacher block times | A new college goes from signup to timetable without help |
+| **6. Chatbot** | Agent service: role-scoped Q&A, edits via proposals, proactive insights | "Move CSE-3A DBMS to Friday" works with a diff |
+| **7. Ship** | Publish, Excel/PDF export, in-app notifications, approvals, polish, deploy | Live URL with the demo college |
+| 8. If time | V1-if-time list in order | |
 
 ---
 

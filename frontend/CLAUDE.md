@@ -80,7 +80,7 @@ Show **live feasibility hints** from the backend (e.g. "CSE needs 34 lab periods
 - Streams tokens via SSE; renders tool progress ("Checking free rooms…").
 - A `ChangeProposal` renders as a **ProposalCard** with a mini `DiffView` + **Apply / Discard / Try another way**. Apply calls the backend, not the chatbot.
 - **InsightCard** for proactive insights after generation (e.g. "Dr. Kaur has 6 lectures on Monday. Rebalance?").
-- Suggested prompts per role on empty state; supports Hinglish input.
+- Suggested prompts per role on empty state (English in V1; Hinglish is V2).
 
 ## Design system
 - Clean SaaS look (Linear / Notion): neutral greys, one accent colour, generous whitespace, 8px radius, subtle borders, no heavy shadows/gradients.
