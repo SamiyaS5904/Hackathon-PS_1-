@@ -9,6 +9,7 @@ from app.college_edit import dept_slice, merge_dept
 from app.io.excel import parse, template
 from app.main import app
 from app.seed.demo_college import build_demo_college
+from app.solver import feasibility
 
 
 def _edit(content: bytes, sheet: str, rows: list[list]) -> bytes:
@@ -34,8 +35,10 @@ def test_round_trip_keeps_department_data_and_ids():
     assert len(d.students) == len(before.students) == 360
     assert {(a.subject_id, tuple(a.section_ids), a.batch_id, a.teacher_id) for a in d.allotments} == \
            {(a.subject_id, tuple(a.section_ids), a.batch_id, a.teacher_id) for a in before.allotments}
+    assert {s.id for s in d.students} == {s.id for s in before.students}  # elective groups refer to these
     merged, errs = merge_dept(c, "cse", d, actor="test")
     assert errs == [] and merged is not None
+    assert feasibility.check(merged) == []  # the re-imported college is still ready to generate
 
 
 def test_row_errors_name_the_sheet_and_row():

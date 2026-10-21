@@ -191,6 +191,7 @@ def parse(college: College, dept: str, content: bytes) -> ImportResult:
     other_teachers = {t.name.lower(): t for t in college.teachers if t.department_id != dept}
     other_subjects = {s.code.lower(): s for s in college.subjects if s.department_id != dept}
     old_venue = {v.name.lower(): v for v in old.venues}
+    old_student = {st.email.lower(): st for st in old.students} | {st.roll_no.lower(): st for st in old.students}
 
     # Rooms
     venues: list[Venue] = []
@@ -407,8 +408,9 @@ def parse(college: College, dept: str, content: bytes) -> ImportResult:
                 continue
             batch_id = b.id
         emails.add(email)
-        students.append(Student(id=f"st-{slug(roll)}", roll_no=roll, name=name, email=email, section_id=sec.id,
-                                batch_id=batch_id))
+        prev = old_student.get(email) or old_student.get(roll.lower())  # keep ids: elective groups refer to them
+        students.append(Student(id=prev.id if prev else f"st-{slug(roll)}", roll_no=roll, name=name, email=email,
+                                section_id=sec.id, batch_id=batch_id))
 
     counts = {"sections": len(sections), "teachers": len(teachers), "subjects": len(subjects), "rooms": len(venues),
               "classes": len(allotments), "can_teach": len(can), "students": len(students)}
