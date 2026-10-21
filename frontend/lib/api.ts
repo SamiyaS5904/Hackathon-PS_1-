@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, Feed, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -70,6 +70,8 @@ export const api = {
   loadSample: () => request<College>(`${org()}/load-sample`, { method: "POST" }),
   precheck: () => request<Precheck>(`${org()}/precheck`),
   timetable: () => request<TimetableOut>(`${org()}/timetable`),
+  notifications: () => request<Feed>(`${org()}/notifications`),
+  seenNotifications: () => request<void>(`${org()}/notifications/seen`, { method: "POST" }),
   publish: () => request<TimetableOut>(`${org()}/timetable/publish`, { method: "POST" }),
   generate: (timeLimit = 45) => request<Job>(`${org()}/timetable/generate`, post({ time_limit: timeLimit })),
   job: (id: string) => request<Job>(`${org()}/jobs/${id}`),

@@ -86,6 +86,9 @@ export interface DayInfo { date: string; day: string; label: string; working: bo
 export interface WeekOut { days: DayInfo[]; occurrences: Occurrence[] }
 export interface OverrideOut { message: string; timetable: TimetableOut }
 
+export interface Notification { id: string; at: number; title: string; body: string; link: string; unread: boolean }
+export interface Feed { items: Notification[]; unread: number }
+
 export type Role = "admin" | "coordinator" | "teacher" | "student";
 export interface Member {
   user_id: string; org_id: string; org_name: string; name: string; email: string; role: Role;

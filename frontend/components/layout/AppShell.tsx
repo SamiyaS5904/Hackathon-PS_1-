@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import { ROLE_LABEL, useAuth } from "@/lib/auth";
 import { isGenerating, useTimetable } from "@/lib/timetable-context";
 import type { Role } from "@/lib/types";
+import { NotificationBell } from "./NotificationBell";
 
 type Item = { href: string; label: string; icon: typeof LayoutDashboard; roles: Role[] };
 
@@ -49,10 +50,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-border bg-surface px-3 py-5 md:flex">
-        <Link href="/" className="mb-6 flex items-center gap-2 px-2">
-          <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-sm font-bold text-white dark:text-bg">T</span>
-          <span className="font-semibold tracking-tight">Timetabl.ai</span>
-        </Link>
+        <div className="mb-6 flex items-center gap-2 px-2">
+          <Link href="/" className="flex flex-1 items-center gap-2">
+            <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-sm font-bold text-white dark:text-bg">T</span>
+            <span className="font-semibold tracking-tight">Timetabl.ai</span>
+          </Link>
+          <NotificationBell />
+        </div>
 
         <div className="mb-4 rounded-lg border border-border bg-surface-2 px-3 py-2">
           <p className="text-[11px] uppercase tracking-wide text-muted">College</p>
@@ -92,7 +96,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 px-4 pt-3">
             <span className="font-semibold">Timetabl.ai</span>
             <span className="truncate text-xs text-muted">{user?.name}</span>
-            <button onClick={signOut} aria-label="Log out" className="ml-auto rounded p-1.5 text-muted hover:bg-surface-2"><LogOut size={16} /></button>
+            <span className="ml-auto"><NotificationBell align="right" /></span>
+            <button onClick={signOut} aria-label="Log out" className="rounded p-1.5 text-muted hover:bg-surface-2"><LogOut size={16} /></button>
           </div>
           {/* One scrollable row instead of wrapping on small screens. */}
           <nav className="flex gap-1 overflow-x-auto whitespace-nowrap px-3 py-2">
