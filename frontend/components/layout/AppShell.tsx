@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Building2, CalendarClock, CalendarDays, Database, History, LayoutDashboard, ListChecks, Loader2, LogOut, Settings2, Users } from "lucide-react";
+import { Building2, CalendarClock, CalendarDays, Database, History, Inbox, LayoutDashboard, ListChecks, Loader2, LogOut, Settings2, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ROLE_LABEL, useAuth } from "@/lib/auth";
@@ -22,6 +22,8 @@ const CORE: Item[] = [
   { href: "/availability", label: "My availability", icon: CalendarClock, roles: ["teacher"] },
 ];
 const SECONDARY: Item[] = [
+  { href: "/requests", label: "Change requests", icon: Inbox, roles: ["admin", "coordinator"] },
+  { href: "/requests", label: "My requests", icon: Inbox, roles: ["teacher"] },
   { href: "/rules", label: "Rules", icon: ListChecks, roles: ["admin", "coordinator"] },
   { href: "/data", label: "College data", icon: Database, roles: ["admin", "coordinator"] },
   { href: "/members", label: "People & invites", icon: Users, roles: ["admin", "coordinator"] },

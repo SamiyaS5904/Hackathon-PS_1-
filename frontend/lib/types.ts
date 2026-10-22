@@ -86,6 +86,11 @@ export interface DayInfo { date: string; day: string; label: string; working: bo
 export interface WeekOut { days: DayInfo[]; occurrences: Occurrence[] }
 export interface OverrideOut { message: string; timetable: TimetableOut }
 
+export interface ChangeRequest {
+  id: string; at: number; teacher_name: string; teacher_id: string; session_id: string; day: string;
+  start_period: number; summary: string; reason: string; status: "pending" | "approved" | "declined" | "withdrawn";
+  decided_by: string; decided_at: number | null; note: string;
+}
 export interface Notification { id: string; at: number; title: string; body: string; link: string; unread: boolean }
 export interface Feed { items: Notification[]; unread: number }
 

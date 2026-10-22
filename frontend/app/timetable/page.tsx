@@ -9,6 +9,7 @@ import { DownloadMenu } from "@/components/timetable/DownloadMenu";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
 import { OneDayPanel } from "@/components/timetable/OneDayPanel";
 import { ProposalDialog } from "@/components/timetable/ProposalDialog";
+import { RequestDialog } from "@/components/timetable/RequestDialog";
 import { useMoveEditor } from "@/components/timetable/useMoveEditor";
 import { type OccurrenceMeta, TimetableGrid } from "@/components/timetable/TimetableGrid";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
@@ -42,11 +43,12 @@ export default function TimetablePage() {
   const [picked, setPicked] = useState<Record<ViewKind, string>>({
     section: member?.section_id ?? "", teacher: member?.teacher_id ?? "", venue: "",
   });
-  const editor = useMoveEditor();
+  const editor = useMoveEditor({ requestOnly: isTeacher });
   const { setData } = useTimetable();
   // Students and teachers care about real dates (cancellations, one-day moves) first.
   const [mode, setMode] = useState<"plan" | "week">(isStaff(role) ? "plan" : "week");
-  const canDrag = isStaff(role);
+  // Staff move classes directly; teachers pick their own lecture and a slot to ask their Coordinator.
+  const canDrag = isStaff(role) || (isTeacher && !!member?.teacher_id);
   const [weekStart, setWeekStart] = useState(() => isoDate(new Date()));
   const [week, setWeek] = useState<WeekOut | null>(null);
   const [selected, setSelected] = useState<Occurrence | null>(null);
@@ -282,7 +284,12 @@ export default function TimetablePage() {
             )
           ) : (
             <TimetableGrid college={college} timetable={data.timetable} view={view} entityId={entityId}
-              edit={canDrag ? editor.edit : undefined} />
+              edit={canDrag && editor.edit ? {
+                ...editor.edit,
+                onPick: (s) => isTeacher && s.teacher_id !== member?.teacher_id
+                  ? editor.setToast({ text: "You can only ask to move your own lectures.", tone: "danger" })
+                  : editor.edit!.onPick(s),
+              } : undefined} />
           )}
           {selected && week && (
             <OneDayPanel occurrence={selected} days={week.days} college={college} onDone={onOneDayDone}
@@ -304,7 +311,7 @@ const HINTS: Record<string, Record<"plan" | "week", string | undefined>> = {
     week: "Real dates. Click a class to cancel or reschedule it for that day only. The weekly plan stays as it is.",
   },
   teacher: {
-    plan: "Your usual week. To change it permanently, ask your Department Coordinator. For a one-day change, open This week.",
+    plan: "Your usual week. Click one of your lectures, then a green or amber slot, to ask your Department Coordinator for a permanent move. For a one-day change, open This week.",
     week: "Click one of your lectures to cancel it or move it for that day. Students see the change straight away.",
   },
   student: {
@@ -331,7 +338,9 @@ function EditBar({
   college: NonNullable<ReturnType<typeof useTimetable>["college"]>;
   hint?: string;
 }) {
-  const { moving, options, busy, proposal, apply, discard, cancel, undo, toast, setToast } = editor;
+  const {
+    moving, options, busy, proposal, apply, discard, cancel, undo, toast, setToast, moveRequest, sendRequest, closeRequest,
+  } = editor;
   const subject = moving ? college.subjects.find((s) => s.id === moving.subject_id)?.name : null;
   const counts = options
     ? [...options.values()].reduce((a, o) => ({ ...a, [o.status]: (a[o.status] ?? 0) + 1 }), {} as Record<string, number>)
@@ -366,6 +375,10 @@ function EditBar({
       </div>
 
       {proposal && <ProposalDialog proposal={proposal} busy={busy} onApply={apply} onDiscard={discard} />}
+      {moveRequest && (
+        <RequestDialog request={moveRequest} subject={subject ?? ""} busy={busy} onSend={sendRequest}
+          onClose={closeRequest} />
+      )}
 
       {toast && (
         <div

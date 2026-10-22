@@ -1,6 +1,6 @@
 "use client";
 
-import { AlertTriangle, ArrowRight, CheckCircle2, Circle, Info, Loader2, RefreshCw, Settings2, Sparkles } from "lucide-react";
+import { AlertTriangle, ArrowRight, CheckCircle2, Circle, Inbox, Info, Loader2, RefreshCw, Settings2, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -20,9 +20,13 @@ export default function Dashboard() {
   const router = useRouter();
   const [sampleBusy, setSampleBusy] = useState(false);
   const [readiness, setReadiness] = useState<DepartmentReadiness[] | null>(null);
+  const [waiting, setWaiting] = useState(0);
 
   useEffect(() => {
     if (isStaff(role) && college) api.readiness().then(setReadiness).catch(() => setReadiness(null));
+    if (isStaff(role) && college) {
+      api.changeRequests().then((r) => setWaiting(r.filter((x) => x.status === "pending").length)).catch(() => setWaiting(0));
+    }
   }, [role, college]);
 
   // Teachers and students go straight to their own timetable.
@@ -157,7 +161,15 @@ export default function Dashboard() {
 
       {hasTimetable && data && !data.stale && <HealthStrip data={data} />}
 
-      {hasTimetable && data && !data.stale && (
+      {waiting > 0 && (
+        <Link href="/requests" className="mb-4 flex items-center gap-3 rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-accent-text hover:bg-accent/15">
+          <Inbox size={16} aria-hidden />
+          <span className="flex-1">{waiting} change request{waiting > 1 ? "s" : ""} from teachers waiting for you</span>
+          <ArrowRight size={16} aria-hidden />
+        </Link>
+      )}
+
+      {isStaff(role) && hasTimetable && data && !data.stale && (
         <InsightsCard revision={`${college.revision}-${data.quality?.score}-${data.timetable.sessions.length}`} />
       )}
 

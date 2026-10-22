@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, Feed, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, ChangeRequest, Feed, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -70,6 +70,14 @@ export const api = {
   loadSample: () => request<College>(`${org()}/load-sample`, { method: "POST" }),
   precheck: () => request<Precheck>(`${org()}/precheck`),
   timetable: () => request<TimetableOut>(`${org()}/timetable`),
+  changeRequests: () => request<ChangeRequest[]>(`${org()}/change-requests`),
+  requestChange: (body: { session_id: string; day: string; start_period: number; reason: string }) =>
+    request<ChangeRequest>(`${org()}/change-requests`, post(body)),
+  reviewRequest: (id: string) => request<Proposal>(`${org()}/change-requests/${id}/review`, { method: "POST" }),
+  declineRequest: (id: string, note: string) =>
+    request<ChangeRequest>(`${org()}/change-requests/${id}/decline`, post({ note })),
+  withdrawRequest: (id: string) =>
+    request<ChangeRequest>(`${org()}/change-requests/${id}/withdraw`, { method: "POST" }),
   notifications: () => request<Feed>(`${org()}/notifications`),
   seenNotifications: () => request<void>(`${org()}/notifications/seen`, { method: "POST" }),
   publish: () => request<TimetableOut>(`${org()}/timetable/publish`, { method: "POST" }),
