@@ -204,7 +204,7 @@ export default function Dashboard() {
               ["Sections", college.sections.length],
               ["Teachers", college.teachers.length],
               ["Rooms & labs", college.venues.length],
-              ["Shifts", college.shifts.map((s) => s.name).join(", ")],
+              ...(college.shifts.length > 1 ? [["Shifts", college.shifts.map((s) => s.name).join(", ")]] : []),
               ["Working days", college.days.length],
             ].map(([k, v]) => (
               <div key={String(k)}>
@@ -237,7 +237,7 @@ export default function Dashboard() {
               <li>No teacher, room or student group is ever double-booked</li>
               <li>Rooms fit the class size and type (labs in labs)</li>
               <li>Labs run as back-to-back periods, batches in parallel</li>
-              <li>Shifts, breaks and a lunch slot inside the mess window</li>
+              <li>Your college day, breaks and a lunch slot inside the mess window</li>
             </ul>
           </Card>
         )}

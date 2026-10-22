@@ -74,7 +74,7 @@ Keep answers short, structured (bullets / small tables), and cite concrete slots
 | `my_free_slots(from, to)` | the user's free periods on real dates (for planning meetings) | ✅ | ✅ | ✅ | ✅ |
 | `free_venues(date?, slot?)` | free rooms now / at a time | ✅ | ✅ | ✅ | ✅ |
 | `teacher_location_now(teacher)` | where a teacher is per timetable right now | ✅ | ✅ | ✅ | ✅ |
-| `query_timetable(filters)` | sessions by section/teacher/venue/day | ✅ all | ✅ dept | own + dept | own section |
+| `query_timetable(filters)` | sessions by section/teacher/venue/day | ✅ all | ✅ dept | own lectures | own section |
 | `find_free_slots(entities, date_range)` | slots where teacher + section + venue are all free | ✅ | ✅ | ✅ own | ❌ |
 | `check_conflicts(change)` | dry-run a change through the validator | ✅ | ✅ | ✅ own | ❌ |
 | `explain_placement(session)` | why a class is where it is (rules, constraints) | ✅ | ✅ | ✅ | ❌ |

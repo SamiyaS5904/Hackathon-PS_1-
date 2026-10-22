@@ -238,7 +238,7 @@ function TargetCell({
             option.status === "repair" ? "text-warn" : "text-danger",
           )}
         >
-          {option.status === "repair" ? "others shift" : "blocked"}
+          {option.status === "repair" ? "other classes move" : "blocked"}
         </span>
       )}
     </div>

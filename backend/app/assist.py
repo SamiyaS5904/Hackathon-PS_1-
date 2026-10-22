@@ -106,8 +106,10 @@ def explain(college: College, tt: Timetable, session_id: str) -> Explanation:
     teacher = college.teacher(s.teacher_id)
     shift = college.shift(s.shift_id)
     venue = college.venue(s.venue_id)
-    facts = [f"It is in the {shift.name} shift ({shift.periods[0].start}-{shift.periods[-1].end}), the shift of "
-             f"{', '.join(college.section(i).name for i in s.section_ids)}."]
+    day = f"{shift.periods[0].start}-{shift.periods[-1].end}"
+    secs = ", ".join(college.section(i).name for i in s.section_ids)
+    facts = [f"It is in the {shift.name} shift ({day}), the shift of {secs}." if len(college.shifts) > 1
+             else f"Classes run {day}; {secs} can only be placed inside those hours."]
     if s.kind == Kind.lab:
         facts.append(f"Labs are {college.lab_periods} back-to-back periods without a break, in a lab with "
                      f"{subj.lab_tag or 'the right equipment'}.")
@@ -136,7 +138,7 @@ def explain(college: College, tt: Timetable, session_id: str) -> Explanation:
         opts = move_options(college, tt, session_id)
         free = sum(1 for o in opts if o.status == "free")
         repair = sum(1 for o in opts if o.status == "repair")
-        facts.append(f"Other possible times this week: {free} free right away, {repair} more if other classes shift.")
+        facts.append(f"Other possible times this week: {free} free right away, {repair} more if other classes move.")
     summary = (f"{subj.name} is on {s.day} {s.start}-{s.end} in {venue.name}. The timetable places every class where "
                "no teacher, room or student clashes, then keeps students' days compact and teachers' loads even.")
     return Explanation(session_id=s.id, summary=summary, facts=facts)

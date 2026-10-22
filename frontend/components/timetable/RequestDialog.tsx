@@ -45,7 +45,7 @@ export function RequestDialog({ request, subject, busy, onSend, onClose }: {
               <span className="rounded bg-ok-soft px-1.5 py-0.5 text-ok">{option.day} {option.start}, every week</span>
             </div>
             {option.status === "repair" && (
-              <p className="mt-2 text-xs text-warn">Other classes would shift to make room; your Coordinator sees exactly which.</p>
+              <p className="mt-2 text-xs text-warn">Other classes would move to make room; your Coordinator sees exactly which.</p>
             )}
           </div>
           <label className="block">

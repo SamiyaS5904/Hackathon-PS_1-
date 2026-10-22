@@ -45,7 +45,7 @@ export default function AvailabilityPage() {
       ) : (
         <Card className="p-5">
           <div className="space-y-2">
-            {blocked.length === 0 && <p className="text-sm text-muted">No blocked times. You can be scheduled any time in your shift.</p>}
+            {blocked.length === 0 && <p className="text-sm text-muted">No blocked times. You can be scheduled any time in the college day.</p>}
             {blocked.map((b, i) => (
               <div key={i} className="flex flex-wrap items-center gap-2">
                 <select className={input} value={b.day} aria-label="Day"

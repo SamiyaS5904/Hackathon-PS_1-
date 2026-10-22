@@ -341,6 +341,8 @@ def export_timetable(format: Literal["xlsx", "pdf"] = "xlsx", view: Literal["sec
             raise HTTPException(404, "Not found in this college.")
         if role == "student" and (view != "section" or id != ctx.member.section_id):
             raise HTTPException(403, "You can download your own section's timetable.")
+        if role == "teacher" and (view != "teacher" or id != ctx.member.teacher_id):
+            raise HTTPException(403, "You can download your own timetable.")
         ids = [id]
     sessions = visible_sessions(ctx.member, college, tt)
     if view == "teacher" and id is None:  # skip teachers with nothing to print

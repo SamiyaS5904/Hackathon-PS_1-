@@ -3,6 +3,11 @@ import type { Config } from "tailwindcss";
 const token = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
 
 export default {
+  // `dark:` follows the device unless the user picked a theme (html[data-theme]).
+  darkMode: ["variant", [
+    "&:is([data-theme=dark] *)",
+    "@media (prefers-color-scheme: dark) { &:not([data-theme=light] *) }",
+  ]],
   content: ["./app/**/*.{ts,tsx}", "./components/**/*.{ts,tsx}", "./lib/**/*.{ts,tsx}"],
   theme: {
     extend: {

@@ -130,7 +130,7 @@ TOOLS: dict[str, tuple[dict, type[BaseModel], tuple[str, ...]]] = {
         ["from_date"]), MyScheduleIn, ("student", "teacher", "coordinator", "admin")),
     "free_time": (_tool(
         "free_time",
-        "Free time windows on real dates within the shift, e.g. to plan a meeting or a makeup class. Without "
+        "Free time windows on real dates within the college day (or shift), e.g. to plan a meeting or a makeup class. Without "
         "'who' it is the user's own free time. Lunch is shown separately.",
         {"from_date": DATE, "to_date": {**DATE, "description": "Last date, inclusive (default: from_date)."},
          "who": {"type": "string", "description": "Optional section (e.g. CSE-3A) or teacher name."},
@@ -148,7 +148,7 @@ TOOLS: dict[str, tuple[dict, type[BaseModel], tuple[str, ...]]] = {
         ["teacher"]), WhereIsIn, ("student", "teacher", "coordinator", "admin")),
     "explain_class": (_tool(
         "explain_class",
-        "Why a class is at its time and room: shift, lab rules, lunch, rules, teacher load, alternatives. "
+        "Why a class is at its time and room: college hours or shift, lab rules, lunch, rules, teacher load, alternatives. "
         "Use a session_id from my_schedule or timetable_for.",
         {"session_id": {"type": "string"}}, ["session_id"]), SessionIn, ("student", "teacher", "coordinator", "admin")),
     "timetable_for": (_tool(
@@ -168,7 +168,7 @@ TOOLS: dict[str, tuple[dict, type[BaseModel], tuple[str, ...]]] = {
         {}, []), NoInput, STAFF),
     "move_options": (_tool(
         "move_options",
-        "Every weekly slot a class could move to: free (direct), repair (other classes shift), blocked (with reason).",
+        "Every weekly slot a class could move to: free (direct), repair (other classes move), blocked (with reason).",
         {"session_id": {"type": "string"}}, ["session_id"]), SessionIn, STAFF),
     "propose_move": (_tool(
         "propose_move",
@@ -207,7 +207,7 @@ def tools_for(role: str) -> list[dict]:
     if role == "student":  # students get their own free time without the 'who' option
         spec = json.loads(json.dumps(TOOLS["free_time"][0]))
         spec["input_schema"]["properties"].pop("who")
-        spec["description"] = ("The student's own free time windows on real dates within their shift, e.g. to "
+        spec["description"] = ("The student's own free time windows on real dates within their college day, e.g. to "
                                "plan a meeting. Lunch is shown separately.")
         out.insert(1, spec)
     return out

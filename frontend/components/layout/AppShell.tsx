@@ -5,6 +5,7 @@ import { Building2, CalendarClock, CalendarDays, Database, History, Inbox, Layou
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ROLE_LABEL, useAuth } from "@/lib/auth";
+import { ThemeToggle } from "@/lib/theme";
 import { isGenerating, useTimetable } from "@/lib/timetable-context";
 import type { Role } from "@/lib/types";
 import { NotificationBell } from "./NotificationBell";
@@ -57,6 +58,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="grid h-7 w-7 place-items-center rounded-md bg-accent text-sm font-bold text-white dark:text-bg">T</span>
             <span className="font-semibold tracking-tight">Timetabl.ai</span>
           </Link>
+          <ThemeToggle />
           <NotificationBell />
         </div>
 
@@ -98,7 +100,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="flex items-center gap-2 px-4 pt-3">
             <span className="font-semibold">Timetabl.ai</span>
             <span className="truncate text-xs text-muted">{user?.name}</span>
-            <span className="ml-auto"><NotificationBell align="right" /></span>
+            <span className="ml-auto flex items-center"><ThemeToggle /><NotificationBell align="right" /></span>
             <button onClick={signOut} aria-label="Log out" className="rounded p-1.5 text-muted hover:bg-surface-2"><LogOut size={16} /></button>
           </div>
           {/* One scrollable row instead of wrapping on small screens. */}

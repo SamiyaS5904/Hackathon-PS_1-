@@ -10,6 +10,8 @@ export default function DataPage() {
   const dept = new Map(college.departments.map((d) => [d.id, d.short]));
   const shift = new Map(college.shifts.map((s) => [s.id, s.name]));
 
+  // Shift wording only for colleges that run two shifts (set in the setup wizard).
+  const twoShifts = college.shifts.length > 1;
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader
@@ -19,7 +21,7 @@ export default function DataPage() {
 
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="p-5">
-          <h2 className="text-sm font-semibold">Shifts</h2>
+          <h2 className="text-sm font-semibold">{college.shifts.length > 1 ? "Shifts" : "College day"}</h2>
           <ul className="mt-3 space-y-2 text-sm">
             {college.shifts.map((s) => (
               <li key={s.id}>
@@ -63,13 +65,13 @@ export default function DataPage() {
       />
       <Table
         title="Sections"
-        head={["Section", "Department", "Year", "Students", "Shift", "Lab batches"]}
+        head={["Section", "Department", "Year", "Students", ...(twoShifts ? ["Shift"] : []), "Lab batches"]}
         rows={college.sections.map((s) => [
           s.name,
           dept.get(s.department_id),
           s.year,
           s.strength,
-          shift.get(s.shift_id),
+          ...(twoShifts ? [shift.get(s.shift_id)] : []),
           s.batches.map((b) => `${b.name} (${b.strength})`).join(", ") || "-",
         ])}
       />
@@ -87,11 +89,11 @@ export default function DataPage() {
       />
       <Table
         title="Teachers"
-        head={["Name", "Department", "Shift", "Max periods/day"]}
+        head={["Name", "Department", ...(twoShifts ? ["Shift"] : []), "Max periods/day"]}
         rows={college.teachers.map((t) => [
           t.name,
           dept.get(t.department_id),
-          t.shift_ids.map((id) => shift.get(id)).join(" + "),
+          ...(twoShifts ? [t.shift_ids.map((id) => shift.get(id)).join(" + ")] : []),
           t.max_per_day,
         ])}
       />

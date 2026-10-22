@@ -112,7 +112,9 @@ def build_grid(college: College, tt: Timetable, sessions: list[Session], view: s
     if view == "section":
         sec = college.section(entity_id)
         shift_ids = [sec.shift_id]
-        subtitle = f"{sec.strength} students · {college.shift(sec.shift_id).name} shift"
+        subtitle = f"{sec.strength} students"
+        if len(college.shifts) > 1:  # shift wording only for colleges that run two
+            subtitle += f" · {college.shift(sec.shift_id).name} shift"
     else:
         shift_ids = sorted({s.shift_id for s in mine}) or [college.shifts[0].id]
         if view == "teacher":

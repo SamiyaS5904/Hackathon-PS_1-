@@ -13,7 +13,8 @@ import { useTimetable } from "@/lib/timetable-context";
 import type { Department, Holiday, Settings, Venue } from "@/lib/types";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-const STEPS = ["Week & labs", "Shifts & timings", "Calendar", "Departments & rooms", "Sections → shifts", "Done"];
+const STEPS = ["Week & labs", "Timings", "Calendar", "Departments & rooms", "Sections → shifts", "Done"];
+const SECTION_SHIFTS = 4; // only shown when the college runs two shifts
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
 const input = "rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm";
 
@@ -70,11 +71,18 @@ export default function SetupPage() {
       setBusy(false);
     }
   };
+  const twoShifts = plans.length > 1;
+  // A one-shift college never sees the "which sections in which shift" step.
+  const visibleSteps = STEPS.map((label, i) => ({ label, i })).filter((s) => twoShifts || s.i !== SECTION_SHIFTS);
+  const move = (dir: 1 | -1) => {
+    let to = step + dir;
+    if (to === SECTION_SHIFTS && !twoShifts) to += dir;
+    return Math.min(STEPS.length - 1, Math.max(0, to));
+  };
   const next = async () => {
-    if (step < STEPS.length - 1 && (await save())) setStep(step + 1);
+    if (step < STEPS.length - 1 && (await save())) setStep(move(1));
   };
 
-  const twoShifts = plans.length > 1;
   const setShiftCount = (n: number) => {
     if (n === 1) setPlans(plans.slice(0, 1));
     else if (plans.length < 2)
@@ -90,7 +98,7 @@ export default function SetupPage() {
       <PageHeader title="College setup" subtitle="A few questions about how your college runs. You can come back and change any answer." />
 
       <ol className="mb-6 flex flex-wrap gap-2" aria-label="Setup steps">
-        {STEPS.map((label, i) => (
+        {visibleSteps.map(({ label, i }, n) => (
           <li key={label}>
             <button onClick={() => setStep(i)}
               className={clsx("flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition",
@@ -98,7 +106,7 @@ export default function SetupPage() {
                   : i < step ? "border-border text-text" : "border-border text-muted")}
               aria-current={i === step ? "step" : undefined}>
               <span className={clsx("grid h-5 w-5 place-items-center rounded-full text-[10px]",
-                i < step ? "bg-ok text-white dark:text-bg" : "bg-surface-2")}>{i < step ? <Check size={12} /> : i + 1}</span>
+                i < step ? "bg-ok text-white dark:text-bg" : "bg-surface-2")}>{i < step ? <Check size={12} /> : n + 1}</span>
               {label}
             </button>
           </li>
@@ -138,24 +146,24 @@ export default function SetupPage() {
         {step === 1 && (
           <div className="space-y-4">
             <div>
-              <h2 className="font-semibold">How many shifts does your college run?</h2>
+              <h2 className="font-semibold">Does your college run one batch of timings, or two shifts?</h2>
               <div className="mt-3 flex gap-2">
                 {[1, 2].map((n) => (
                   <button key={n} aria-pressed={plans.length === n} onClick={() => setShiftCount(n)}
                     className={clsx("rounded-lg border px-4 py-2 text-sm", plans.length === n ? "border-accent bg-accent-soft text-accent-text" : "border-border text-muted")}>
-                    {n === 1 ? "One shift" : "Two shifts (morning / evening)"}
+                    {n === 1 ? "One timing for everyone" : "Two shifts (e.g. morning / evening)"}
                   </button>
                 ))}
               </div>
               {twoShifts && (
                 <p className="mt-2 text-sm text-muted">
-                  Every section belongs to exactly one shift (you&apos;ll choose in step 5). Shifts may overlap in time; rooms
+                  Every section belongs to exactly one shift (you&apos;ll choose in the next steps). Shifts may overlap in time; rooms
                   and teachers are shared safely between them.
                 </p>
               )}
             </div>
             {plans.map((p, i) => (
-              <ShiftEditor key={i} plan={p} onChange={(np) => setPlans(plans.map((x, j) => (j === i ? { ...np, id: np.id || slug(np.name) } : x)))} />
+              <ShiftEditor key={i} plan={p} single={!twoShifts} onChange={(np) => setPlans(plans.map((x, j) => (j === i ? { ...np, id: np.id || slug(np.name) } : x)))} />
             ))}
           </div>
         )}
@@ -253,7 +261,7 @@ export default function SetupPage() {
         <FormError message={error} />
         {step < STEPS.length - 1 && (
           <div className="mt-6 flex justify-between border-t border-border pt-4">
-            <Button onClick={() => setStep(Math.max(0, step - 1))} disabled={step === 0 || busy}>
+            <Button onClick={() => setStep(move(-1))} disabled={step === 0 || busy}>
               <ChevronLeft size={16} /> Back
             </Button>
             <Button variant="primary" onClick={next} disabled={busy}>

@@ -128,12 +128,16 @@ export default function TimetablePage() {
     if (view === "section") {
       const s = college.sections.find((x) => x.id === entityId);
       const shift = college.shifts.find((x) => x.id === s?.shift_id);
-      return s ? `${s.strength} students · ${shift?.name} shift · ${s.batches.length} lab batches` : "";
+      const shiftText = college.shifts.length > 1 ? ` · ${shift?.name} shift` : "";
+      return s ? `${s.strength} students${shiftText} · ${s.batches.length} lab batches` : "";
     }
     if (view === "teacher") {
       const t = college.teachers.find((x) => x.id === entityId);
       const n = data?.timetable.sessions.filter((x) => x.teacher_id === entityId).reduce((a, x) => a + x.length, 0);
-      return t ? `${n ?? 0} periods a week · max ${t.max_per_day}/day · ${t.shift_ids.join(" + ")} shift` : "";
+      const shiftText = college.shifts.length > 1
+        ? ` · ${t?.shift_ids.map((id) => college.shifts.find((x) => x.id === id)?.name ?? id).join(" + ")} shift`
+        : "";
+      return t ? `${n ?? 0} periods a week · max ${t.max_per_day}/day${shiftText}` : "";
     }
     const v = college.venues.find((x) => x.id === entityId);
     const u = data?.quality?.venue_utilisation[entityId];
@@ -198,7 +202,8 @@ export default function TimetablePage() {
           {isStaff(role) && !data.stale && <HealthStrip data={data} />}
 
           <div className="no-print mb-3 flex flex-wrap items-center gap-3">
-            {!isStudent && (<>
+            {/* Teachers and students see only their own timetable: no switching. */}
+            {isStaff(role) && (<>
             <div className="inline-flex rounded-lg border border-border bg-surface p-0.5" role="tablist" aria-label="View by">
               {VIEWS.map((v) => (
                 <button
@@ -358,7 +363,7 @@ function EditBar({
             {counts && !busy && (
               <span className="flex gap-3 text-xs">
                 <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-ok/70" />{counts.free ?? 0} free</span>
-                <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-warn/70" />{counts.repair ?? 0} others shift</span>
+                <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-warn/70" />{counts.repair ?? 0} other classes move</span>
                 <span><i className="mr-1 inline-block h-2.5 w-2.5 rounded-sm bg-danger/50" />{counts.blocked ?? 0} blocked</span>
               </span>
             )}
@@ -369,7 +374,7 @@ function EditBar({
         ) : (
           <p className="px-1 py-3 text-xs text-muted">
             {hint ?? <>Tip: drag any class to a new slot, or click it and then click a slot. Green = free, amber = other classes
-            will shift to make room, red = not allowed. You always see the result before it&apos;s applied.</>}
+            will move to make room, red = not allowed. You always see the result before it&apos;s applied.</>}
           </p>
         )}
       </div>

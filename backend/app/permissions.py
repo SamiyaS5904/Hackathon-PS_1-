@@ -81,12 +81,11 @@ def can_manage_college(m: Member) -> str:
 
 
 def visible_sessions(m: Member, college: College, tt: Timetable) -> list[Session]:
-    """What each role may see: staff everything; teachers their own + their department; students their section."""
+    """What each role may see: staff everything; teachers only their own lectures; students their own classes."""
     if m.role in STAFF:
         return tt.sessions
     if m.role == "teacher":
-        return [s for s in tt.sessions
-                if s.teacher_id == m.teacher_id or m.department_id in _session_departments(college, s)]
+        return [s for s in tt.sessions if s.teacher_id == m.teacher_id]
     if m.role == "student":
         me = next((st.id for st in college.students if st.email == m.email), None)
         out = []

@@ -109,7 +109,7 @@ Hierarchy: **Super Admin (platform)** → **College Admin** → **Department Coo
 | Use another dept's free room | ✅ | ✅ first-come, owner notified | via own changes | ❌ |
 | Teacher leave → substitute | ✅ | picks from ranked suggestions | marks leave | notified |
 | Undo from audit log | ✅ | ✅ own dept | ❌ | ❌ |
-| View | everything | own dept + shared | own + dept | own section / electives |
+| View | everything | own dept + shared | **own lectures only** | own section / electives |
 | Chatbot | full | own dept | own lectures | **read-only**, own schedule + free rooms / where-is |
 
 **Super Admin** manages tenants (colleges) and platform health; never edits college data.

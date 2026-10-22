@@ -6,6 +6,7 @@ import { ChatPanel } from "@/components/chat/ChatPanel";
 import { PUBLIC_PATHS, useAuth } from "@/lib/auth";
 import { ChatPageProvider } from "@/lib/chat-context";
 import { TimetableProvider } from "@/lib/timetable-context";
+import { ThemeToggle } from "@/lib/theme";
 import { AppShell } from "./AppShell";
 
 /** Public pages (login, signup, invite) render bare; everything else needs a login and a college. */
@@ -45,7 +46,8 @@ export function Gate({ children }: { children: React.ReactNode }) {
 
 export function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center px-4 py-10">
+    <div className="relative flex min-h-screen flex-col items-center justify-center px-4 py-10">
+      <ThemeToggle className="absolute right-4 top-4" />
       <div className="mb-6 flex items-center gap-2">
         <span className="grid h-8 w-8 place-items-center rounded-md bg-accent text-sm font-bold text-white dark:text-bg">T</span>
         <span className="text-lg font-semibold tracking-tight">Timetabl.ai</span>

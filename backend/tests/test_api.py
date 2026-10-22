@@ -351,3 +351,11 @@ def test_teacher_change_request_needs_the_coordinator(client, admin):
     assert out.status_code == 200 and out.json()["status"] == "declined"
     assert client.post(f"/api/orgs/demo/change-requests/{r.json()['id']}/decline", headers=reviewer,
                        json={}).status_code == 409
+
+
+def test_teacher_sees_only_own_lectures(client):
+    t = login(client, "anita.sharma@demo.timetabl.ai")
+    mine = client.get("/api/orgs/demo/timetable", headers=t).json()["timetable"]["sessions"]
+    assert mine and all(s["teacher_id"] == "t-anita" for s in mine)
+    assert client.get("/api/orgs/demo/export?format=pdf&view=teacher&id=t-anita", headers=t).status_code == 200
+    assert client.get("/api/orgs/demo/export?format=pdf&view=section&id=cse-1a", headers=t).status_code == 403

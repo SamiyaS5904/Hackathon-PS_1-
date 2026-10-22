@@ -56,16 +56,21 @@ export function shiftToPlan(s: ShiftFull): ShiftPlan {
 
 const input = "rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm";
 
-export function ShiftEditor({ plan, onChange }: { plan: ShiftPlan; onChange: (p: ShiftPlan) => void }) {
+/** ``single``: the college has one timing for everyone, so no shift name and no shift wording. */
+export function ShiftEditor({ plan, single = false, onChange }: {
+  plan: ShiftPlan; single?: boolean; onChange: (p: ShiftPlan) => void;
+}) {
   const set = (patch: Partial<ShiftPlan>) => onChange({ ...plan, ...patch });
   const periods = buildPeriods(plan);
   return (
     <div className="rounded-xl border border-border p-4">
-      <div className="grid gap-3 sm:grid-cols-4">
-        <label className="text-sm">
-          <span className="mb-1 block font-medium">Shift name</span>
-          <input className={`${input} w-full`} value={plan.name} onChange={(e) => set({ name: e.target.value })} />
-        </label>
+      <div className={`grid gap-3 ${single ? "sm:grid-cols-3" : "sm:grid-cols-4"}`}>
+        {!single && (
+          <label className="text-sm">
+            <span className="mb-1 block font-medium">Shift name</span>
+            <input className={`${input} w-full`} value={plan.name} onChange={(e) => set({ name: e.target.value })} />
+          </label>
+        )}
         <label className="text-sm">
           <span className="mb-1 block font-medium">First period starts</span>
           <input type="time" className={`${input} w-full`} value={plan.start} onChange={(e) => set({ start: e.target.value })} />
@@ -83,7 +88,7 @@ export function ShiftEditor({ plan, onChange }: { plan: ShiftPlan; onChange: (p:
       </div>
 
       <div className="mt-4">
-        <p className="text-sm font-medium">Fixed breaks <span className="font-normal text-muted">(same for everyone in this shift)</span></p>
+        <p className="text-sm font-medium">Fixed breaks <span className="font-normal text-muted">({single ? "same for everyone" : "same for everyone in this shift"})</span></p>
         <div className="mt-2 space-y-2">
           {plan.breaks.map((b, i) => (
             <div key={i} className="flex flex-wrap items-center gap-2 text-sm">
