@@ -34,6 +34,17 @@ def can_edit_weekly(m: Member, college: College, s: Session) -> str:
     return "Students can't change the timetable."
 
 
+def can_request_move(m: Member, s: Session) -> str:
+    """Teachers ask their Department Coordinator for a permanent move of their own lecture."""
+    if m.role != "teacher":
+        return "Only teachers send change requests; you can move classes directly."
+    if s.teacher_id != m.teacher_id:
+        return "You can only ask to move your own lectures."
+    if s.elective_slot_id:
+        return "Elective slots move together for every group; ask the College Admin."
+    return ""
+
+
 def can_edit_one_day(m: Member, college: College, s: Session) -> str:
     """One-day changes: teachers may change their own lectures instantly."""
     if m.role == "teacher":

@@ -110,8 +110,9 @@ def test_teacher_one_day_change_own_lecture_only(client, admin):
     mine = next(s for s in all_sessions if s["teacher_id"] == "t-anita")  # Dr. Anita Sharma
     other = next(s for s in all_sessions if s["teacher_id"] != "t-anita")
     t = login(client, "anita.sharma@demo.timetabl.ai")
-    # Permanent change: needs the Coordinator.
-    r = client.get(f"/api/orgs/demo/timetable/sessions/{mine['id']}/options", headers=t)
+    # Permanent change: needs the Coordinator (teachers may look at options and send a request).
+    r = client.post("/api/orgs/demo/proposals", headers=t,
+                    json={"session_id": mine["id"], "day": mine["day"], "start_period": mine["start_period"]})
     assert r.status_code == 403 and "Coordinator" in r.json()["detail"]
     # Not their lecture at all.
     r = client.post("/api/orgs/demo/overrides", headers=t,
@@ -292,3 +293,61 @@ def test_notifications_reach_the_right_people(client, admin):
                    for n in client.get("/api/orgs/demo/notifications", headers=other).json()["items"])
     client.post("/api/orgs/demo/audit/undo", headers=admin)
     assert client.get("/api/orgs/demo/notifications", headers=st).json()["items"][0]["title"].startswith("Change undone")
+
+
+def test_teacher_change_request_needs_the_coordinator(client, admin):
+    t = login(client, "anita.sharma@demo.timetabl.ai")
+    co = login(client, "cse.coordinator@demo.timetabl.ai")
+    st = login(client, "cse3a.01@demo.timetabl.ai")
+    sessions = client.get("/api/orgs/demo/timetable", headers=admin).json()["timetable"]["sessions"]
+    mine = [s for s in sessions if s["teacher_id"] == "t-anita" and not s["elective_slot_id"]]
+    # Teachers may look at the options for their own lectures, then ask (not apply).
+    req = target = s = None
+    for s in mine:
+        opts = client.get(f"/api/orgs/demo/timetable/sessions/{s['id']}/options", headers=t)
+        assert opts.status_code == 200, opts.text
+        for target in [o for o in opts.json() if o["status"] == "free"][:2]:
+            r = client.post("/api/orgs/demo/change-requests", headers=t, json={
+                "session_id": s["id"], "day": target["day"], "start_period": target["start_period"],
+                "reason": "Clinic on that morning"})
+            if r.status_code == 201:
+                req = r.json()
+                break
+        if req:
+            break
+    assert req and req["status"] == "pending"
+    assert client.post("/api/orgs/demo/proposals", headers=t, json={
+        "session_id": s["id"], "day": target["day"], "start_period": target["start_period"]}).status_code == 403
+    assert client.post(f"/api/orgs/demo/change-requests/{req['id']}/review", headers=t).status_code == 403
+    assert client.get("/api/orgs/demo/change-requests", headers=st).status_code == 403
+    # The Coordinator hears about it, reviews (fresh repair + validator) and applies = approves.
+    sections = {x for x in s["section_ids"]}
+    depts = {sid.split("-")[0] for sid in sections}
+    if depts == {"cse"}:
+        reviewer = co
+        assert any("asks to move" in n["title"]
+                   for n in client.get("/api/orgs/demo/notifications", headers=co).json()["items"])
+    else:
+        reviewer = admin
+    assert any(r["id"] == req["id"] for r in client.get("/api/orgs/demo/change-requests", headers=reviewer).json())
+    proposal = client.post(f"/api/orgs/demo/change-requests/{req['id']}/review", headers=reviewer)
+    assert proposal.status_code == 201, proposal.text
+    applied = client.post(f"/api/orgs/demo/proposals/{proposal.json()['id']}/apply", headers=reviewer).json()
+    assert applied["violations"] == []
+    mine_now = client.get("/api/orgs/demo/change-requests", headers=t).json()
+    assert next(r for r in mine_now if r["id"] == req["id"])["status"] == "approved"
+    assert client.get("/api/orgs/demo/notifications", headers=t).json()["items"][0]["title"] == \
+        "Your change request was approved"
+    audit = client.get("/api/orgs/demo/audit", headers=admin).json()
+    assert audit[0]["source"] == "teacher" and "requested by Dr. Anita Sharma" in audit[0]["action"]
+    client.post("/api/orgs/demo/audit/undo", headers=admin)
+
+    # A second request gets declined with a note.
+    r = client.post("/api/orgs/demo/change-requests", headers=t, json={
+        "session_id": s["id"], "day": target["day"], "start_period": target["start_period"]})
+    assert r.status_code == 201, r.text
+    out = client.post(f"/api/orgs/demo/change-requests/{r.json()['id']}/decline", headers=reviewer,
+                      json={"note": "Lab is booked then"})
+    assert out.status_code == 200 and out.json()["status"] == "declined"
+    assert client.post(f"/api/orgs/demo/change-requests/{r.json()['id']}/decline", headers=reviewer,
+                       json={}).status_code == 409

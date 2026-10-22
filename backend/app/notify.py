@@ -142,7 +142,10 @@ def changed_sessions(before: Timetable | None, after: Timetable) -> list[Session
 
 
 def notify_change(org: str, college: College, before: Timetable | None, after: Timetable, title: str, body: str,
-                  actor_user_id: str) -> None:
+                  actor_user_id: str, skip_teacher: str | None = None) -> None:
+    """``skip_teacher``: already told separately (e.g. their own request was approved)."""
     if not after.published_at:
         return
-    send(org, title, body, session_audience(college, changed_sessions(before, after)), actor_user_id)
+    audience = session_audience(college, changed_sessions(before, after))
+    audience.teacher_ids = [t for t in audience.teacher_ids if t != skip_teacher]
+    send(org, title, body, audience, actor_user_id)

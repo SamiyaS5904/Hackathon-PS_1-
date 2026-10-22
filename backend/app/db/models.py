@@ -100,6 +100,28 @@ class AuditRow(Base):
     undone: Mapped[bool] = mapped_column(Boolean, default=False)
 
 
+class ChangeRequestRow(Base):
+    """A teacher's request to move one of their lectures permanently; the Coordinator decides."""
+
+    __tablename__ = "change_requests"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    at: Mapped[float] = mapped_column(Float, default=time.time)
+    user_id: Mapped[str] = mapped_column(String(32))
+    teacher_name: Mapped[str] = mapped_column(String(200))
+    teacher_id: Mapped[str] = mapped_column(String(64))
+    department_ids: Mapped[list] = mapped_column(JSON)  # departments of the class's sections
+    session_id: Mapped[str] = mapped_column(String(64))
+    day: Mapped[str] = mapped_column(String(10))
+    start_period: Mapped[int] = mapped_column(Integer)
+    summary: Mapped[str] = mapped_column(String(500))  # "Programming in C (CSE-1A): Mon 10:10 -> Thu 11:00"
+    reason: Mapped[str] = mapped_column(String(500), default="")
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|approved|declined|withdrawn
+    decided_by: Mapped[str] = mapped_column(String(200), default="")
+    decided_at: Mapped[float | None] = mapped_column(Float, nullable=True)
+    note: Mapped[str] = mapped_column(String(500), default="")
+
+
 class NotificationRow(Base):
     """One in-app notification for an audience (sections, teachers, departments, roles), not a user list,
     so students who log in later still see what concerns them."""

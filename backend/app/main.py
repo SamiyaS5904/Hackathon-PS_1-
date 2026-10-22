@@ -39,6 +39,8 @@ from app.io.excel import RowError
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
 from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
+from app import change_requests
+from app.change_requests import ChangeRequestOut
 from app.notify import Audience, FeedOut, feed, mark_seen, notify_change, send
 from app.models.domain import College, Department, Rule, TimeBlock, Timetable, Venue
 from app.permissions import (
@@ -47,6 +49,7 @@ from app.permissions import (
     can_generate,
     can_invite,
     can_manage_college,
+    can_request_move,
     can_undo,
     can_view_activity,
     college_for,
@@ -428,23 +431,23 @@ def _session(state, session_id: str):
 @app.get("/api/orgs/{org}/timetable/sessions/{session_id}/options", response_model=list[MoveOption])
 def get_move_options(session_id: str, ctx: Ctx = Depends(org_ctx)) -> list[MoveOption]:
     state = _current(ctx, for_edit=True)
-    allow(can_edit_weekly(ctx.member, state.college, _session(state, session_id)))
+    s = _session(state, session_id)
+    allow(can_request_move(ctx.member, s) if ctx.member.role == "teacher" else can_edit_weekly(ctx.member, state.college, s))
     return move_options(state.college, state.timetable, session_id)
 
 
-@app.post("/api/orgs/{org}/proposals", response_model=ProposalOut, status_code=201)
-def create_proposal(body: ProposalRequest, ctx: Ctx = Depends(org_ctx)) -> ProposalOut:
-    state = _current(ctx, for_edit=True)
-    moved = _session(state, body.session_id)
+def _make_proposal(ctx: Ctx, state, session_id: str, day: str, start_period: int, venue_id: str | None = None,
+                   source: str = "drag", request_id: str | None = None, requested_by: str = "") -> ProposalOut:
+    """Repair, check permissions on everything that moves, and keep the result for Apply."""
+    moved = _session(state, session_id)
     allow(can_edit_weekly(ctx.member, state.college, moved))
-    if body.day not in state.college.days:
-        raise HTTPException(422, f"{body.day} is not a working day")
-    candidate, message = repair_move(state.college, state.timetable, body.session_id, body.day, body.start_period,
-                                     body.venue_id)
+    if day not in state.college.days:
+        raise HTTPException(422, f"{day} is not a working day")
+    candidate, message = repair_move(state.college, state.timetable, session_id, day, start_period, venue_id)
     if candidate is None:
         raise HTTPException(422, message)
     changes = diff(state.college, state.timetable.sessions, candidate.sessions)
-    changes.sort(key=lambda c: c.session_id != body.session_id)  # the class the user moved comes first
+    changes.sort(key=lambda c: c.session_id != session_id)  # the class the user moved comes first
     # A Coordinator's move may not push other departments' classes around.
     for c in changes:
         s = next(x for x in state.timetable.sessions if x.id == c.session_id)
@@ -455,10 +458,119 @@ def create_proposal(body: ProposalRequest, ctx: Ctx = Depends(org_ctx)) -> Propo
     after = score(state.college, candidate.sessions, candidate.lunches).score
     subj = state.college.subject(moved.subject_id).name
     secs = " + ".join(state.college.section(i).name for i in moved.section_ids)
-    when = f"{body.day} {state.college.shift(moved.shift_id).periods[body.start_period].start}"
-    p = store.add_proposal(state.id, candidate, changes, message, action=f"Moved {subj} ({secs}) to {when}",
-                           created_by=ctx.user.id, source="chatbot" if body.via == "chatbot" else "drag")
+    when = f"{day} {state.college.shift(moved.shift_id).periods[start_period].start}"
+    action = f"Moved {subj} ({secs}) to {when}" + (f" (requested by {requested_by})" if requested_by else "")
+    p = store.add_proposal(state.id, candidate, changes, message, action=action, created_by=ctx.user.id,
+                           source=source, request_id=request_id)
     return ProposalOut(id=p.id, message=message, changes=changes, quality_before=before, quality_after=after)
+
+
+@app.post("/api/orgs/{org}/proposals", response_model=ProposalOut, status_code=201)
+def create_proposal(body: ProposalRequest, ctx: Ctx = Depends(org_ctx)) -> ProposalOut:
+    state = _current(ctx, for_edit=True)
+    return _make_proposal(ctx, state, body.session_id, body.day, body.start_period, body.venue_id,
+                          source="chatbot" if body.via == "chatbot" else "drag")
+
+
+class ChangeRequestIn(BaseModel):
+    session_id: str
+    day: str
+    start_period: int
+    reason: str = ""
+
+
+class DeclineIn(BaseModel):
+    note: str = ""
+
+
+def _request_scope(ctx: Ctx) -> dict:
+    role = ctx.member.role
+    if role == "admin":
+        return {}
+    if role == "coordinator":
+        return {"department_id": ctx.member.department_id}
+    if role == "teacher":
+        return {"teacher_id": ctx.member.teacher_id}
+    raise HTTPException(403, "Students don't have change requests.")
+
+
+@app.post("/api/orgs/{org}/change-requests", response_model=ChangeRequestOut, status_code=201)
+def create_change_request(body: ChangeRequestIn, ctx: Ctx = Depends(org_ctx)) -> ChangeRequestOut:
+    """A teacher asks for a permanent move. Checked now (it must be possible), decided by the Coordinator."""
+    state = _current(ctx, for_edit=True)
+    s = _session(state, body.session_id)
+    allow(can_request_move(ctx.member, s))
+    college = state.college
+    if body.day not in college.days:
+        raise HTTPException(422, f"{body.day} is not a working day")
+    candidate, message = repair_move(college, state.timetable, s.id, body.day, body.start_period, None)
+    if candidate is None:
+        raise HTTPException(422, message)
+    periods = college.shift(s.shift_id).periods
+    secs = " + ".join(college.section(i).name for i in s.section_ids)
+    summary = (f"{college.subject(s.subject_id).name} ({secs}): {s.day} {s.start} -> "
+               f"{body.day} {periods[body.start_period].start}")
+    depts = sorted({college.section(i).department_id for i in s.section_ids})
+    req = change_requests.create(state.id, ctx.user.id, ctx.user.name, s.teacher_id, depts, s.id, body.day,
+                                 body.start_period, summary, body.reason.strip())
+    send(state.id, f"{ctx.user.name} asks to move a class", summary + (f". Reason: {req.reason}" if req.reason else ""),
+         Audience(coordinator_departments=depts), ctx.user.id, link="/requests")
+    return req
+
+
+@app.get("/api/orgs/{org}/change-requests", response_model=list[ChangeRequestOut])
+def list_change_requests(ctx: Ctx = Depends(org_ctx)) -> list[ChangeRequestOut]:
+    return change_requests.listing(ctx.state.id, **_request_scope(ctx))
+
+
+def _pending_request(ctx: Ctx, request_id: str):
+    req = change_requests.get(ctx.state.id, request_id)
+    if req is None:
+        raise HTTPException(404, "Request not found.")
+    if req.status != "pending":
+        raise HTTPException(409, f"This request is already {req.status}.")
+    if ctx.member.role == "coordinator" and ctx.member.department_id not in req.department_ids:
+        raise HTTPException(404, "Request not found.")
+    if ctx.member.role not in ("admin", "coordinator"):
+        raise HTTPException(403, "Your Department Coordinator decides on change requests.")
+    return req
+
+
+@app.post("/api/orgs/{org}/change-requests/{request_id}/review", response_model=ProposalOut, status_code=201)
+def review_change_request(request_id: str, ctx: Ctx = Depends(org_ctx)) -> ProposalOut:
+    """Re-check the request against today's timetable and prepare it; Apply approves it."""
+    req = _pending_request(ctx, request_id)
+    state = _current(ctx, for_edit=True)
+    if not any(x.id == req.session_id for x in state.timetable.sessions):
+        raise HTTPException(409, "That class is no longer in the timetable. Decline the request.")
+    try:
+        return _make_proposal(ctx, state, req.session_id, req.day, req.start_period, source="teacher",
+                              request_id=req.id, requested_by=req.teacher_name)
+    except HTTPException as exc:
+        if exc.status_code == 422:
+            raise HTTPException(422, f"Not possible any more: {exc.detail} Decline it with a note, "
+                                     "or ask the teacher for another time.") from None
+        raise
+
+
+@app.post("/api/orgs/{org}/change-requests/{request_id}/decline", response_model=ChangeRequestOut)
+def decline_change_request(request_id: str, body: DeclineIn, ctx: Ctx = Depends(org_ctx)) -> ChangeRequestOut:
+    req = _pending_request(ctx, request_id)
+    out = change_requests.decide(ctx.state.id, req.id, "declined", ctx.user.name, body.note.strip())
+    send(ctx.state.id, "Your change request was declined", req.summary + (f". Note: {out.note}" if out.note else ""),
+         Audience(teacher_ids=[req.teacher_id]), ctx.user.id, link="/requests")
+    return out
+
+
+@app.post("/api/orgs/{org}/change-requests/{request_id}/withdraw", response_model=ChangeRequestOut)
+def withdraw_change_request(request_id: str, ctx: Ctx = Depends(org_ctx)) -> ChangeRequestOut:
+    req = change_requests.get(ctx.state.id, request_id)
+    if req is None or req.teacher_id != ctx.member.teacher_id:
+        raise HTTPException(404, "Request not found.")
+    out = change_requests.decide(ctx.state.id, req.id, "withdrawn", ctx.user.name)
+    if out is None:
+        raise HTTPException(409, f"This request is already {req.status}.")
+    return out
 
 
 @app.post("/api/orgs/{org}/proposals/{proposal_id}/apply", response_model=TimetableOut)
@@ -476,12 +588,19 @@ def apply_proposal(proposal_id: str, ctx: Ctx = Depends(org_ctx)) -> TimetableOu
     before = state.timetable
     store.set_timetable(state.id, p.timetable, action=p.action, source=p.source, actor=ctx.user.name,
                         changes=p.changes)
+    req = None
+    if p.request_id:
+        req = change_requests.decide(state.id, p.request_id, "approved", ctx.user.name)
+        if req:
+            send(state.id, "Your change request was approved", f"{req.summary}, every week from now on.",
+                 Audience(teacher_ids=[req.teacher_id]), ctx.user.id)
     first = p.changes[0]
     others = len(p.changes) - 1
     body = f"{first.before} → {first.after}, every week from now on."
     if others:
         body += f" {others} other class{'es' if others > 1 else ''} moved to make room."
-    notify_change(state.id, state.college, before, p.timetable, p.action, body, ctx.user.id)
+    notify_change(state.id, state.college, before, p.timetable, p.action, body, ctx.user.id,
+                  skip_teacher=req.teacher_id if req else None)
     return _timetable_out(ctx)
 
 

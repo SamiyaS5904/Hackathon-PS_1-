@@ -38,7 +38,8 @@ class Proposal:
     based_on: int  # timetable version it was computed from
     action: str = "Edited timetable"  # audit sentence once applied
     created_by: str = ""  # user id
-    source: str = "drag"  # how it was made, for the activity log: drag | chatbot
+    source: str = "drag"  # how it was made, for the activity log: drag | chatbot | teacher
+    request_id: str | None = None  # set when it carries out a teacher's change request
 
 
 @dataclass
@@ -193,11 +194,12 @@ class Store:
             return entry
 
     def add_proposal(self, org: str, tt: Timetable, changes: list, message: str, action: str,
-                     created_by: str = "", source: str = "drag") -> Proposal:
+                     created_by: str = "", source: str = "drag", request_id: str | None = None) -> Proposal:
         with self._lock:
             state = self._orgs[org]
             p = Proposal(id=uuid.uuid4().hex[:10], timetable=tt, changes=changes, message=message,
-                         based_on=state.version, action=action, created_by=created_by, source=source)
+                         based_on=state.version, action=action, created_by=created_by, source=source,
+                         request_id=request_id)
             state.proposals[p.id] = p
             return p
 
