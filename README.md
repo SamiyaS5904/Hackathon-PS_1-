@@ -82,7 +82,7 @@ cd backend
 
 ## Deploy
 
-Vercel (web app) + Render (backend, assistant) + Supabase (database): step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md). `render.yaml` sets up both Render services.
+Vercel (web app) + Railway (backend, assistant) + Supabase (database): step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md). Each service folder has a `railway.toml`; `render.yaml` is an alternative.
 
 ## Tech
 
