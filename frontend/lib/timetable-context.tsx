@@ -31,6 +31,7 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const { member } = useAuth();
   const orgId = member?.org_id;
+  const staff = member?.role === "admin" || member?.role === "coordinator";
 
   const loadTimetable = useCallback(async () => {
     try {
@@ -45,16 +46,20 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     setError(null);
     try {
-      const [c, p] = await Promise.all([api.college(), api.precheck()]);
+      // All at once; the data checks only matter to staff (their dashboard and Generate button).
+      const [c, p] = await Promise.all([
+        api.college(),
+        staff ? api.precheck() : Promise.resolve(null),
+        loadTimetable(),
+      ]);
       setCollege(c);
       setPrecheck(p);
-      await loadTimetable();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong");
     } finally {
       setLoading(false);
     }
-  }, [loadTimetable]);
+  }, [loadTimetable, staff]);
 
   useEffect(() => {
     if (!orgId) return;

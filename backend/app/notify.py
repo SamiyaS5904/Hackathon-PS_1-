@@ -82,6 +82,7 @@ class _Note:
 _lock = threading.Lock()
 _feeds: dict[str, list[_Note]] = {}  # org -> newest first
 _seen: dict[tuple[str, str], float] = {}  # (user, org) -> seen up to
+_seen_loaded: set[str] = set()  # colleges whose markers were all loaded by the warm-up
 
 
 def _feed_for(org: str) -> list[_Note]:
@@ -104,7 +105,13 @@ def warm(orgs: list[str]) -> None:
         for org in orgs:
             try:
                 _feed_for(org)
-            except Exception:  # a cold feed just loads on first use instead
+                with SessionLocal() as db:  # everyone's "seen up to" marker for this college, in one query
+                    rows = db.scalars(select(NotificationSeenRow).where(NotificationSeenRow.org_id == org)).all()
+                with _lock:
+                    for r in rows:
+                        _seen.setdefault((r.user_id, r.org_id), r.seen_at)
+                    _seen_loaded.add(org)
+            except Exception:  # anything not warmed just loads on first use instead
                 pass
     threading.Thread(target=run, name="notify-warm", daemon=True).start()
 
@@ -114,6 +121,11 @@ def _seen_at(m: Member) -> float:
     with _lock:
         if key in _seen:
             return _seen[key]
+    with _lock:
+        warmed = m.org_id in _seen_loaded
+    if warmed:  # the warm-up loaded every marker of this college: no row means never opened the bell
+        with _lock:
+            return _seen.setdefault(key, 0.0)
     with SessionLocal() as db:
         row = db.get(NotificationSeenRow, key)
     with _lock:
