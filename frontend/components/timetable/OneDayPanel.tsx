@@ -155,6 +155,20 @@ export function OneDayPanel({
                         ))}
                       </div>
                       {picked?.reason && <p className="mt-2 text-xs text-muted">{picked.reason}</p>}
+                      {/* Say why each time is taken (hover tooltips don't exist on phones). Both sections, the
+                          teacher and a big-enough room must all be free; one-day changes never move other classes. */}
+                      {options.some((o) => o.status !== "free") && (
+                        <details className="mt-2 text-xs text-muted" open={options.every((o) => o.status !== "free")}>
+                          <summary className="cursor-pointer select-none">Why the other times aren&apos;t free</summary>
+                          <ul className="mt-1.5 space-y-0.5">
+                            {options.filter((o) => o.status !== "free").map((o) => (
+                              <li key={o.start_period}>
+                                <span className="font-mono">{o.start}</span> · {o.reason.replace(/^Clashes with /, "busy with ")}
+                              </li>
+                            ))}
+                          </ul>
+                        </details>
+                      )}
                       {options.every((o) => o.status !== "free") && (
                         <p className="mt-2 text-sm text-muted">No free time that day. Try another day.</p>
                       )}

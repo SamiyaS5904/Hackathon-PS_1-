@@ -425,8 +425,12 @@ async def _run(ctx: ToolContext, name: str, a: Any) -> Any:
 
     if name == "free_rooms":
         rooms = await ctx.backend.free_rooms(a.date or ctx.today, a.time or ctx.now, a.min_seats)
+        depts = {d["id"]: d["name"] for d in c["departments"]}
         return {"date": _label(a.date or ctx.today), "time": a.time or ctx.now,
+                "note": "Shared rooms are for every department. A department's own room can be used by others "
+                        "when free (first come); its department is told.",
                 "free": [{"room": r["name"], "type": r["type"], "seats": r["capacity"],
+                          "belongs_to": depts.get(r["department"], r["department"]) if r["department"] else "Shared",
                           "free_until": r["free_until"] or "end of day"} for r in rooms[:25]]}
 
     if name == "where_is_teacher":

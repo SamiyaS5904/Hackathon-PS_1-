@@ -84,3 +84,9 @@ def test_names_are_resolved_loosely(backend):
     assert out["status"] == "teaching" and out["room"] == "Room 1"
     with pytest.raises(ToolError, match="Couldn't find"):
         run(run_tool(ctx, "where_is_teacher", {"teacher": "Nobody"}))
+
+
+def test_free_rooms_say_whose_room_it_is(backend):
+    ctx = ToolContext(backend=backend, member=STUDENT, today="2026-10-19", now="10:00")
+    out = json.loads(asyncio.run(run_tool(ctx, "free_rooms", {})))
+    assert out["free"][0]["belongs_to"] == "CSE"
