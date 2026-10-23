@@ -10,6 +10,7 @@ import { HealthStrip } from "@/components/timetable/HealthStrip";
 import { OneDayPanel } from "@/components/timetable/OneDayPanel";
 import { ProposalDialog } from "@/components/timetable/ProposalDialog";
 import { RequestDialog } from "@/components/timetable/RequestDialog";
+import { TodayView } from "@/components/timetable/TodayView";
 import { useMoveEditor } from "@/components/timetable/useMoveEditor";
 import { type OccurrenceMeta, TimetableGrid } from "@/components/timetable/TimetableGrid";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
@@ -46,7 +47,8 @@ export default function TimetablePage() {
   const editor = useMoveEditor({ requestOnly: isTeacher });
   const { setData } = useTimetable();
   // Students and teachers care about real dates (cancellations, one-day moves) first.
-  const [mode, setMode] = useState<"plan" | "week">(isStaff(role) ? "plan" : "week");
+  // Students and teachers open on Today (now, next, done); staff on the weekly plan they manage.
+  const [mode, setMode] = useState<"today" | "plan" | "week">(isStaff(role) ? "plan" : "today");
   // Staff move classes directly; teachers pick their own lecture and a slot to ask their Coordinator.
   const canDrag = isStaff(role) || (isTeacher && !!member?.teacher_id);
   const [weekStart, setWeekStart] = useState(() => isoDate(new Date()));
@@ -266,7 +268,9 @@ export default function TimetablePage() {
                 </div>
               )}
               <div className="inline-flex rounded-lg border border-border bg-surface p-0.5" role="tablist" aria-label="Timetable mode">
-                {([["plan", "Weekly plan"], ["week", "This week"]] as const).map(([id, label]) => (
+                {(isStaff(role)
+                  ? ([["plan", "Weekly plan"], ["week", "This week"]] as const)
+                  : ([["today", "Today"], ["week", "This week"], ["plan", "Weekly plan"]] as const)).map(([id, label]) => (
                   <button key={id} role="tab" aria-selected={mode === id}
                     onClick={() => { editor.cancel(); setMode(id); }}
                     className={clsx("rounded-md px-3 py-1.5 text-sm transition",
@@ -278,12 +282,16 @@ export default function TimetablePage() {
             </div>
           </div>
 
-          <EditBar
-            editor={editor}
-            college={college}
-            hint={HINTS[role ?? "student"][mode]}
-          />
-          {mode === "week" ? (
+          {mode !== "today" && (
+            <EditBar
+              editor={editor}
+              college={college}
+              hint={HINTS[role ?? "student"][mode]}
+            />
+          )}
+          {mode === "today" && member ? (
+            <TodayView college={college} member={member} lunches={data.timetable.lunches} />
+          ) : mode === "week" ? (
             weekView ? (
               <TimetableGrid college={college} timetable={weekView.timetable} view={view} entityId={entityId}
                 dayLabels={weekView.dayLabels} meta={weekView.meta}

@@ -30,6 +30,7 @@ export interface College {
   holidays: Holiday[];
   rules: Rule[];
   department_status: Record<string, { ready: boolean; at: number | null; by: string }>;
+  attendance_min_percent: number;
   revision: number;
 }
 export interface ElectiveGroup { id: string; name: string; subject_id: string; teacher_id: string; student_ids: string[] }
@@ -93,6 +94,28 @@ export interface DayInfo { date: string; day: string; label: string; working: bo
 export interface WeekOut { days: DayInfo[]; occurrences: Occurrence[] }
 export interface OverrideOut { message: string; timetable: TimetableOut }
 
+export interface RosterStudent { student_id: string; roll_no: string; name: string }
+export interface ClassAttendance {
+  occurrence_id: string; session_id: string; date: string; subject: string; sections: string; start: string; end: string;
+  venue: string; roster: RosterStudent[]; absent: string[]; marked: boolean; marked_by: string; marked_at: number | null;
+  can_edit: boolean; note: string;
+}
+export interface TeacherClass {
+  session_id: string; date: string; label: string; subject: string; sections: string; start: string; end: string;
+  venue: string; students: number; marked: boolean; absent: number; can_edit: boolean;
+}
+export interface SubjectAttendance {
+  subject_id: string; code: string; name: string; held: number; attended: number; percent: number | null;
+  status: "ok" | "low" | "none"; advice: string;
+}
+export interface StudentAttendance {
+  min_percent: number; held: number; attended: number; percent: number | null; status: "ok" | "low" | "none";
+  advice: string; subjects: SubjectAttendance[]; recent: { date: string; subject: string; present: boolean }[];
+}
+export interface SectionAttendance {
+  section: string; min_percent: number;
+  students: { student_id: string; roll_no: string; name: string; held: number; attended: number; percent: number | null; low: boolean }[];
+}
 export interface ChangeRequest {
   id: string; at: number; teacher_name: string; teacher_id: string; session_id: string; day: string;
   start_period: number; summary: string; reason: string; status: "pending" | "approved" | "declined" | "withdrawn";

@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, ChangeRequest, Feed, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, ChangeRequest, ClassAttendance, Feed, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -70,6 +70,15 @@ export const api = {
   loadSample: () => request<College>(`${org()}/load-sample`, { method: "POST" }),
   precheck: () => request<Precheck>(`${org()}/precheck`),
   timetable: () => request<TimetableOut>(`${org()}/timetable`),
+  classAttendance: (sessionId: string, date: string) =>
+    request<ClassAttendance>(`${org()}/attendance/class?session_id=${sessionId}&date=${date}`),
+  saveAttendance: (sessionId: string, date: string, absent: string[]) =>
+    request<ClassAttendance>(`${org()}/attendance/class`, { method: "PUT", body: JSON.stringify({ session_id: sessionId, date, absent }) }),
+  myClasses: () => request<TeacherClass[]>(`${org()}/attendance/my-classes`),
+  myAttendance: () => request<StudentAttendance>(`${org()}/attendance/me`),
+  sectionAttendance: (sectionId: string) => request<SectionAttendance>(`${org()}/attendance/sections/${sectionId}`),
+  setAttendanceRule: (minPercent: number) =>
+    request<{ min_percent: number; message: string }>(`${org()}/attendance/rule`, { method: "PUT", body: JSON.stringify({ min_percent: minPercent }) }),
   changeRequests: () => request<ChangeRequest[]>(`${org()}/change-requests`),
   requestChange: (body: { session_id: string; day: string; start_period: number; reason: string }) =>
     request<ChangeRequest>(`${org()}/change-requests`, post(body)),
