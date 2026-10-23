@@ -229,7 +229,7 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 Substitutes on leave · makeup / extra class finder · email notifications · Now & Next TV board
 
 **V2: roadmap**
-OpenAI Whisper as a second voice option (side by side with browser speech) · calendar invites (`.ics`) after the schedule is set · Super admin panel · Google login for students · Hinglish chatbot · auto-sectioning from year list · mid-semester regenerate with minimal change · NAAC/NBA workload report · Google Calendar sync · QR posters · teacher booking (doubt slots, meetings) · WhatsApp/SMS · plain-language rules via chatbot · book/makeup/notify via chat · timetable version compare · **attendance** (per-college rule, e.g. 75%, shown beside the student timetable)
+OpenAI Whisper as a second voice option (side by side with browser speech) · calendar invites (`.ics`) after the schedule is set · Super admin panel · Google login for students · Hinglish chatbot · auto-sectioning from year list · mid-semester regenerate with minimal change · NAAC/NBA workload report · Google Calendar sync · QR posters · teacher booking (doubt slots, meetings) · WhatsApp/SMS · plain-language rules via chatbot · book/makeup/notify via chat · timetable version compare · **attendance** as its own *My attendance* page in the student portal, separate from the timetable (per-college rule, e.g. 75% overall or per subject; teachers mark it per class from their timetable). Groundwork in V1: every class on a real date has a stable `occurrence_id` (`<session id>@<original date>`)
 
 ---
 

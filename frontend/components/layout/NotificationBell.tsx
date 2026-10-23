@@ -3,12 +3,8 @@
 import clsx from "clsx";
 import { Bell } from "lucide-react";
 import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "@/lib/api";
-import { useTimetable } from "@/lib/timetable-context";
-import type { Notification } from "@/lib/types";
-
-const POLL_MS = 30_000;
+import { useEffect, useRef, useState } from "react";
+import { useNotifications } from "@/lib/notifications";
 
 function ago(at: number): string {
   const s = Math.max(0, Date.now() / 1000 - at);
@@ -18,41 +14,12 @@ function ago(at: number): string {
   return new Date(at * 1000).toLocaleDateString(undefined, { day: "numeric", month: "short" });
 }
 
-/** Secondary: the bell. New items also refresh the timetable, so what people see matches what they're told. */
+/** Secondary: the bell. The feed itself lives in NotificationsProvider (one poll for the whole app). */
 export function NotificationBell({ align = "left" }: { align?: "left" | "right" }) {
   const router = useRouter();
-  const { reload } = useTimetable();
-  const [items, setItems] = useState<Notification[] | null>(null);
-  const [unread, setUnread] = useState(0);
+  const { items, unread, failed, markSeen, clearDots } = useNotifications();
   const [open, setOpen] = useState(false);
-  const [failed, setFailed] = useState(false);
-  const last = useRef<number | null>(null);
   const box = useRef<HTMLDivElement>(null);
-
-  const load = useCallback(async () => {
-    try {
-      const f = await api.notifications();
-      setItems(f.items);
-      setUnread(f.unread);
-      setFailed(false);
-      const newest = f.items[0]?.at ?? 0;
-      if (last.current !== null && newest > last.current) void reload();
-      last.current = newest;
-    } catch {
-      setFailed(true);
-    }
-  }, [reload]);
-
-  useEffect(() => {
-    void load();
-    const id = setInterval(load, POLL_MS);
-    const onFocus = () => void load();
-    window.addEventListener("focus", onFocus);
-    return () => {
-      clearInterval(id);
-      window.removeEventListener("focus", onFocus);
-    };
-  }, [load]);
 
   useEffect(() => {
     if (!open) return;
@@ -70,12 +37,8 @@ export function NotificationBell({ align = "left" }: { align?: "left" | "right" 
   const toggle = () => {
     const next = !open;
     setOpen(next);
-    if (next && unread > 0) {
-      setUnread(0); // items keep their "new" dot while the panel is open
-      api.seenNotifications().catch(() => {});
-    } else if (!next) {
-      setItems((list) => list?.map((n) => ({ ...n, unread: false })) ?? null);
-    }
+    if (next) markSeen();
+    else clearDots();
   };
 
   return (

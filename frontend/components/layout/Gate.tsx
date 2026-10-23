@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { PUBLIC_PATHS, useAuth } from "@/lib/auth";
 import { ChatPageProvider } from "@/lib/chat-context";
+import { NotificationsProvider } from "@/lib/notifications";
 import { TimetableProvider } from "@/lib/timetable-context";
 import { ThemeToggle } from "@/lib/theme";
 import { AppShell } from "./AppShell";
@@ -36,10 +37,12 @@ export function Gate({ children }: { children: React.ReactNode }) {
   }
   return (
     <TimetableProvider key={member.org_id}>
-      <ChatPageProvider>
-        <AppShell>{children}</AppShell>
-        <ChatPanel />
-      </ChatPageProvider>
+      <NotificationsProvider>
+        <ChatPageProvider>
+          <AppShell>{children}</AppShell>
+          <ChatPanel />
+        </ChatPageProvider>
+      </NotificationsProvider>
     </TimetableProvider>
   );
 }

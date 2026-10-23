@@ -81,7 +81,10 @@ export interface AuditEntry {
   undone: boolean; can_undo: boolean;
 }
 export type OccurrenceStatus = "normal" | "cancelled" | "moved_out" | "moved_in";
-export interface Occurrence { session: Session; date: string; status: OccurrenceStatus; override_id: string | null; note: string }
+export interface Occurrence {
+  session: Session; date: string; status: OccurrenceStatus; override_id: string | null; note: string;
+  occurrence_id: string; // "<session id>@<original date>": stable, for future attendance
+}
 export interface DayInfo { date: string; day: string; label: string; working: boolean; holiday: string | null }
 export interface WeekOut { days: DayInfo[]; occurrences: Occurrence[] }
 export interface OverrideOut { message: string; timetable: TimetableOut }

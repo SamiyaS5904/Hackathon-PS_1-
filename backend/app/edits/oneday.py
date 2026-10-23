@@ -27,6 +27,9 @@ class Occurrence(BaseModel):
     status: str  # "normal" | "cancelled" | "moved_out" | "moved_in"
     override_id: str | None = None
     note: str = ""
+    # Stable id of this class on its original date: "<session id>@<YYYY-MM-DD>". A class moved to another
+    # day keeps the id of the date it was moved from, so future attendance always hooks onto the same id.
+    occurrence_id: str = ""
 
 
 class DayInfo(BaseModel):
@@ -82,13 +85,13 @@ def occurrences(college: College, tt: Timetable, d: str) -> list[Occurrence]:
                 continue
             o = away.get(s.id)
             if o is None:
-                out.append(Occurrence(session=s, date=d, status="normal"))
+                out.append(Occurrence(session=s, date=d, status="normal", occurrence_id=f"{s.id}@{d}"))
             elif o.kind == "cancel":
-                out.append(Occurrence(session=s, date=d, status="cancelled", override_id=o.id,
+                out.append(Occurrence(session=s, date=d, status="cancelled", override_id=o.id, occurrence_id=f"{s.id}@{d}",
                                       note=o.reason or "Cancelled for this day"))
             else:
                 target = college.shift(s.shift_id).periods[o.start_period].start
-                out.append(Occurrence(session=s, date=d, status="moved_out", override_id=o.id,
+                out.append(Occurrence(session=s, date=d, status="moved_out", override_id=o.id, occurrence_id=f"{s.id}@{d}",
                                       note=f"Moved to {label(o.to_date)} {target}"))
     for o in tt.overrides:
         if o.kind == "move" and o.to_date == d and o.session_id in by_id:
@@ -97,6 +100,7 @@ def occurrences(college: College, tt: Timetable, d: str) -> list[Occurrence]:
                 continue
             s = _placed(college, by_id[o.session_id], twd, o.start_period, o.venue_id)
             out.append(Occurrence(session=s, date=d, status="moved_in", override_id=o.id,
+                                  occurrence_id=f"{o.session_id}@{o.date}",
                                   note=f"Moved from {label(o.date)} {by_id[o.session_id].start}"
                                   + (f" · {o.reason}" if o.reason else "")))
     return out

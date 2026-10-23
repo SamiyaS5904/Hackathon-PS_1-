@@ -39,6 +39,17 @@
         "D:\\Hackathon\\chatbot"
       ],
       "port": 8001
+    },
+    {
+      "name": "frontend-preview",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "--prefix",
+        "D:\\Hackathon\\frontend",
+        "run",
+        "start"
+      ],
+      "port": 3000
     }
   ]
 }

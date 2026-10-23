@@ -64,3 +64,16 @@ def test_restore_removes_the_change():
     new, _, _ = add_override(college, tt, s.id, MONDAY, "cancel", None, None, "", "Admin")
     restored, msg = remove_override(college, new, new.overrides[0].id)
     assert restored is not None and restored.overrides == []
+
+
+def test_occurrence_ids_are_stable_when_a_class_moves():
+    """Future attendance hooks onto occurrence ids: a moved class keeps the id of its original date."""
+    college, tt = solved()
+    s = next(x for x in tt.sessions if x.day == "Mon" and x.kind.value == "lecture")
+    before = next(o for o in occurrences(college, tt, MONDAY) if o.session.id == s.id)
+    assert before.occurrence_id == f"{s.id}@{MONDAY}"
+    free = next(o for o in day_options(college, tt, s.id, MONDAY, MONDAY) if o.status == "free")
+    new, msg, _ = add_override(college, tt, s.id, MONDAY, "move", MONDAY, free.start_period, "", "Admin")
+    assert new is not None, msg
+    ids = {o.status: o.occurrence_id for o in occurrences(college, new, MONDAY) if o.session.id == s.id}
+    assert ids["moved_in"] == ids["moved_out"] == before.occurrence_id
