@@ -18,7 +18,7 @@ from sqlalchemy import select
 from app.core.config import DEMO_PASSWORD
 from app.core.security import hash_password, verify_password
 from app.db.models import InviteRow, MembershipRow, SessionLocal, UserRow, new_id
-from app.models.domain import College
+from app.models.domain import College, DepartmentStatus
 from app.seed.demo_college import build_demo_college
 from app.store import store
 
@@ -245,6 +245,11 @@ def seed_demo() -> None:
     """Create the demo college with ready-made accounts (once). Every demo account uses DEMO_PASSWORD."""
     if store.org("demo") is None:
         store.create_org("Demo Institute of Technology", build_demo_college(), is_demo=True, slug="demo")
+    demo = store.org("demo").college
+    if not demo.department_status:  # the demo shows a finished semester: every department has marked Ready
+        ready = {d.id: DepartmentStatus(ready=True, at=time.time(), by=f"{d.short} Coordinator")
+                 for d in demo.departments}
+        store.update_college("demo", demo.model_copy(update={"department_status": ready}), bump=False)
     with SessionLocal() as db:  # a first start that was stopped half-way left the college without accounts
         has_accounts = db.scalar(select(MembershipRow.id).where(MembershipRow.org_id == "demo").limit(1))
     if not has_accounts:

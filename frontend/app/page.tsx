@@ -169,10 +169,6 @@ export default function Dashboard() {
         </Link>
       )}
 
-      {isStaff(role) && hasTimetable && data && !data.stale && (
-        <InsightsCard revision={`${college.revision}-${data.quality?.score}-${data.timetable.sessions.length}`} />
-      )}
-
       {readiness && readiness.length > 0 && (
         <Card className="mb-4 p-5">
           <div className="flex items-center justify-between">
@@ -242,6 +238,13 @@ export default function Dashboard() {
           </Card>
         )}
       </div>
+
+      {/* Secondary: suggestions sit below the core cards (root CLAUDE.md §2A). */}
+      {isStaff(role) && hasTimetable && data && !data.stale && (
+        <div className="mt-4">
+          <InsightsCard revision={`${college.revision}-${data.quality?.score}-${data.timetable.sessions.length}`} />
+        </div>
+      )}
 
       {warnings.length > 0 && (
         <Card className="mt-4 p-5">

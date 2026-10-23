@@ -13,7 +13,8 @@ export function InsightsCard({ revision }: { revision: string | number }) {
   const [items, setItems] = useState<Insight[] | null>(null);
 
   useEffect(() => {
-    api.insights().then(setItems).catch(() => setItems(null));
+    // The quality score has its own card on the dashboard; show the concrete things to act on here.
+    api.insights().then((all) => setItems(all.filter((i) => i.kind !== "quality"))).catch(() => setItems(null));
   }, [revision]);
 
   if (!items || items.length === 0) return null;
