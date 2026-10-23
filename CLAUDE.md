@@ -224,12 +224,14 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - Audit log with undo; in-app notifications
 - Chatbot side panel: role-scoped Q&A (student read-only) + edits via solver repair + diff preview + **proactive insights after generation**
 - **Voice input** for the chatbot via the browser's built-in speech recognition (answers in text; typing always works)
+- **Attendance portal** (moved from V2 on 2026-10-24): teachers mark each class (everyone present by default, from *Today* or *Attendance*), students see *My attendance* (overall + per subject vs the college rule, e.g. 75%, with "can miss N / attend the next M"), Coordinators/Admin see each section with below-rule students first. Separate from the timetable
+- **Today view** for students and teachers: Now / Next card (room, countdown), done classes greyed, lunch, cancellations
 
 **V1: if time** (in this order)
 Substitutes on leave · makeup / extra class finder · email notifications · Now & Next TV board
 
 **V2: roadmap**
-OpenAI Whisper as a second voice option (side by side with browser speech) · calendar invites (`.ics`) after the schedule is set · Super admin panel · Google login for students · Hinglish chatbot · auto-sectioning from year list · mid-semester regenerate with minimal change · NAAC/NBA workload report · Google Calendar sync · QR posters · teacher booking (doubt slots, meetings) · WhatsApp/SMS · plain-language rules via chatbot · book/makeup/notify via chat · timetable version compare · **attendance** as its own *My attendance* page in the student portal, separate from the timetable (per-college rule, e.g. 75% overall or per subject; teachers mark it per class from their timetable). Groundwork in V1: every class on a real date has a stable `occurrence_id` (`<session id>@<original date>`)
+OpenAI Whisper as a second voice option (side by side with browser speech) · calendar invites (`.ics`) after the schedule is set · Super admin panel · Google login for students · Hinglish chatbot · auto-sectioning from year list · mid-semester regenerate with minimal change · NAAC/NBA workload report · Google Calendar sync · QR posters · teacher booking (doubt slots, meetings) · WhatsApp/SMS · plain-language rules via chatbot · book/makeup/notify via chat · timetable version compare · attendance extras: QR / self check-in, notify students when they drop below the rule, parent view
 
 ---
 
