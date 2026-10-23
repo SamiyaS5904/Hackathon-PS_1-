@@ -42,6 +42,7 @@ from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
 from app import change_requests
 from app.change_requests import ChangeRequestOut
 from app.notify import Audience, FeedOut, feed, mark_seen, notify_change, send
+from app.notify import warm as notify_warm
 from app.models.domain import College, Department, Rule, TimeBlock, Timetable, Venue
 from app.permissions import (
     can_edit_one_day,
@@ -60,7 +61,7 @@ from app.solver.allotment import SuggestResult, suggest
 from app.solver.feasibility import check, warnings
 from app.solver.generate import generate
 from app.solver.quality import QualityReport, score
-from app.store import store
+from app.store import store, writer
 from app.validator.check import Violation, validate
 
 
@@ -68,7 +69,9 @@ from app.validator.check import Violation, validate
 async def lifespan(_: FastAPI):
     store.load()
     accounts.seed_demo()
+    notify_warm(store.org_ids())
     yield
+    writer.flush()  # nothing queued is lost on shutdown
 
 
 app = FastAPI(title="Timetabl.ai API", version="0.4.0", lifespan=lifespan)

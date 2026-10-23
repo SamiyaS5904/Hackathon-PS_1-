@@ -10,16 +10,20 @@ students, so telling them about a draft would confuse them.
 
 from __future__ import annotations
 
+import threading
 import time
+from dataclasses import dataclass
 
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
 from app.accounts import Member
-from app.db.models import NotificationRow, NotificationSeenRow, SessionLocal
+from app.db.models import NotificationRow, NotificationSeenRow, SessionLocal, new_id
 from app.models.domain import College, Session, Timetable
+from app.store import writer
 
 FEED_SIZE = 30
+KEEP = 500  # recent notifications kept per college
 
 
 class Audience(BaseModel):
@@ -61,36 +65,99 @@ def matches(a: Audience, m: Member) -> bool:
     return False
 
 
+@dataclass
+class _Note:
+    id: str
+    at: float
+    title: str
+    body: str
+    link: str
+    audience: Audience
+    actor_user_id: str
+
+
+# Feeds are read every 30 s by every open screen, so they are served from memory. Each college's
+# recent notifications are loaded from the database once; new ones are kept here and saved by
+# the background writer.
+_lock = threading.Lock()
+_feeds: dict[str, list[_Note]] = {}  # org -> newest first
+_seen: dict[tuple[str, str], float] = {}  # (user, org) -> seen up to
+
+
+def _feed_for(org: str) -> list[_Note]:
+    with _lock:
+        if org in _feeds:
+            return _feeds[org]
+    with SessionLocal() as db:
+        rows = db.scalars(select(NotificationRow).where(NotificationRow.org_id == org)
+                          .order_by(NotificationRow.at.desc()).limit(KEEP)).all()
+    notes = [_Note(r.id, r.at, r.title, r.body, r.link, Audience.model_validate(r.audience), r.actor_user_id)
+             for r in rows]
+    with _lock:
+        return _feeds.setdefault(org, notes)
+
+
+def warm(orgs: list[str]) -> None:
+    """Load each college's recent notifications in the background at startup, so the first bell check
+    on any screen is answered from memory."""
+    def run() -> None:
+        for org in orgs:
+            try:
+                _feed_for(org)
+            except Exception:  # a cold feed just loads on first use instead
+                pass
+    threading.Thread(target=run, name="notify-warm", daemon=True).start()
+
+
+def _seen_at(m: Member) -> float:
+    key = (m.user_id, m.org_id)
+    with _lock:
+        if key in _seen:
+            return _seen[key]
+    with SessionLocal() as db:
+        row = db.get(NotificationSeenRow, key)
+    with _lock:
+        return _seen.setdefault(key, row.seen_at if row else 0.0)
+
+
 def send(org: str, title: str, body: str, audience: Audience, actor_user_id: str = "", link: str = "/timetable",
          ) -> None:
     if audience.empty():
         return
-    with SessionLocal() as db:
-        db.add(NotificationRow(org_id=org, at=time.time(), title=title[:300], body=body[:1000], link=link,
-                               audience=audience.model_dump(), actor_user_id=actor_user_id))
-        db.commit()
+    note = _Note(new_id(), time.time(), title[:300], body[:1000], link, audience, actor_user_id)
+    feed_list = _feed_for(org)
+    with _lock:
+        feed_list.insert(0, note)
+        del feed_list[KEEP:]
+    row = dict(id=note.id, org_id=org, at=note.at, title=note.title, body=note.body, link=link,
+               audience=audience.model_dump(), actor_user_id=actor_user_id)
+    writer.submit(lambda db: db.add(NotificationRow(**row)))
 
 
 def feed(m: Member) -> FeedOut:
-    with SessionLocal() as db:
-        seen = db.get(NotificationSeenRow, (m.user_id, m.org_id))
-        seen_at = seen.seen_at if seen else 0.0
-        rows = db.scalars(select(NotificationRow).where(NotificationRow.org_id == m.org_id)
-                          .order_by(NotificationRow.at.desc()).limit(500)).all()
-    mine = [r for r in rows if r.actor_user_id != m.user_id and matches(Audience.model_validate(r.audience), m)]
-    items = [NotificationOut(id=r.id, at=r.at, title=r.title, body=r.body, link=r.link, unread=r.at > seen_at)
-             for r in mine[:FEED_SIZE]]
-    return FeedOut(items=items, unread=sum(1 for r in mine if r.at > seen_at))
+    seen_at = _seen_at(m)
+    feed_list = _feed_for(m.org_id)  # takes the lock itself
+    with _lock:
+        notes = list(feed_list)
+    mine = [n for n in notes if n.actor_user_id != m.user_id and matches(n.audience, m)]
+    items = [NotificationOut(id=n.id, at=n.at, title=n.title, body=n.body, link=n.link, unread=n.at > seen_at)
+             for n in mine[:FEED_SIZE]]
+    return FeedOut(items=items, unread=sum(1 for n in mine if n.at > seen_at))
 
 
 def mark_seen(m: Member) -> None:
-    with SessionLocal() as db:
-        row = db.get(NotificationSeenRow, (m.user_id, m.org_id))
+    key, now = (m.user_id, m.org_id), time.time()
+    with _lock:
+        _seen[key] = now
+
+    def save(db) -> None:
+        row = db.get(NotificationSeenRow, key)
         if row is None:
-            db.add(NotificationSeenRow(user_id=m.user_id, org_id=m.org_id, seen_at=time.time()))
+            db.add(NotificationSeenRow(user_id=key[0], org_id=key[1], seen_at=now))
         else:
-            row.seen_at = time.time()
-        db.commit()
+            row.seen_at = now
+
+    writer.submit(save)
 
 
 # ---- who a change concerns ---------------------------------------------------

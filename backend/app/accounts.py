@@ -9,13 +9,15 @@ from __future__ import annotations
 
 import re
 import secrets
+import threading
+import time
 
 from pydantic import BaseModel
 from sqlalchemy import select
 
 from app.core.config import DEMO_PASSWORD
 from app.core.security import hash_password, verify_password
-from app.db.models import InviteRow, MembershipRow, SessionLocal, UserRow
+from app.db.models import InviteRow, MembershipRow, SessionLocal, UserRow, new_id
 from app.models.domain import College
 from app.seed.demo_college import build_demo_college
 from app.store import store
@@ -60,9 +62,36 @@ def find_user(email: str) -> UserRow | None:
         return db.scalar(select(UserRow).where(UserRow.email == normalize_email(email)))
 
 
-def get_user(user_id: str) -> UserRow | None:
+# ---- cache --------------------------------------------------------------------
+# Every request checks who is calling and their role in the college. With a remote database
+# each lookup is a network round trip, so users and their memberships are kept in memory.
+# Every write in this module clears the cache; the TTL covers writes from another process.
+_CACHE_TTL = 60.0
+_cache_lock = threading.Lock()
+_cache: dict[str, tuple[float, UserRow | None, list[MembershipRow]]] = {}
+
+
+def _forget() -> None:
+    with _cache_lock:
+        _cache.clear()
+
+
+def _user_and_rows(user_id: str) -> tuple[UserRow | None, list[MembershipRow]]:
+    now = time.monotonic()
+    with _cache_lock:
+        hit = _cache.get(user_id)
+    if hit and now - hit[0] < _CACHE_TTL:
+        return hit[1], hit[2]
     with SessionLocal() as db:
-        return db.get(UserRow, user_id)
+        user = db.get(UserRow, user_id)
+        rows = list(db.scalars(select(MembershipRow).where(MembershipRow.user_id == user_id))) if user else []
+    with _cache_lock:
+        _cache[user_id] = (now, user, rows)
+    return user, rows
+
+
+def get_user(user_id: str) -> UserRow | None:
+    return _user_and_rows(user_id)[0]
 
 
 def create_user(email: str, name: str, password: str) -> UserRow:
@@ -70,7 +99,8 @@ def create_user(email: str, name: str, password: str) -> UserRow:
         user = UserRow(email=normalize_email(email), name=name.strip(), password_hash=hash_password(password))
         db.add(user)
         db.commit()
-        return user
+    _forget()
+    return user
 
 
 def authenticate(email: str, password: str) -> UserRow | None:
@@ -97,7 +127,8 @@ def _first_student_login(email: str, password: str) -> UserRow | None:
                 db.add(MembershipRow(user_id=user.id, org_id=org_id, role="student", section_id=st.section_id,
                                      batch_id=st.batch_id))
                 db.commit()
-                return user
+            _forget()
+            return user
     return None
 
 
@@ -109,23 +140,21 @@ def _member(row: MembershipRow, user: UserRow) -> Member:
 
 
 def memberships(user_id: str) -> list[Member]:
-    with SessionLocal() as db:
-        user = db.get(UserRow, user_id)
-        rows = db.scalars(select(MembershipRow).where(MembershipRow.user_id == user_id)).all()
-        return [_member(r, user) for r in rows if store.org(r.org_id)]
+    user, rows = _user_and_rows(user_id)
+    return [_member(r, user) for r in rows if store.org(r.org_id)] if user else []
 
 
 def membership(user_id: str, org_id: str) -> Member | None:
-    with SessionLocal() as db:
-        row = db.scalar(select(MembershipRow).where(MembershipRow.user_id == user_id,
-                                                    MembershipRow.org_id == org_id))
-        return _member(row, db.get(UserRow, user_id)) if row else None
+    user, rows = _user_and_rows(user_id)
+    row = next((r for r in rows if r.org_id == org_id), None)
+    return _member(row, user) if row and user else None
 
 
 def add_membership(user_id: str, org_id: str, role: str, **links: str | None) -> None:
     with SessionLocal() as db:
         db.add(MembershipRow(user_id=user_id, org_id=org_id, role=role, **links))
         db.commit()
+    _forget()
 
 
 def list_members(org_id: str) -> list[Member]:
@@ -196,7 +225,8 @@ def accept_invite(token: str, name: str, password: str) -> tuple[UserRow | None,
                                  department_id=inv.department_id, teacher_id=inv.teacher_id))
         inv.status = "accepted"
         db.commit()
-        return user, ""
+    _forget()
+    return user, ""
 
 
 # ---- demo college ----------------------------------------------------------
@@ -213,34 +243,45 @@ def _slug_email(name: str, domain: str, used: set[str]) -> str:
 
 def seed_demo() -> None:
     """Create the demo college with ready-made accounts (once). Every demo account uses DEMO_PASSWORD."""
-    if store.org("demo"):
-        return
-    college = build_demo_college()
-    store.create_org("Demo Institute of Technology", college, is_demo=True, slug="demo")
-    seed_accounts("demo", store.org("demo").college, "demo.timetabl.ai")
+    if store.org("demo") is None:
+        store.create_org("Demo Institute of Technology", build_demo_college(), is_demo=True, slug="demo")
+    with SessionLocal() as db:  # a first start that was stopped half-way left the college without accounts
+        has_accounts = db.scalar(select(MembershipRow.id).where(MembershipRow.org_id == "demo").limit(1))
+    if not has_accounts:
+        seed_accounts("demo", store.org("demo").college, "demo.timetabl.ai")
 
 
 def seed_accounts(org_id: str, college: College, domain: str) -> None:
     shared_hash = hash_password(DEMO_PASSWORD)  # one hash for all demo accounts keeps seeding fast
     used: set[str] = set()
-    with SessionLocal() as db:
-        def add(email: str, name: str, role: str, **links: str | None) -> None:
-            user = db.scalar(select(UserRow).where(UserRow.email == email))
-            if user is None:
-                user = UserRow(email=email, name=name, password_hash=shared_hash)
-                db.add(user)
-                db.flush()
-            db.add(MembershipRow(user_id=user.id, org_id=org_id, role=role, **links))
+    accounts: list[tuple[str, str, str, dict]] = [(f"admin@{domain}", "College Admin", "admin", {})]
+    used.add(f"admin@{domain}")
+    for d in college.departments:
+        email = f"{d.id}.coordinator@{domain}"
+        used.add(email)
+        accounts.append((email, f"{d.short} Coordinator", "coordinator", {"department_id": d.id}))
+    for t in college.teachers:
+        accounts.append((_slug_email(t.name, domain, used), t.name, "teacher",
+                         {"department_id": t.department_id, "teacher_id": t.id}))
+    for st in college.students:
+        accounts.append((st.email, st.name, "student", {"section_id": st.section_id, "batch_id": st.batch_id}))
 
-        add(f"admin@{domain}", "College Admin", "admin")
-        used.add(f"admin@{domain}")
-        for d in college.departments:
-            email = f"{d.id}.coordinator@{domain}"
-            used.add(email)
-            add(email, f"{d.short} Coordinator", "coordinator", department_id=d.id)
-        for t in college.teachers:
-            add(_slug_email(t.name, domain, used), t.name, "teacher", department_id=t.department_id,
-                teacher_id=t.id)
-        for s in college.students:
-            add(s.email, s.name, "student", section_id=s.section_id, batch_id=s.batch_id)
+    with SessionLocal() as db:
+        # One lookup per 500 emails and one batched insert: a remote database (Supabase) costs a round
+        # trip per statement, and a college can have thousands of students.
+        emails = [a[0] for a in accounts]
+        existing: dict[str, UserRow] = {}
+        for i in range(0, len(emails), 500):
+            chunk = emails[i:i + 500]
+            existing.update({u.email: u for u in db.scalars(select(UserRow).where(UserRow.email.in_(chunk)))})
+        new_users = []
+        for email, name, *_ in accounts:
+            if email not in existing:
+                existing[email] = UserRow(id=new_id(), email=email, name=name, password_hash=shared_hash)
+                new_users.append(existing[email])
+        db.add_all(new_users)
+        db.flush()  # users before memberships: the foreign key needs them first
+        db.add_all([MembershipRow(id=new_id(), user_id=existing[email].id, org_id=org_id, role=role, **links)
+                    for email, _, role, links in accounts])
         db.commit()
+    _forget()

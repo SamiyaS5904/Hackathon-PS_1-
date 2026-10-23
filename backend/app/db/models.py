@@ -145,7 +145,14 @@ class NotificationSeenRow(Base):
 
 
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
-engine = create_engine(DATABASE_URL, connect_args=_connect_args, pool_pre_ping=True)
+# Postgres: requests rarely touch the database (memory first, background writer), so a liveness
+# ping per checkout is cheap; TCP keepalives stop idle Supabase connections from silently dying.
+if DATABASE_URL.startswith("sqlite"):
+    engine = create_engine(DATABASE_URL, connect_args=_connect_args)
+else:
+    engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_recycle=1800, pool_size=5, max_overflow=5,
+                           connect_args={"keepalives": 1, "keepalives_idle": 30, "keepalives_interval": 10,
+                                         "keepalives_count": 3, "connect_timeout": 15})
 SessionLocal = sessionmaker(bind=engine, expire_on_commit=False)
 
 
