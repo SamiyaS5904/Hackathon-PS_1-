@@ -352,7 +352,7 @@ function EditBar({
     : null;
   return (
     <>
-      <div className="no-print mb-3 min-h-[44px]" aria-live="polite">
+      <div className="no-print mb-3 sm:min-h-[44px]" aria-live="polite">
         {moving ? (
           <div className="flex flex-wrap items-center gap-3 rounded-lg border border-accent/30 bg-accent-soft px-4 py-2.5 text-sm text-accent-text">
             {busy || !options ? <Loader2 size={16} className="animate-spin" aria-hidden /> : <Move size={16} aria-hidden />}
@@ -372,7 +372,7 @@ function EditBar({
             </button>
           </div>
         ) : (
-          <p className="px-1 py-3 text-xs text-muted">
+          <p className="hidden px-1 py-3 text-xs text-muted sm:block">
             {hint ?? <>Tip: drag any class to a new slot, or click it and then click a slot. Green = free, amber = other classes
             will move to make room, red = not allowed. You always see the result before it&apos;s applied.</>}
           </p>

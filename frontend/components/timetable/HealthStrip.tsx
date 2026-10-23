@@ -8,7 +8,17 @@ export function HealthStrip({ data }: { data: TimetableOut }) {
   const score = data.quality?.score ?? 0;
   const tone = score >= 85 ? "text-ok" : score >= 70 ? "text-warn" : "text-danger";
   return (
-    <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <>
+    {/* Phones: one compact line, so the timetable itself is on the first screen. */}
+    <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:hidden" role="status">
+      <span className="flex items-center gap-1">
+        {clashes === 0 ? <CheckCircle2 size={15} className="text-ok" aria-hidden /> : <AlertTriangle size={15} className="text-danger" aria-hidden />}
+        <b>{clashes === 0 ? "0 clashes" : `${clashes} problems`}</b>
+      </span>
+      <span className="flex items-center gap-1"><Gauge size={15} className={tone} aria-hidden /> Quality <b>{score}/100</b></span>
+      <span className="text-muted">{data.timetable.sessions.length} classes</span>
+    </p>
+    <div className="mb-4 hidden grid-cols-2 gap-3 sm:grid lg:grid-cols-4">
       <Stat
         icon={clashes === 0 ? <CheckCircle2 size={18} className="text-ok" /> : <AlertTriangle size={18} className="text-danger" />}
         label="Clashes"
@@ -29,6 +39,7 @@ export function HealthStrip({ data }: { data: TimetableOut }) {
         hint={data.timetable.status === "optimal" ? "Proven best" : "Best found in time"}
       />
     </div>
+    </>
   );
 }
 
