@@ -86,18 +86,27 @@ export default function TimetablePage() {
     editor.setToast({ text: out.message, undo: true, tone: "ok" });
   };
 
+  const isCoordinator = role === "coordinator";
   const options = useMemo(() => {
     if (!college) return [];
     const dept = new Map(college.departments.map((d) => [d.id, d.short]));
-    // Teachers only see their own department's sections and colleagues.
-    const mineOnly = (d: string) => !isTeacher || d === member?.department_id;
+    const yearName = (y: number) => `${y}${["th", "st", "nd", "rd"][y % 10 > 3 || Math.floor(y / 10) === 1 ? 0 : y % 10]} year`;
+    // A Coordinator works on their own department: its sections (by year) and everyone who teaches them.
+    const ownDept = isCoordinator ? member?.department_id : undefined;
+    const ownSections = new Set(college.sections.filter((s) => s.department_id === ownDept).map((s) => s.id));
+    const teachesOwn = new Set((data?.timetable.sessions ?? [])
+      .filter((x) => x.section_ids.some((id) => ownSections.has(id))).map((x) => x.teacher_id));
     const list =
       view === "section"
-        ? college.sections.filter((s) => mineOnly(s.department_id))
-            .map((s) => ({ id: s.id, label: s.name, group: dept.get(s.department_id) ?? "" }))
+        ? college.sections.filter((s) => !ownDept || s.department_id === ownDept)
+            .sort((a, b) => a.department_id.localeCompare(b.department_id) || a.year - b.year || a.name.localeCompare(b.name))
+            .map((s) => ({ id: s.id, label: s.name,
+                           group: ownDept ? yearName(s.year) : `${dept.get(s.department_id) ?? ""} · ${yearName(s.year)}` }))
         : view === "teacher"
-          ? college.teachers.filter((t) => mineOnly(t.department_id) || t.id === member?.teacher_id)
-              .map((t) => ({ id: t.id, label: t.name, group: dept.get(t.department_id) ?? "" }))
+          ? college.teachers.filter((t) => !ownDept || t.department_id === ownDept || teachesOwn.has(t.id))
+              .map((t) => ({ id: t.id, label: t.name,
+                             group: ownDept && t.department_id !== ownDept ? `Also teach your sections (${dept.get(t.department_id)})`
+                               : dept.get(t.department_id) ?? "" }))
           : college.venues.map((v) => ({
               id: v.id,
               label: `${v.name} (${v.capacity})`,
@@ -106,7 +115,7 @@ export default function TimetablePage() {
     const groups = new Map<string, typeof list>();
     for (const o of list) groups.set(o.group, [...(groups.get(o.group) ?? []), o]);
     return [...groups.entries()];
-  }, [college, view, isTeacher, member]);
+  }, [college, data, view, isCoordinator, member]);
 
   const entityId = picked[view] || options[0]?.[1][0]?.id || "";
 
@@ -199,7 +208,7 @@ export default function TimetablePage() {
             </div>
           )}
           {isStaff(role) && !data.stale && <PublishStatus data={data} />}
-          {isStaff(role) && !data.stale && <HealthStrip data={data} />}
+          {role === "admin" && !data.stale && <HealthStrip data={data} />}
 
           <div className="no-print mb-3 flex flex-wrap items-center gap-3">
             {/* Teachers and students see only their own timetable: no switching. */}

@@ -359,3 +359,10 @@ def test_teacher_sees_only_own_lectures(client):
     assert mine and all(s["teacher_id"] == "t-anita" for s in mine)
     assert client.get("/api/orgs/demo/export?format=pdf&view=teacher&id=t-anita", headers=t).status_code == 200
     assert client.get("/api/orgs/demo/export?format=pdf&view=section&id=cse-1a", headers=t).status_code == 403
+
+
+def test_coordinator_sees_only_own_department_readiness(client, admin):
+    co = login(client, "cse.coordinator@demo.timetabl.ai")
+    mine = client.get("/api/orgs/demo/readiness", headers=co).json()
+    assert [d["department_id"] for d in mine] == ["cse"]
+    assert len(client.get("/api/orgs/demo/readiness", headers=admin).json()) == 4

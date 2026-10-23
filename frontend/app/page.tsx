@@ -4,7 +4,6 @@ import { AlertTriangle, ArrowRight, CheckCircle2, Circle, Inbox, Info, Loader2, 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { InsightsCard } from "@/components/chat/InsightsCard";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
 import { PublishButton } from "@/components/timetable/PublishButton";
@@ -68,7 +67,20 @@ export default function Dashboard() {
       {/* Core first: the next step is always the first thing on the page. */}
       <Card className="mb-6 p-6">
         <p className="text-xs font-medium uppercase tracking-wide text-accent-text">Next step</p>
-        {college.sections.length === 0 ? (
+        {role === "coordinator" && readiness?.[0] && !readiness[0].ready ? (
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="mt-1 text-lg font-semibold">Finish {readiness[0].name} and mark it Ready</h2>
+              <p className="mt-1 max-w-xl text-sm text-muted">
+                Check sections, subjects and who teaches what (or upload the Excel sheet), then mark the department
+                Ready. The College Admin generates the timetable once every department is Ready.
+              </p>
+            </div>
+            <Link href={`/departments/${readiness[0].department_id}`}>
+              <Button variant="primary">Open my department <ArrowRight size={16} aria-hidden /></Button>
+            </Link>
+          </div>
+        ) : college.sections.length === 0 ? (
           <div className="flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="mt-1 text-lg font-semibold">
@@ -159,7 +171,7 @@ export default function Dashboard() {
         )}
       </Card>
 
-      {hasTimetable && data && !data.stale && <HealthStrip data={data} />}
+      {role === "admin" && hasTimetable && data && !data.stale && <HealthStrip data={data} />}
 
       {waiting > 0 && (
         <Link href="/requests" className="mb-4 flex items-center gap-3 rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-accent-text hover:bg-accent/15">
@@ -169,7 +181,7 @@ export default function Dashboard() {
         </Link>
       )}
 
-      {readiness && readiness.length > 0 && (
+      {role === "admin" && readiness && readiness.length > 0 && (
         <Card className="mb-4 p-5">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">Departments ready: {readiness.filter((d) => d.ready).length} of {readiness.length}</h3>
@@ -181,9 +193,7 @@ export default function Dashboard() {
                 <Link href={`/departments/${d.department_id}`} className="flex items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-surface-2">
                   {d.ready ? <CheckCircle2 size={16} className="text-ok" /> : <Circle size={16} className="text-muted" />}
                   <span className="flex-1 truncate">{d.name}</span>
-                  <span className="text-xs text-muted">
-                    {d.ready ? "Ready" : d.without_teacher ? `${d.without_teacher} without teacher` : d.sections ? "In progress" : "No data yet"}
-                  </span>
+                  <span className="text-xs text-muted">{readinessText(d)}</span>
                 </Link>
               </li>
             ))}
@@ -191,62 +201,9 @@ export default function Dashboard() {
         </Card>
       )}
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="p-5">
-          <h3 className="text-sm font-semibold">College at a glance</h3>
-          <dl className="mt-3 grid grid-cols-2 gap-3 text-sm">
-            {[
-              ["Departments", college.departments.length],
-              ["Sections", college.sections.length],
-              ["Teachers", college.teachers.length],
-              ["Rooms & labs", college.venues.length],
-              ...(college.shifts.length > 1 ? [["Shifts", college.shifts.map((s) => s.name).join(", ")]] : []),
-              ["Working days", college.days.length],
-            ].map(([k, v]) => (
-              <div key={String(k)}>
-                <dt className="text-xs text-muted">{k}</dt>
-                <dd className="font-medium">{v}</dd>
-              </div>
-            ))}
-          </dl>
-        </Card>
+      {role === "coordinator" && readiness?.[0] && <MyDepartmentCard d={readiness[0]} />}
 
-        {hasTimetable && data?.quality ? (
-          <Card className="p-5">
-            <h3 className="text-sm font-semibold">Why the quality score is {data.quality.score}</h3>
-            <ul className="mt-3 space-y-2 text-sm">
-              {data.quality.items.map((i) => (
-                <li key={i.key} className="flex items-start justify-between gap-3">
-                  <span>
-                    {i.label}
-                    <span className="block text-xs text-muted">{i.detail}</span>
-                  </span>
-                  <span className="shrink-0 font-mono text-xs text-muted">−{i.penalty}</span>
-                </li>
-              ))}
-            </ul>
-          </Card>
-        ) : (
-          <Card className="p-5">
-            <h3 className="text-sm font-semibold">What the generator guarantees</h3>
-            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-muted">
-              <li>No teacher, room or student group is ever double-booked</li>
-              <li>Rooms fit the class size and type (labs in labs)</li>
-              <li>Labs run as back-to-back periods, batches in parallel</li>
-              <li>Your college day, breaks and a lunch slot inside the mess window</li>
-            </ul>
-          </Card>
-        )}
-      </div>
-
-      {/* Secondary: suggestions sit below the core cards (root CLAUDE.md §2A). */}
-      {isStaff(role) && hasTimetable && data && !data.stale && (
-        <div className="mt-4">
-          <InsightsCard revision={`${college.revision}-${data.quality?.score}-${data.timetable.sessions.length}`} />
-        </div>
-      )}
-
-      {warnings.length > 0 && (
+      {role === "admin" && warnings.length > 0 && (
         <Card className="mt-4 p-5">
           <h3 className="flex items-center gap-2 text-sm font-semibold">
             <Info size={16} className="text-warn" aria-hidden /> Good to know
@@ -259,5 +216,34 @@ export default function Dashboard() {
         </Card>
       )}
     </div>
+  );
+}
+
+function readinessText(d: DepartmentReadiness): string {
+  if (d.ready) return "Ready";
+  if (d.without_teacher) return `${d.without_teacher} without teacher`;
+  return d.sections ? "In progress" : "No data yet";
+}
+
+/** A Coordinator's own department: status at a glance and the one place to go next. */
+function MyDepartmentCard({ d }: { d: DepartmentReadiness }) {
+  return (
+    <Card className="mb-4 p-5">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="flex items-center gap-2 text-sm font-semibold">
+            {d.ready ? <CheckCircle2 size={16} className="text-ok" aria-hidden /> : <Circle size={16} className="text-muted" aria-hidden />}
+            {d.name}: {d.ready ? "Ready" : "not Ready yet"}
+          </h3>
+          <p className="mt-1 text-sm text-muted">
+            {d.sections} sections · {d.teachers} teachers · {d.subjects} subjects · {d.classes} classes
+            {d.without_teacher ? ` · ${d.without_teacher} without a teacher` : ""}
+          </p>
+        </div>
+        <Link href={`/departments/${d.department_id}`}>
+          <Button>Open my department</Button>
+        </Link>
+      </div>
+    </Card>
   );
 }

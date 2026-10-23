@@ -882,6 +882,8 @@ def readiness(ctx: Ctx = Depends(org_ctx)) -> list[DepartmentReadiness]:
     college = ctx.state.college
     out = []
     for d in college.departments:
+        if ctx.member.role == "coordinator" and d.id != ctx.member.department_id:
+            continue  # a Coordinator sees only their own department
         sl = dept_slice(college, d.id)
         st = college.department_status.get(d.id)
         out.append(DepartmentReadiness(

@@ -7,7 +7,7 @@ import type { AuthOut, Member, Role } from "./types";
 
 const TOKEN_KEY = "tt_token";
 const ORG_KEY = "tt_org";
-export const PUBLIC_PATHS = ["/login", "/signup", "/invite"];
+export const PUBLIC_PATHS = ["/login", "/signup", "/invite", "/demo"];
 
 interface AuthState {
   ready: boolean;
