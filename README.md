@@ -33,6 +33,10 @@ Each finished stage has a Git tag, so its exact state can be opened on GitHub.
 
 ## Run it locally
 
+**Quickest:** double-click `start-local.bat` (starts everything and opens the browser). Where every feature is, per role, plus a 5-minute demo script: [`docs/DEMO_GUIDE.md`](docs/DEMO_GUIDE.md).
+
+Step by step:
+
 Backend (Python 3.12):
 
 ```bash
