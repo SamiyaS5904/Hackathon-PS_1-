@@ -19,7 +19,7 @@ Each finished stage has a Git tag, so its exact state can be opened on GitHub.
 | **4. Real SaaS** | Signup creates a college workspace, login, roles (Admin / Department Coordinator / Teacher / Student), invite links, students log in with college emails and see only their own timetable, every college's data kept separate, saved in a database (SQLite locally, Supabase Postgres in production) | ✅ Done | `stage-4-real-saas` |
 | **5. Set it up** | Setup wizard (days, 1 or 2 shifts, periods and breaks, mess window, lab length, semester dates, holidays, departments, shared rooms, sections → shifts); department workspace with pre-filled Excel download and upload with row-level errors; teacher allotment suggestions with reasons; Ready flow and readiness checklist; elective slots and pooled cross-department groups; rule cards (Must / Try); teacher block times; "data changed, regenerate" safety | ✅ Done | `stage-5-set-it-up` |
 | **6. Chatbot** | Assistant side panel on every page (Ctrl+K, typing or browser voice): students ask "when am I free next week?", "where is Dr. Kaur now?", "why is my lab on Friday?"; staff get move proposals and one-day changes as cards they Apply or Discard (the assistant never writes on its own, and uses the logged-in user's own permissions); "Worth a look" insights after generation | ✅ Done | `stage-6-chatbot` |
-| 7. Ship | Publish, Excel / PDF export, notifications, deploy | ⏳ Next | |
+| 7. Ship | Publish (teachers and students see only published timetables), Excel / PDF for notice boards, in-app notifications for the people affected, teacher change requests approved by the Department Coordinator, light / dark theme, phone layout, fast on a remote database (memory first, background saves); deploy guide in [`docs/DEPLOY.md`](docs/DEPLOY.md) | 🟡 Built, deploying | |
 
 ### Results on the demo college
 12 sections · 40 teachers · 15 rooms · 2 overlapping shifts · combined classes · lab batches · a 3rd-year open elective pooled from 4 sections and 3 departments
@@ -79,6 +79,10 @@ cd backend
 .venv/Scripts/python -m pytest
 .venv/Scripts/python -m app.cli --section cse-3a
 ```
+
+## Deploy
+
+Vercel (web app) + Render (backend, assistant) + Supabase (database): step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md). `render.yaml` sets up both Render services.
 
 ## Tech
 

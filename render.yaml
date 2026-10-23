@@ -1,0 +1,48 @@
+# Render blueprint: the backend API and the assistant, as two web services.
+# Render dashboard -> New -> Blueprint -> pick this repository. Secrets marked `sync: false`
+# are typed in the dashboard (never committed). Full steps: docs/DEPLOY.md.
+#
+# Pick the region closest to your Supabase project (same region = ~1 ms per database query).
+# Both services must run ONE process: college data lives in memory and is saved in the
+# background, so several workers would not see each other's changes.
+
+services:
+  - type: web
+    name: timetabl-backend
+    runtime: python
+    rootDir: backend
+    region: singapore
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /api/health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DATABASE_URL # Supabase -> Connect -> Session pooler URI (IPv4), with your database password
+        sync: false
+      - key: APP_SECRET # signs login tokens; Render makes a long random value
+        generateValue: true
+      - key: CORS_ORIGINS # your Vercel URL, e.g. https://timetabl-ai.vercel.app
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+
+  - type: web
+    name: timetabl-assistant
+    runtime: python
+    rootDir: chatbot
+    region: singapore
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: BACKEND_URL # the backend's Render URL, e.g. https://timetabl-backend.onrender.com
+        sync: false
+      - key: CORS_ORIGINS # your Vercel URL
+        sync: false
