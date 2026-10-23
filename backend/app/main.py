@@ -6,6 +6,7 @@ and every action checks the role rules in app/permissions.py.
 
 from __future__ import annotations
 
+import datetime
 import re
 import threading
 import time
@@ -34,12 +35,12 @@ from app.core.deps import Ctx, allow, current_user, org_ctx
 from app.core.security import create_token
 from app.db.models import UserRow
 from app.edits.moves import Change, MoveOption, diff, move_options, repair_move
-from app.edits.oneday import DayInfo, Occurrence, add_override, day_options, occurrences, remove_override, week
+from app.edits.oneday import DayInfo, Occurrence, add_override, day_options, label, occurrences, remove_override, week
 from app.io.excel import RowError
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
 from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
-from app import change_requests
+from app import attendance, change_requests
 from app.change_requests import ChangeRequestOut
 from app.notify import Audience, FeedOut, feed, mark_seen, notify_change, send
 from app.notify import warm as notify_warm
@@ -649,6 +650,207 @@ def get_audit(ctx: Ctx = Depends(org_ctx)) -> list[AuditOut]:
                  undone=e.undone, can_undo=e is undoable and not can_undo(ctx.member, e.actor))
         for e in reversed(ctx.state.audit)
     ]
+
+
+# ---------------------------------------------------------------------------
+# Attendance: teachers mark each class; students see where they stand
+# ---------------------------------------------------------------------------
+
+class RosterStudent(BaseModel):
+    student_id: str
+    roll_no: str
+    name: str
+
+
+class ClassAttendanceOut(BaseModel):
+    occurrence_id: str
+    session_id: str
+    date: str
+    subject: str
+    sections: str
+    start: str
+    end: str
+    venue: str
+    roster: list[RosterStudent]
+    absent: list[str]
+    marked: bool
+    marked_by: str = ""
+    marked_at: float | None = None
+    can_edit: bool
+    note: str = ""
+
+
+class AttendanceIn(BaseModel):
+    session_id: str
+    date: str
+    absent: list[str] = []
+
+
+def _today() -> str:
+    return datetime.date.today().isoformat()
+
+
+def _held_occurrence(state, session_id: str, d: str):
+    """The class as it happened on date ``d`` (normal or moved there for the day), or 404."""
+    try:
+        datetime.date.fromisoformat(d)
+    except ValueError:
+        raise HTTPException(422, "Use a date like 2026-10-21") from None
+    occ = next((o for o in occurrences(state.college, state.timetable, d)
+                if o.session.id == session_id and o.status in ("normal", "moved_in")), None)
+    if occ is None:
+        raise HTTPException(404, "That class doesn't take place on this date (cancelled, moved or not that day).")
+    return occ
+
+
+def _attendance_access(ctx: Ctx, occ, d: str) -> tuple[bool, str]:
+    """(may edit, reason if not). Teachers: own classes, today or up to a week back. Staff: their classes."""
+    role = ctx.member.role
+    if role == "student":
+        raise HTTPException(403, "Students see their own attendance under My attendance.")
+    if role == "teacher" and occ.session.teacher_id != ctx.member.teacher_id:
+        raise HTTPException(403, "You can only take attendance for your own classes.")
+    if role == "coordinator":
+        allow(can_edit_one_day(ctx.member, ctx.state.college, occ.session))
+    if d > _today():
+        return False, "Attendance opens on the day of the class."
+    if role == "teacher" and (datetime.date.fromisoformat(_today()) - datetime.date.fromisoformat(d)).days > attendance.EDIT_DAYS:
+        return False, f"Older than {attendance.EDIT_DAYS} days: ask your Department Coordinator to correct it."
+    return True, ""
+
+
+def _class_out(ctx: Ctx, occ, d: str) -> ClassAttendanceOut:
+    college = ctx.state.college
+    s = occ.session
+    rec = attendance.get(ctx.state.id, occ.occurrence_id)
+    students = attendance.roster(college, s)
+    if rec:  # the roster as it was that day
+        by_id = {st.id: st for st in college.students}
+        students = [by_id[i] for i in rec.roster if i in by_id]
+    can_edit, note = _attendance_access(ctx, occ, d)
+    return ClassAttendanceOut(
+        occurrence_id=occ.occurrence_id, session_id=s.id, date=d, subject=college.subject(s.subject_id).name,
+        sections=" + ".join(college.section(i).name for i in s.section_ids) + (
+            f" · {next((b.name for i in s.section_ids for b in college.section(i).batches if b.id == s.batch_id), '')}"
+            if s.batch_id else ""),
+        start=s.start, end=s.end, venue=college.venue(s.venue_id).name if s.venue_id else "",
+        roster=[RosterStudent(student_id=st.id, roll_no=st.roll_no, name=st.name)
+                for st in sorted(students, key=lambda x: x.roll_no)],
+        absent=rec.absent if rec else [], marked=rec is not None, marked_by=rec.marked_by if rec else "",
+        marked_at=rec.marked_at if rec else None, can_edit=can_edit, note=note)
+
+
+@app.get("/api/orgs/{org}/attendance/class", response_model=ClassAttendanceOut)
+def get_class_attendance(session_id: str, date: str, ctx: Ctx = Depends(org_ctx)) -> ClassAttendanceOut:
+    state = _current(ctx)
+    return _class_out(ctx, _held_occurrence(state, session_id, date), date)
+
+
+@app.put("/api/orgs/{org}/attendance/class", response_model=ClassAttendanceOut)
+def save_class_attendance(body: AttendanceIn, ctx: Ctx = Depends(org_ctx)) -> ClassAttendanceOut:
+    state = _current(ctx)
+    occ = _held_occurrence(state, body.session_id, body.date)
+    can_edit, note = _attendance_access(ctx, occ, body.date)
+    if not can_edit:
+        raise HTTPException(409, note)
+    existing = attendance.get(state.id, occ.occurrence_id)
+    roster_ids = existing.roster if existing else [st.id for st in attendance.roster(state.college, occ.session)]
+    unknown = set(body.absent) - set(roster_ids)
+    if unknown:
+        raise HTTPException(422, "Some students marked absent aren't in this class.")
+    attendance.save(state.id, attendance.new_record(occ.occurrence_id, occ.session, body.date, roster_ids,
+                                                    body.absent, ctx.user.name))
+    return _class_out(ctx, occ, body.date)
+
+
+class TeacherClassOut(BaseModel):
+    session_id: str
+    date: str
+    label: str  # "Thu 23 Oct"
+    subject: str
+    sections: str
+    start: str
+    end: str
+    venue: str
+    students: int
+    marked: bool
+    absent: int
+    can_edit: bool
+
+
+@app.get("/api/orgs/{org}/attendance/my-classes", response_model=list[TeacherClassOut])
+def my_classes_attendance(ctx: Ctx = Depends(org_ctx)) -> list[TeacherClassOut]:
+    """A teacher's classes from the last week up to today, newest first, with marked / not yet."""
+    if ctx.member.role != "teacher" or not ctx.member.teacher_id:
+        raise HTTPException(403, "This list is for teachers.")
+    state = _current(ctx)
+    college = state.college
+    today = datetime.date.fromisoformat(_today())
+    out = []
+    for back in range(attendance.EDIT_DAYS + 1):
+        d = (today - datetime.timedelta(days=back)).isoformat()
+        for o in occurrences(college, state.timetable, d):
+            if o.status not in ("normal", "moved_in") or o.session.teacher_id != ctx.member.teacher_id:
+                continue
+            rec = attendance.get(state.id, o.occurrence_id)
+            out.append(TeacherClassOut(
+                session_id=o.session.id, date=d, label=label(d), subject=college.subject(o.session.subject_id).name,
+                sections=" + ".join(college.section(i).name for i in o.session.section_ids),
+                start=o.session.start, end=o.session.end,
+                venue=college.venue(o.session.venue_id).name if o.session.venue_id else "",
+                students=len(rec.roster) if rec else len(attendance.roster(college, o.session)),
+                marked=rec is not None, absent=len(rec.absent) if rec else 0, can_edit=True))
+    return sorted(out, key=lambda c: (c.date, c.start), reverse=True)
+
+
+@app.get("/api/orgs/{org}/attendance/me", response_model=attendance.StudentAttendance)
+def my_attendance(ctx: Ctx = Depends(org_ctx)) -> attendance.StudentAttendance:
+    if ctx.member.role != "student":
+        raise HTTPException(403, "My attendance is for students.")
+    me = next((st for st in ctx.state.college.students if st.email.lower() == ctx.member.email.lower()), None)
+    if me is None:
+        raise HTTPException(404, "Your name isn't on this college's student list yet.")
+    return attendance.for_student(ctx.state.college, ctx.state.id, me.id)
+
+
+class SectionAttendanceOut(BaseModel):
+    section: str
+    min_percent: int
+    students: list[attendance.StudentRow]
+
+
+@app.get("/api/orgs/{org}/attendance/sections/{section_id}", response_model=SectionAttendanceOut)
+def section_attendance(section_id: str, ctx: Ctx = Depends(org_ctx)) -> SectionAttendanceOut:
+    college = ctx.state.college
+    sec = next((x for x in college.sections if x.id == section_id), None)
+    if sec is None:
+        raise HTTPException(404, "Section not found.")
+    if ctx.member.role not in ("admin", "coordinator") or (
+            ctx.member.role == "coordinator" and sec.department_id != ctx.member.department_id):
+        raise HTTPException(403, "Department Coordinators see their own sections; the College Admin sees all.")
+    return SectionAttendanceOut(section=sec.name, min_percent=college.attendance_min_percent,
+                                students=attendance.for_section(college, ctx.state.id, section_id))
+
+
+class AttendanceRuleIn(BaseModel):
+    min_percent: int
+
+
+class AttendanceRuleOut(BaseModel):
+    min_percent: int
+    message: str
+
+
+@app.put("/api/orgs/{org}/attendance/rule", response_model=AttendanceRuleOut)
+def set_attendance_rule(body: AttendanceRuleIn, ctx: Ctx = Depends(org_ctx)) -> AttendanceRuleOut:
+    allow(can_manage_college(ctx.member))
+    if not 1 <= body.min_percent <= 100:
+        raise HTTPException(422, "Use a percentage between 1 and 100.")
+    college = ctx.state.college
+    store.update_college(ctx.state.id, college.model_copy(update={"attendance_min_percent": body.min_percent}),
+                         bump=False)  # the timetable doesn't change
+    return AttendanceRuleOut(min_percent=body.min_percent,
+                             message=f"Saved. Students now need {body.min_percent}% attendance.")
 
 
 @app.get("/api/orgs/{org}/notifications", response_model=FeedOut)

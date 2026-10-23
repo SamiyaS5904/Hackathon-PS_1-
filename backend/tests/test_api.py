@@ -368,3 +368,64 @@ def test_coordinator_sees_only_own_department_readiness(client, admin):
     mine = client.get("/api/orgs/demo/readiness", headers=co).json()
     assert [d["department_id"] for d in mine] == ["cse"]
     assert len(client.get("/api/orgs/demo/readiness", headers=admin).json()) == 4
+
+
+def test_attendance_marking_and_student_view(client, admin):
+    import datetime
+
+    t = login(client, "anita.sharma@demo.timetabl.ai")
+    classes = client.get("/api/orgs/demo/attendance/my-classes", headers=t).json()
+    assert classes, "Dr. Anita has classes in the last week"
+    c = classes[0]
+    sheet = client.get(f"/api/orgs/demo/attendance/class?session_id={c['session_id']}&date={c['date']}", headers=t).json()
+    assert sheet["roster"] and not sheet["marked"] and sheet["can_edit"]
+    absent = [sheet["roster"][0]["student_id"]]
+    saved = client.put("/api/orgs/demo/attendance/class", headers=t,
+                       json={"session_id": c["session_id"], "date": c["date"], "absent": absent})
+    assert saved.status_code == 200, saved.text
+    assert saved.json()["marked"] and saved.json()["absent"] == absent
+
+    # Roles: students can't open a class sheet; another teacher's class is refused; future dates aren't open.
+    college = client.get("/api/orgs/demo/college", headers=admin).json()
+    email = {st["id"]: st["email"] for st in college["students"]}
+    away = login(client, email[absent[0]])
+    there = login(client, email[sheet["roster"][1]["student_id"]])
+    assert client.get(f"/api/orgs/demo/attendance/class?session_id={c['session_id']}&date={c['date']}",
+                      headers=away).status_code == 403
+    sessions = client.get("/api/orgs/demo/timetable", headers=admin).json()["timetable"]["sessions"]
+    other = next(s for s in sessions if s["teacher_id"] != "t-anita")
+    days = ["Mon", "Tue", "Wed", "Thu", "Fri"]
+    monday = datetime.date.today() - datetime.timedelta(days=datetime.date.today().weekday())
+    other_date = (monday + datetime.timedelta(days=days.index(other["day"]))).isoformat()
+    assert client.get(f"/api/orgs/demo/attendance/class?session_id={other['id']}&date={other_date}",
+                      headers=t).status_code == 403
+    mine = next(s for s in sessions if s["teacher_id"] == "t-anita")
+    future = (monday + datetime.timedelta(days=7 + days.index(mine["day"]))).isoformat()
+    r = client.put("/api/orgs/demo/attendance/class", headers=t,
+                   json={"session_id": mine["id"], "date": future, "absent": []})
+    assert r.status_code == 409 and "day of the class" in r.json()["detail"]
+
+    # Students see their own numbers against the college's rule.
+    me = client.get("/api/orgs/demo/attendance/me", headers=away).json()
+    assert me["held"] == 1 and me["attended"] == 0 and me["status"] == "low" and me["min_percent"] == 75
+    ok = client.get("/api/orgs/demo/attendance/me", headers=there).json()
+    assert ok["percent"] == 100.0 and ok["status"] == "ok"
+
+    # The Admin sees the section with below-rule students first; the rule is a setting.
+    sec = next(i for i in sheet["sections"].split(" · ")[0].split(" + "))
+    sec_id = next(x["id"] for x in college["sections"] if x["name"] == sec)
+    rows = client.get(f"/api/orgs/demo/attendance/sections/{sec_id}", headers=admin).json()["students"]
+    if any(r["student_id"] == absent[0] for r in rows):
+        assert rows[0]["low"]
+    assert client.put("/api/orgs/demo/attendance/rule", headers=admin, json={"min_percent": 80}).status_code == 200
+    assert client.get("/api/orgs/demo/attendance/me", headers=there).json()["min_percent"] == 80
+    client.put("/api/orgs/demo/attendance/rule", headers=admin, json={"min_percent": 75})
+
+
+def test_attendance_advice_numbers():
+    from app.attendance import advice
+
+    assert advice(9, 10, 75)[0] == "ok" and "miss 2 more" in advice(9, 10, 75)[1]  # 9/12 = 75%
+    status, text = advice(5, 10, 75)
+    assert status == "low" and "next 10 classes" in text  # (5+10)/(10+10) = 75%
+    assert advice(0, 0, 75)[0] == "none"

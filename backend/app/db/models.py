@@ -122,6 +122,22 @@ class ChangeRequestRow(Base):
     note: Mapped[str] = mapped_column(String(500), default="")
 
 
+class AttendanceRow(Base):
+    """Attendance for one class on one real date (``occurrence_id`` = "<session id>@<original date>").
+    Stores who was absent; everyone else on that class's roster was present."""
+
+    __tablename__ = "attendance"
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    occurrence_id: Mapped[str] = mapped_column(String(120), primary_key=True)
+    session_id: Mapped[str] = mapped_column(String(64))
+    subject_id: Mapped[str] = mapped_column(String(64))
+    date: Mapped[str] = mapped_column(String(10), index=True)
+    roster: Mapped[list] = mapped_column(JSON)  # student ids expected in class
+    absent: Mapped[list] = mapped_column(JSON)
+    marked_by: Mapped[str] = mapped_column(String(200))
+    marked_at: Mapped[float] = mapped_column(Float)
+
+
 class NotificationRow(Base):
     """One in-app notification for an audience (sections, teachers, departments, roles), not a user list,
     so students who log in later still see what concerns them."""

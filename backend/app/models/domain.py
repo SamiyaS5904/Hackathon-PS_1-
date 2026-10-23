@@ -278,6 +278,8 @@ class College(BaseModel):
     semester_start: str | None = None  # YYYY-MM-DD (tentative, editable)
     semester_end: str | None = None
     department_status: dict[str, DepartmentStatus] = Field(default_factory=dict)
+    # Attendance rule: students need at least this share of held classes, overall and per subject.
+    attendance_min_percent: int = 75
     revision: int = 0  # bumped on every data change; a timetable remembers the revision it was built from
 
     # ---- lookups -------------------------------------------------------
