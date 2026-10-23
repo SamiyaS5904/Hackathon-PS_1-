@@ -75,9 +75,10 @@ def test_rules_api_permissions_and_block_times():
                        json={"blocked": [{"day": clash["day"], "start": clash["start"], "end": clash["end"]}]})
         assert r.status_code == 409 and "Coordinator" in r.json()["detail"]
         busy = {(s["day"], s["start"]) for s in mine}
-        free = next(d for d in ["Mon", "Tue", "Wed", "Thu", "Fri"] if (d, "14:10") not in busy)
+        # The last morning period (Dr. Anita teaches in the morning shift).
+        free = next(d for d in ["Mon", "Tue", "Wed", "Thu", "Fri"] if (d, "14:20") not in busy)
         r = client.put("/api/orgs/demo/me/blocked", headers=t,
-                       json={"blocked": [{"day": free, "start": "14:10", "end": "15:00"}]})
+                       json={"blocked": [{"day": free, "start": "14:20", "end": "15:10"}]})
         assert r.status_code == 200, r.text
         assert not client.get("/api/orgs/demo/timetable", headers=admin).json()["stale"]  # still valid
         assert client.put("/api/orgs/demo/me/blocked", headers=admin, json={"blocked": []}).status_code == 403

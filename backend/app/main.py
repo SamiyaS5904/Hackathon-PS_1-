@@ -29,7 +29,7 @@ from app.college_edit import (
     settings_of,
     structural_errors,
 )
-from app.core.config import CORS_ORIGINS
+from app.core.config import AUTO_DEMO_TIMETABLE, CORS_ORIGINS
 from app.core.deps import Ctx, allow, current_user, org_ctx
 from app.core.security import create_token
 from app.db.models import UserRow
@@ -65,10 +65,33 @@ from app.store import store, writer
 from app.validator.check import Violation, validate
 
 
+def ensure_demo_timetable() -> None:
+    """The built-in demo college always shows a current, published timetable: when it has none (first
+    start, e.g. a new deployment) or its data changed, build and publish one in the background."""
+    demo = store.org("demo")
+    if demo is None or not AUTO_DEMO_TIMETABLE:
+        return
+    tt = demo.timetable
+    if tt is not None and tt.sessions and tt.college_revision == demo.college.revision and tt.published_at:
+        return
+
+    def run() -> None:
+        new = generate(demo.college, time_limit=45)
+        new.college_revision = demo.college.revision
+        if not new.sessions:
+            return
+        store.set_timetable("demo", new, action=f"Generated timetable ({len(new.sessions)} classes)",
+                            source="generate", actor="System")
+        store.publish("demo", "System")
+
+    threading.Thread(target=run, name="demo-timetable", daemon=True).start()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     store.load()
     accounts.seed_demo()
+    ensure_demo_timetable()
     notify_warm(store.org_ids())
     yield
     writer.flush()  # nothing queued is lost on shutdown

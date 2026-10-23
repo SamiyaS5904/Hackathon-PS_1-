@@ -11,6 +11,7 @@ from collections import defaultdict
 from pydantic import BaseModel
 
 from app.models.domain import College, Kind, Session, Timetable, VenueType
+from app import lunch
 from app.solver.generate import Pin, generate, session_groups
 from app.validator.check import validate
 
@@ -72,15 +73,20 @@ def check_slot(
     teacher = college.teacher(s.teacher_id)
     groups = _groups(college, s)
     years = {college.section(i).year for i in s.section_ids}
-    lunch = {ln.period for ln in lunches if ln.shift_id == s.shift_id and ln.year in years}
-    idx = range(p, p + s.length)
     begin, end = shift.periods[p].start_min, shift.periods[p + s.length - 1].end_min
+    # Lunch is flexible: the class may take a mess-window period as long as each of its sections
+    # still has another free one that day.
+    # Classes of these students in the slot itself would be moved away by a repair, so they don't count.
+    rest = [o for o in others if o.id != s.id and not (
+        o.day == day and _m(o.start) < end and begin < _m(o.end) and _groups(college, o) & groups)]
+    no_lunch = next((college.section(i) for i in s.section_ids
+                     if not lunch.keeps_lunch(college, rest, college.section(i), day, (begin, end))), None)
     opt = MoveOption(day=day, start_period=p, start=shift.periods[p].start, end=shift.periods[p + s.length - 1].end,
                      status="blocked")
     if any(shift.periods[i].end != shift.periods[i + 1].start for i in range(p, p + s.length - 1)):
         opt.reason = "A lab can't run across a break."
-    elif lunch & set(idx):
-        opt.reason = "That's the lunch period for these students."
+    elif no_lunch is not None:
+        opt.reason = f"{no_lunch.name} would have no free period left for lunch that day."
     elif any(b.day == day and begin < _m(b.end) and _m(b.start) < end for b in teacher.blocked):
         opt.reason = f"{teacher.name} has blocked this time."
     elif any(br for br in shift.year_breaks if set(br.years) & years and begin < _m(br.end) and _m(br.start) < end):
@@ -226,7 +232,6 @@ def repair_move(
     shift = college.shift(moved.shift_id)
     begin, end = shift.periods[start_period].start_min, shift.periods[start_period + moved.length - 1].end_min
     groups = _groups(college, moved)
-    lunch_pins = {(ln.shift_id, ln.year): ln.period for ln in tt.lunches}
 
     def attempt(free_ids: set[str]) -> Timetable | None:
         pins: dict[str, list[Pin]] = defaultdict(list)
@@ -238,8 +243,12 @@ def repair_move(
                 pins[s.allotment_id].append(Pin(day=day, start=start_period, venue_id=venue_id or opt.venue_id))
             elif s.id not in free_ids:
                 pins[s.allotment_id].append(Pin(day=s.day, start=s.start_period, venue_id=s.venue_id))
-        result = generate(college, time_limit=time_limit, pins=dict(pins), lunch_pins=lunch_pins,
-                          fixed=electives)
+        # Only the sections this move touches may get a different lunch, and only on the days involved;
+        # everyone else's lunch stays exactly where it is.
+        touched = {sid for x in tt.sessions if x.id == session_id or x.id in free_ids for sid in x.section_ids}
+        lunch_pins = {(ln.section_id, ln.day): ln.period for ln in tt.lunches
+                      if ln.section_id and not (ln.section_id in touched and ln.day in (day, moved.day))}
+        result = generate(college, time_limit=time_limit, pins=dict(pins), fixed=electives, lunch_pins=lunch_pins)
         if result.status in ("optimal", "feasible") and not validate(college, result.sessions, result.lunches):
             return result
         return None
@@ -252,7 +261,7 @@ def repair_move(
         }) for s in tt.sessions]
         if venue_id and venue_id != opt.venue_id:
             new = [s if s.id != session_id else s.model_copy(update={"venue_id": venue_id}) for s in new]
-        candidate = tt.model_copy(update={"sessions": new})
+        candidate = tt.model_copy(update={"sessions": new, "lunches": lunch.assign(college, new, tt.lunches)})
         if not validate(college, candidate.sessions, candidate.lunches):
             return candidate, "Moved. Nothing else had to change."
 
@@ -274,7 +283,8 @@ def repair_move(
         result = attempt(free)
         if result:
             sessions = _with_ids(tt.sessions, result.sessions, forced=(session_id, day, start_period))
-            new_tt = tt.model_copy(update={"sessions": sessions})
+            # The repair may also move a section's lunch inside its window: keep the solver's lunches.
+            new_tt = tt.model_copy(update={"sessions": sessions, "lunches": result.lunches})
             n = len(diff(college, tt.sessions, sessions)) - 1
             return new_tt, (f"Moved. {n} other class{'es' if n != 1 else ''} rearranged to avoid clashes."
                             if n > 0 else "Moved. Nothing else had to change.")

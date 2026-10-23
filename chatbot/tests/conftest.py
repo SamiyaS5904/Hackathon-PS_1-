@@ -43,8 +43,9 @@ SESSIONS = [
     session("l1", "cs", "t2", "lab", "Mon", "14:00", "15:00", 5, kind="lecture"),
     session("m2", "ma", "t1", "r1", "Tue", "11:00", "12:00", 2),
 ]
-TIMETABLE = {"timetable": {"sessions": SESSIONS, "lunches": [{"shift_id": "day", "year": 1, "period": 3,
-                                                               "start": "12:00", "end": "13:00"}], "overrides": []},
+TIMETABLE = {"timetable": {"sessions": SESSIONS, "lunches": [
+    {"shift_id": "day", "section_id": "s1", "day": d, "period": 3, "start": "12:00", "end": "13:00"}
+    for d in ["Mon", "Tue", "Wed", "Thu", "Fri"]], "overrides": []},
              "quality": {"score": 88, "items": []}, "violations": [], "stale": False}
 
 

@@ -28,7 +28,7 @@ export default function DataPage() {
                 <span className="font-medium">{s.name}</span>{" "}
                 <span className="text-muted">
                   {s.periods[0]?.start}–{s.periods.at(-1)?.end} · {s.periods.length} periods
-                  {s.lunch ? ` · lunch chosen inside ${s.lunch.window_start}–${s.lunch.window_end}` : ""}
+                  {s.lunch ? ` · lunch inside ${s.lunch.window_start}–${s.lunch.window_end}, chosen per section and day` : ""}
                 </span>
               </li>
             ))}

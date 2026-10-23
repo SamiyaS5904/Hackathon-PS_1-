@@ -42,7 +42,11 @@ export interface Session {
   start_period: number; length: number; start: string; end: string;
   elective_slot_id: string | null; group_id: string | null;
 }
-export interface Lunch { shift_id: string; year: number; period: number; start: string; end: string }
+/** One section's lunch on one weekday (chosen per section and per day inside the mess window). */
+export interface Lunch {
+  shift_id: string; period: number; start: string; end: string;
+  section_id: string | null; day: string | null; year?: number | null;
+}
 export interface Override {
   id: string; session_id: string; date: string; kind: "cancel" | "move"; to_date: string | null;
   start_period: number | null; venue_id: string | null; reason: string; created_by: string;

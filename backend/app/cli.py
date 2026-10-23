@@ -19,14 +19,14 @@ def print_section(college: College, tt: Timetable, section_id: str) -> None:
     sec = college.section(section_id)
     shift = college.shift(sec.shift_id)
     groups = {b.id for b in sec.batches}
-    lunch = next((ln.period for ln in tt.lunches if ln.shift_id == shift.id and ln.year == sec.year), None)
+    lunch = {ln.day: ln.period for ln in tt.lunches if ln.section_id == sec.id}
     width = 22
     print(f"\n{sec.name} ({shift.name} shift)")
     print("Period".ljust(13) + "".join(d.ljust(width) for d in college.days))
     for i, p in enumerate(shift.periods):
         row = f"{p.start}-{p.end}".ljust(13)
         for day in college.days:
-            if i == lunch:
+            if lunch.get(day) == i:
                 row += "LUNCH".ljust(width)
                 continue
             cells = []
@@ -64,8 +64,7 @@ def main() -> None:
     for v in violations[:20]:
         print(" !", v.message)
 
-    for ln in tt.lunches:
-        print(f"Lunch: {college.shift(ln.shift_id).name} year {ln.year} -> {ln.start}-{ln.end}")
+    print(f"Lunches: {len(tt.lunches)} (one per section per day, inside each mess window)")
 
     q = score(college, tt.sessions, tt.lunches)
     print(f"Quality score: {q.score}/100")

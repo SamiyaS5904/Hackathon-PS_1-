@@ -20,7 +20,7 @@ Hard constraints
     every period start time of every shift, so overlapping shifts that share
     venues/teachers are handled correctly
   * teacher max periods per day
-  * flexible lunch: one period per (shift, year) inside the mess window, students free
+  * flexible lunch: one free period per section and per day inside the mess window
 
 Soft objective (minimised)
   * gaps in a student group's day (counted as extra "starts" of a block)
@@ -246,7 +246,7 @@ def generate(
     workers: int = 8,
     log: bool = False,
     pins: dict[str, list[Pin]] | None = None,
-    lunch_pins: dict[tuple[str, int], int] | None = None,
+    lunch_pins: dict[tuple[str, str], int] | None = None,
     fixed: list[Session] | None = None,
 ) -> Timetable:
     """Build a timetable.
@@ -300,7 +300,7 @@ def generate(
         stage_a.messages = ["The elective groups can't all get a big-enough room at the same time."]
         return done(stage_a)
     hints = {(s.allotment_id, s.day, s.start_period) for s in stage_a.sessions if not s.elective_slot_id}
-    lunch = {(ln.shift_id, ln.year): ln.period for ln in stage_a.lunches}
+    lunch = {(ln.section_id, ln.day): ln.period for ln in stage_a.lunches}
     full = _solve(college, units, [], max(remaining, 20.0), workers, log, {}, lunch, with_venues=True,
                   hints=hints, blockers=electives)
     if full.sessions:
@@ -329,7 +329,7 @@ def _solve(
     workers: int,
     log: bool,
     pins: dict[str, list[Pin]],
-    lunch_pins: dict[tuple[str, int], int],
+    lunch_pins: dict[tuple[str, str], int],
     with_venues: bool,
     hints: set[tuple[str, str, int]] | None = None,
     blockers: list[Session] | None = None,
@@ -510,29 +510,30 @@ def _solve(
         if len(vars_) > len(venue_sets[k]):
             model.Add(sum(vars_) <= len(venue_sets[k]))
 
-    # Flexible lunch: pick one period per (shift, year) inside the mess window and
-    # keep every student group of that year free then, on every day.
-    lunch_vars: dict[tuple[str, int], dict[int, cp_model.IntVar]] = {}
-    for sh in college.shifts:
-        cands = sh.lunch_candidates()
+    # Flexible lunch: every section gets one free period inside its mess window on every day. The
+    # period is chosen per section and per day, whatever keeps the days most compact.
+    lunch_vars: dict[tuple[str, int], dict[int, cp_model.IntVar]] = {}  # (section, day index) -> period -> var
+    for sec in college.sections:
+        sh = college.shift(sec.shift_id)
+        allowed = set(available_periods(college, sec.shift_id, sec.year))
+        cands = [p for p in sh.lunch_candidates() if p in allowed]
         if not cands:
             continue
-        for y in sorted({s.year for s in college.sections if s.shift_id == sh.id}):
-            choice = {p: model.NewBoolVar(f"lunch_{sh.id}_{y}_{p}") for p in cands}
+        for d, day in enumerate(days):
+            choice = {p: model.NewBoolVar(f"lunch_{sec.id}_{d}_{p}") for p in cands}
             model.AddExactlyOne(choice.values())
-            if (sh.id, y) in lunch_pins and lunch_pins[(sh.id, y)] in choice:
-                model.Add(choice[lunch_pins[(sh.id, y)]] == 1)
-            lunch_vars[(sh.id, y)] = choice
-            for sec in (s for s in college.sections if s.shift_id == sh.id and s.year == y):
-                for g in group_ids(sec):
-                    for d, day in enumerate(days):
-                        for p, lv in choice.items():
-                            per = sh.periods[p]
-                            if is_busy(f"g:{g}", day, per.start_min, per.end_min):
-                                model.Add(lv == 0)
-                            busy_vars = cover.get((f"g:{g}", d, per.start_min), [])
-                            if busy_vars:
-                                model.Add(sum(busy_vars) + lv <= 1)
+            pin = lunch_pins.get((sec.id, day))
+            if pin in choice:
+                model.Add(choice[pin] == 1)
+            lunch_vars[(sec.id, d)] = choice
+            for g in group_ids(sec):
+                for p, lv in choice.items():
+                    per = sh.periods[p]
+                    if is_busy(f"g:{g}", day, per.start_min, per.end_min):
+                        model.Add(lv == 0)
+                    busy_vars = cover.get((f"g:{g}", d, per.start_min), [])
+                    if busy_vars:
+                        model.Add(sum(busy_vars) + lv <= 1)
 
     # Home room: each extra lecture room a section uses costs a little.
     for vars_ in room_use.values():
@@ -595,9 +596,9 @@ def _solve(
     for s in college.sections:
         shift = college.shift(s.shift_id)
         chain = available_periods(college, s.shift_id, s.year)
-        lunch = lunch_vars.get((s.shift_id, s.year), {})
         for g in group_ids(s):
             for d, day in enumerate(days):
+                lunch = lunch_vars.get((s.id, d), {})
                 # Lunch counts as "occupied" so it never looks like a gap; fixed sessions are occupied too.
                 occ = []
                 for p in chain:
@@ -649,10 +650,11 @@ def _solve(
                 end=to_hhmm(shift.periods[s].end_min), elective_slot_id=eu.slot.id, group_id=g.id)
 
     lunches = []
-    for (sh_id, y), choice in lunch_vars.items():
+    for (sec_id, d), choice in lunch_vars.items():
         p = next(p for p, v in choice.items() if solver.Value(v))
-        per = college.shift(sh_id).periods[p]
-        lunches.append(Lunch(shift_id=sh_id, year=y, period=p, start=per.start, end=per.end))
+        sh = college.shift(college.section(sec_id).shift_id)
+        lunches.append(Lunch(shift_id=sh.id, section_id=sec_id, day=days[d], period=p,
+                             start=sh.periods[p].start, end=sh.periods[p].end))
 
     return Timetable(
         college_id=college.id,

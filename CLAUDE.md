@@ -125,7 +125,7 @@ Hierarchy: **Super Admin (platform)** → **College Admin** → **Department Coo
 | Organization (org) | One college = one tenant |
 | Structure levels | Configurable per college: **Program → Department → Year/Semester → Section → Lab batch** (Program, Section, Batch optional) |
 | Shift | 1 or 2 per college (morning / evening). Sections belong strictly to one shift. Teachers are Morning / Evening / Both. Venues are reused across shifts |
-| Time grid | Working days, shift timings, lecture duration, **one lab duration for the whole college**, fixed breaks, and a **flexible lunch**: admin gives the mess window per shift, the solver picks each year's lunch period inside it (same every day) for the best timetable and venue use |
+| Time grid | Working days, shift timings, lecture duration, **one lab duration for the whole college**, fixed breaks, and a **flexible lunch**: admin gives the mess window per shift; the solver gives **every section one free period inside it, every day**, chosen per section and per day (it may differ from day to day) for the best timetable and venue use |
 | Venue | Room with type (lecture hall / lab / seminar / auditorium), capacity, tags, owner dept or *Shared* |
 | Section | A group of students that always sits together (atomic). Room capacity ≥ strength |
 | Lab batch | Sub-group of a section for labs (A1/A2), runs in parallel |
@@ -160,7 +160,7 @@ Drag & drop / chatbot / teacher request / leave → **solver repair** (freeze ev
 ## 7. Scheduling model (summary; full spec in `backend/CLAUDE.md`)
 
 - **Algorithm:** Google OR-Tools **CP-SAT** for generation; **LNS repair** (re-solve a small neighbourhood with everything else fixed, minimise number of changes) for edits; **independent validator** after both.
-- **Hard:** no teacher / venue / section / batch double-booking (also across overlapping shifts); venue type + capacity; shift windows (strict); breaks & holidays; flexible lunch inside the mess window; teacher block times + daily limit; labs as consecutive blocks of the college lab length, batches in parallel; same subject at most once a day; combined classes & elective groups together; all *Must* rules.
+- **Hard:** no teacher / venue / section / batch double-booking (also across overlapping shifts); venue type + capacity; shift windows (strict); breaks & holidays; flexible lunch (every section, every day, a free period inside the mess window); teacher block times + daily limit; labs as consecutive blocks of the college lab length, batches in parallel; same subject at most once a day; combined classes & elective groups together; all *Must* rules.
 - **Soft (quality score):** compact student days (few gaps), balanced teacher load, right-sized rooms, **home room** (few room changes per section), own department's rooms before borrowed ones, all *Try* rules with weights. Goal: highest quality and most efficient venue use.
 - Infeasible input → explain which rule group conflicts in plain language (never a silent failure).
 

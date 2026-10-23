@@ -152,14 +152,13 @@ def build_grid(college: College, tt: Timetable, sessions: list[Session], view: s
             grid.cells[(first, d)] = Cell(lines=lines, span=last - first + 1, fill=_fill(group[0].subject_id))
             grid.covered.update((r, d) for r in range(first + 1, last + 1))
 
-    if view == "section":  # the year's lunch period, chosen by the solver, every day
-        sec = college.section(entity_id)
-        for lunch in tt.lunches:
-            if lunch.shift_id == sec.shift_id and lunch.year == sec.year and (lunch.start, lunch.end) in index:
-                r = index[(lunch.start, lunch.end)]
-                for d in range(len(grid.days)):
-                    if (r, d) not in grid.cells and (r, d) not in grid.covered:
-                        grid.cells[(r, d)] = Cell(lines=["Lunch"], fill="F2F2F2", lunch=True)
+    if view == "section":  # the section's lunch on each day, chosen by the solver (it can differ by day)
+        for ln in tt.lunches:
+            if ln.section_id != entity_id or ln.day not in grid.days or (ln.start, ln.end) not in index:
+                continue
+            r, d = index[(ln.start, ln.end)], grid.days.index(ln.day)
+            if (r, d) not in grid.cells and (r, d) not in grid.covered:
+                grid.cells[(r, d)] = Cell(lines=["Lunch"], fill="F2F2F2", lunch=True)
     return grid
 
 

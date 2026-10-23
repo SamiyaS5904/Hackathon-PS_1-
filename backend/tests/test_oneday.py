@@ -8,6 +8,15 @@ from tests.conftest import tiny_college
 MONDAY = "2026-10-19"  # tiny college works Mon-Wed
 
 
+DATES = {"Mon": "2026-10-19", "Tue": "2026-10-20", "Wed": "2026-10-21"}
+
+
+def movable(college, tt):
+    """A lecture with a free slot on its own day (the tiny college is packed, so search every day)."""
+    return next((x, DATES[x.day], o) for x in tt.sessions if x.kind.value == "lecture"
+                for o in day_options(college, tt, x.id, DATES[x.day], DATES[x.day]) if o.status == "free")
+
+
 def solved():
     college = tiny_college()
     tt = generate(college, time_limit=10)
@@ -33,20 +42,20 @@ def test_cancel_only_affects_that_date():
 
 def test_move_for_one_day_uses_only_free_slots_and_stays_clash_free():
     college, tt = solved()
-    s = next(x for x in tt.sessions if x.day == "Mon" and x.kind.value == "lecture")
-    opts = day_options(college, tt, s.id, MONDAY, MONDAY)
+    s, day, free = movable(college, tt)
+    opts = day_options(college, tt, s.id, day, day)
     assert all(o.status in ("free", "blocked") for o in opts)
-    free = next(o for o in opts if o.status == "free")
-    new, msg, _ = add_override(college, tt, s.id, MONDAY, "move", MONDAY, free.start_period, "", "Admin")
+    new, msg, _ = add_override(college, tt, s.id, day, "move", day, free.start_period, "", "Admin")
     assert new is not None, msg
-    day = active(college, new, MONDAY)
-    assert validate(college, day, new.lunches, check_counts=False) == []
-    moved = next(x for x in day if x.id == s.id)
+    from app.edits.oneday import _day
+    assert validate(college, *_day(college, new, day), check_counts=False) == []
+    moved = next(x for x in active(college, new, day) if x.id == s.id)
     assert moved.start_period == free.start_period
 
     blocked = next((o for o in opts if o.status == "blocked"), None)
     if blocked:
-        bad, err, _ = add_override(college, tt, s.id, MONDAY, "move", MONDAY, blocked.start_period, "", "Admin")
+        bad, err, _ = add_override(college, tt, s.id, DATES[s.day], "move", DATES[s.day], blocked.start_period, "",
+                                   "Admin")
         assert bad is None and err
 
 
@@ -69,11 +78,10 @@ def test_restore_removes_the_change():
 def test_occurrence_ids_are_stable_when_a_class_moves():
     """Future attendance hooks onto occurrence ids: a moved class keeps the id of its original date."""
     college, tt = solved()
-    s = next(x for x in tt.sessions if x.day == "Mon" and x.kind.value == "lecture")
-    before = next(o for o in occurrences(college, tt, MONDAY) if o.session.id == s.id)
-    assert before.occurrence_id == f"{s.id}@{MONDAY}"
-    free = next(o for o in day_options(college, tt, s.id, MONDAY, MONDAY) if o.status == "free")
-    new, msg, _ = add_override(college, tt, s.id, MONDAY, "move", MONDAY, free.start_period, "", "Admin")
+    s, day, free = movable(college, tt)
+    before = next(o for o in occurrences(college, tt, day) if o.session.id == s.id)
+    assert before.occurrence_id == f"{s.id}@{day}"
+    new, msg, _ = add_override(college, tt, s.id, day, "move", day, free.start_period, "", "Admin")
     assert new is not None, msg
-    ids = {o.status: o.occurrence_id for o in occurrences(college, new, MONDAY) if o.session.id == s.id}
+    ids = {o.status: o.occurrence_id for o in occurrences(college, new, day) if o.session.id == s.id}
     assert ids["moved_in"] == ids["moved_out"] == before.occurrence_id

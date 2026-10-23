@@ -30,7 +30,7 @@ export function HealthStrip({ data }: { data: TimetableOut }) {
         icon={<CheckCircle2 size={18} className="text-muted" />}
         label="Classes placed"
         value={String(data.timetable.sessions.length)}
-        hint={`${data.timetable.lunches.length} lunch slots chosen`}
+        hint={data.timetable.lunches.length ? "Lunch for every section, every day" : "Clash-free"}
       />
       <Stat
         icon={<Clock size={18} className="text-muted" />}

@@ -18,15 +18,49 @@ def test_options_cover_every_slot_with_reasons():
     s = next(x for x in tt.sessions if x.kind.value == "lecture")
     opts = move_options(college, tt, s.id)
     assert opts and all(o.status in ("free", "repair", "blocked") for o in opts)
-    lunch = tt.lunches[0].period
-    assert all(o.status == "blocked" for o in opts if o.start_period == lunch)
     assert all(o.reason for o in opts if o.status != "free" or o.venue_id != s.venue_id)
+    # Lunch is flexible: a "free" slot may be a mess-window period, but the move still leaves every
+    # section a free lunch period that day (the validator would say otherwise).
+    for o in (o for o in opts if o.status == "free"):
+        new, msg = repair_move(college, tt, s.id, o.day, o.start_period)
+        assert new is not None, msg
+        assert validate(college, new.sessions, new.lunches) == []
+
+
+def test_lunch_is_per_section_per_day_and_can_differ_by_day():
+    college, tt = solved()
+    sec = college.sections[0]
+    mine = {ln.day: ln for ln in tt.lunches if ln.section_id == sec.id}
+    assert set(mine) == set(college.days)  # one lunch every working day
+    window = college.shift(sec.shift_id).lunch
+    assert all(window.window_start <= ln.start and ln.end <= window.window_end for ln in mine.values())
+
+
+def test_move_refused_when_it_would_take_the_last_lunch_period():
+    from app import lunch
+    from app.edits.moves import check_slot
+
+    college, tt = solved()
+    sec = college.sections[0]
+    day = college.days[0]
+    shift = college.shift(sec.shift_id)
+    free = lunch.free_periods(college, tt.sessions, sec, day)
+    s = next(x for x in tt.sessions if sec.id in x.section_ids and x.kind.value == "lecture" and x.length == 1)
+    others = [x for x in tt.sessions if x.id != s.id]
+    if len(free) == 1:  # placing a class on the only free lunch period must be refused
+        opt = check_slot(college, s, day, free[0], others, tt.lunches)
+        assert opt.status == "blocked" and "lunch" in opt.reason
+    # The helper itself: an extra class over every free window period leaves no lunch.
+    if free:
+        lo = shift.periods[min(free)].start_min
+        hi = shift.periods[max(free)].end_min
+        assert not lunch.keeps_lunch(college, tt.sessions, sec, day, (lo, hi))
 
 
 def test_direct_move_changes_only_that_class():
     college, tt = solved()
-    s = next(x for x in tt.sessions if x.kind.value == "lecture")
-    free = next(o for o in move_options(college, tt, s.id) if o.status == "free")
+    s, free = next((x, o) for x in tt.sessions if x.kind.value == "lecture"
+                   for o in move_options(college, tt, x.id) if o.status == "free")
     new, msg = repair_move(college, tt, s.id, free.day, free.start_period)
     assert new is not None, msg
     assert validate(college, new.sessions, new.lunches) == []
@@ -68,3 +102,29 @@ def test_fully_pinned_generation_reproduces_the_timetable():
                      lunch_pins={(ln.shift_id, ln.year): ln.period for ln in tt.lunches})
     key = lambda ss: sorted((x.allotment_id, x.day, x.start_period, x.venue_id) for x in ss)  # noqa: E731
     assert key(again.sessions) == key(tt.sessions)
+
+
+def test_every_repaired_move_passes_the_apply_check():
+    """Apply re-runs the validator on the proposal exactly as stored, lunches included."""
+    college, tt = solved()
+    tried = 0
+    for s in (x for x in tt.sessions if x.kind.value == "lecture"):
+        for o in (o for o in move_options(college, tt, s.id) if o.status == "repair"):
+            new, msg = repair_move(college, tt, s.id, o.day, o.start_period)
+            if new is not None:
+                assert validate(college, new.sessions, new.lunches) == [], msg
+                tried += 1
+            if tried >= 6:
+                return
+
+
+def test_a_move_keeps_other_sections_lunches():
+    college, tt = solved()
+    s, o = next((x, o) for x in tt.sessions if x.kind.value == "lecture"
+                for o in move_options(college, tt, x.id) if o.status in ("free", "repair"))
+    new, msg = repair_move(college, tt, s.id, o.day, o.start_period)
+    assert new is not None, msg
+    untouched_days = set(college.days) - {o.day, s.day}
+    before = {(ln.section_id, ln.day): ln.period for ln in tt.lunches if ln.day in untouched_days}
+    after = {(ln.section_id, ln.day): ln.period for ln in new.lunches if ln.day in untouched_days}
+    assert before == after

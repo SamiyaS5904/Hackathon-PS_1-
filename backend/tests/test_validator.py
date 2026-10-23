@@ -14,7 +14,7 @@ def sess(sid, allot, subj, teacher, venue, kind, day, start, length=1, batch=Non
     )
 
 
-LUNCH = [Lunch(shift_id="day", year=1, period=3, start="12:00", end="13:00")]
+LUNCH = [Lunch(shift_id="day", section_id="s1", day="Tue", period=3, start="12:00", end="13:00")]
 
 
 def valid_sessions():
@@ -71,9 +71,13 @@ def test_wrong_weekly_count(college):
 
 def test_class_during_lunch_and_missing_lunch(college):
     s = valid_sessions()
-    s[1] = sess("m2", "a1", "maths", "t1", "r1", Kind.lecture, "Tue", 3)  # 12-13 is lunch
+    s[1] = sess("m2", "a1", "maths", "t1", "r1", Kind.lecture, "Tue", 3)  # 12-13 is CSE-1A's Tuesday lunch
     assert "class_during_lunch" in types(college, s)
-    assert "lunch_missing" in types(college, valid_sessions(), lunches=[])
+    # Lunch is flexible, so a class in the window is fine while another window period is free...
+    assert "lunch_missing" not in types(college, s, lunches=[])
+    # ...but not when the whole mess window (12-14) is taken that day.
+    s[4] = sess("p2", "a2", "prog", "t2", "r1", Kind.lecture, "Tue", 4)
+    assert "lunch_missing" in types(college, s, lunches=[])
 
 
 def test_lab_split_across_break(college):

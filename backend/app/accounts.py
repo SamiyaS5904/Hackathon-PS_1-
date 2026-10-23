@@ -246,6 +246,11 @@ def seed_demo() -> None:
     if store.org("demo") is None:
         store.create_org("Demo Institute of Technology", build_demo_college(), is_demo=True, slug="demo")
     demo = store.org("demo").college
+    fresh = build_demo_college()
+    if [s.model_dump() for s in demo.shifts] != [s.model_dump() for s in fresh.shifts]:
+        # The built-in demo's timings changed (e.g. lunch rules): take them over. The timetable becomes
+        # out of date and is rebuilt by ensure_demo_timetable().
+        demo = store.update_college("demo", demo.model_copy(update={"shifts": fresh.shifts}))
     if not demo.department_status:  # the demo shows a finished semester: every department has marked Ready
         ready = {d.id: DepartmentStatus(ready=True, at=time.time(), by=f"{d.short} Coordinator")
                  for d in demo.departments}

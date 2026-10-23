@@ -122,10 +122,11 @@ def explain(college: College, tt: Timetable, session_id: str) -> Explanation:
     if teacher.blocked:
         facts.append(f"{teacher.name} is unavailable at " +
                      ", ".join(f"{b.day} {b.start}-{b.end}" for b in teacher.blocked) + ".")
-    years = {college.section(i).year for i in s.section_ids}
-    for ln in tt.lunches:
-        if ln.shift_id == s.shift_id and ln.year in years:
-            facts.append(f"Year {ln.year} has lunch at {ln.start}-{ln.end} every day.")
+    for sid in s.section_ids:
+        ln = next((x for x in tt.lunches if x.section_id == sid and x.day == s.day), None)
+        if ln:
+            facts.append(f"{college.section(sid).name} has lunch at {ln.start}-{ln.end} that day (lunch is chosen "
+                         "per section and per day inside the mess window).")
     for r in college.rules:
         if r.enabled and any(r.applies_to(college.section(i)) for i in s.section_ids):
             facts.append(f"Rule '{r.name}' ({r.mode}) applies.")

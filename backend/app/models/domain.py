@@ -51,11 +51,11 @@ class YearBreak(BaseModel):
 
 
 class LunchRule(BaseModel):
-    """Flexible lunch: the solver picks one period per year inside the mess window.
+    """Flexible lunch: every section gets one free period inside the mess window, every day.
 
-    The chosen period is the same on every working day for that year, and all
-    sections of that year are kept free then. This staggers lunch across years
-    so venues and the mess are used evenly.
+    The solver picks the period per section and per day (11:30 one day, 13:30 the next is fine),
+    whatever makes the best timetable. That also spreads lunch over the window, so rooms and the
+    mess are used evenly.
     """
 
     window_start: str
@@ -326,13 +326,17 @@ class Session(BaseModel):
 
 
 class Lunch(BaseModel):
-    """Lunch period chosen by the solver for one year in one shift (every day)."""
+    """One section's lunch on one weekday: a free period inside its shift's mess window, chosen by
+    the solver, so it can differ between sections and between days. (Older timetables stored one
+    lunch per year for every day: ``year`` set, no ``section_id``; they are upgraded on load.)"""
 
     shift_id: str
-    year: int
     period: int
     start: str
     end: str
+    section_id: str | None = None
+    day: str | None = None
+    year: int | None = None
 
 
 class Override(BaseModel):

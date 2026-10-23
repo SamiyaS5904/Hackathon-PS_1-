@@ -12,6 +12,7 @@ from datetime import date, timedelta
 
 from pydantic import BaseModel
 
+from app import lunch
 from app.edits.moves import MoveOption, check_slot
 from app.models.domain import College, Override, Session, Timetable
 from app.validator.check import validate
@@ -110,6 +111,13 @@ def active(college: College, tt: Timetable, d: str) -> list[Session]:
     return [o.session for o in occurrences(college, tt, d) if o.status in ("normal", "moved_in")]
 
 
+def _day(college: College, tt: Timetable, d: str) -> tuple[list[Session], list]:
+    """What happens on date ``d`` and that day's lunches (re-picked from what is free that day)."""
+    sessions = active(college, tt, d)
+    wd = weekday(college, d)
+    return sessions, (lunch.for_day(college, sessions, wd, tt.lunches) if wd else [])
+
+
 def day_options(college: College, tt: Timetable, session_id: str, from_date: str, to_date: str) -> list[MoveOption]:
     """Free slots on ``to_date`` for moving one occurrence. Anything that would disturb others is blocked."""
     s = next(x for x in tt.sessions if x.id == session_id)
@@ -163,8 +171,8 @@ def add_override(
     ov = Override(id=uuid.uuid4().hex[:10], session_id=s.id, date=d, kind="move", to_date=to_date,
                   start_period=start_period, venue_id=opt.venue_id, reason=reason, created_by=actor)
     new = tt.model_copy(update={"overrides": [*tt.overrides, ov]})
-    # Golden rule #1 on the real day: nothing on that date may clash.
-    if validate(college, active(college, new, to_date), new.lunches, check_counts=False):
+    # Golden rule #1 on the real day: nothing on that date may clash, and every section still gets lunch.
+    if validate(college, *_day(college, new, to_date), check_counts=False):
         return None, "That change would create a clash on that day.", ""
     when = f"{label(to_date)} {opt.start}"
     room = college.venue(opt.venue_id).name
@@ -179,7 +187,7 @@ def remove_override(college: College, tt: Timetable, override_id: str) -> tuple[
         return None, "That change no longer exists."
     s = next(x for x in tt.sessions if x.id == ov.session_id)
     new = tt.model_copy(update={"overrides": [o for o in tt.overrides if o.id != override_id]})
-    if validate(college, active(college, new, ov.date), new.lunches, check_counts=False):
+    if validate(college, *_day(college, new, ov.date), check_counts=False):
         return None, "Restoring would clash with another change made that day."
     subj = college.subject(s.subject_id).name
     return new, f"Restored {subj} on {label(ov.date)} to its usual time"

@@ -72,5 +72,6 @@ def test_demo_college_is_clash_free():
     college = build_demo_college()
     tt = generate(college, time_limit=30)
     assert_valid(college, tt)
-    years = {ln.year: ln.period for ln in tt.lunches}
-    assert set(years) == {2, 3}
+    # Lunch for every section on every working day (chosen per section and per day).
+    assert {(ln.section_id, ln.day) for ln in tt.lunches} == {
+        (s.id, d) for s in college.sections if college.shift(s.shift_id).lunch for d in college.days}

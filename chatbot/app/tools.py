@@ -321,8 +321,9 @@ async def _mine(ctx: ToolContext, occ: list[dict]) -> list[dict]:
     return [o for o in occ if o["session"]["teacher_id"] == tid]
 
 
-async def _free_windows(ctx: ToolContext, dates: list[str], busy_for, shift_ids: list[str], years: set[int],
+async def _free_windows(ctx: ToolContext, dates: list[str], busy_for, shift_ids: list[str], section_ids: set[str],
                         min_minutes: int) -> list[dict]:
+    """Free windows on each date; for a section, its lunch that weekday (chosen per section and per day) is not free."""
     c = await ctx.college()
     tt = await ctx.timetable()
     occ, days = await _occurrences(ctx, dates)
@@ -337,7 +338,8 @@ async def _free_windows(ctx: ToolContext, dates: list[str], busy_for, shift_ids:
             continue
         busy = [(_m(o["session"]["start"]), _m(o["session"]["end"])) for o in occ
                 if o["date"] == d and o["status"] in ("normal", "moved_in") and busy_for(o)]
-        lunches = [ln for ln in tt["timetable"]["lunches"] if ln["shift_id"] in shift_ids and ln["year"] in years]
+        lunches = [ln for ln in tt["timetable"]["lunches"]
+                   if ln.get("section_id") in section_ids and ln.get("day") == info.get("day")]
         day_free, lunch_txt = [], []
         for sh in (s for s in c["shifts"] if s["id"] in shift_ids):
             start, end = _m(sh["periods"][0]["start"]), _m(sh["periods"][-1]["end"])
@@ -391,7 +393,7 @@ async def _run(ctx: ToolContext, name: str, a: Any) -> Any:
             if ctx.role == "student":
                 sec = next(s for s in c["sections"] if s["id"] == ctx.member["section_id"])
                 return {"who": "you", "days": await _free_windows(ctx, dates, lambda o: True, [sec["shift_id"]],
-                                                                  {sec["year"]}, a.min_minutes)}
+                                                                  {sec["id"]}, a.min_minutes)}
             tid = ctx.member.get("teacher_id")
             if not tid:
                 raise ToolError("Say whose free time: a section or a teacher.")
@@ -401,7 +403,7 @@ async def _run(ctx: ToolContext, name: str, a: Any) -> Any:
         try:
             sec = _find(c["sections"], who, ("name", "id"))
             return {"who": sec["name"], "days": await _free_windows(
-                ctx, dates, lambda o: sec["id"] in o["session"]["section_ids"], [sec["shift_id"]], {sec["year"]},
+                ctx, dates, lambda o: sec["id"] in o["session"]["section_ids"], [sec["shift_id"]], {sec["id"]},
                 a.min_minutes)}
         except ToolError:
             t = _find(c["teachers"], who, ("name", "id"))

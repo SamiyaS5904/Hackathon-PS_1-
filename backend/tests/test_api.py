@@ -179,7 +179,9 @@ def test_admin_edit_apply_undo(client, admin):
     # Someone else can't apply your proposal.
     co = login(client, "cse.coordinator@demo.timetabl.ai")
     assert client.post(f"/api/orgs/demo/proposals/{proposal['id']}/apply", headers=co).status_code == 403
-    applied = client.post(f"/api/orgs/demo/proposals/{proposal['id']}/apply", headers=admin).json()
+    r = client.post(f"/api/orgs/demo/proposals/{proposal['id']}/apply", headers=admin)
+    assert r.status_code == 200, r.text
+    applied = r.json()
     assert applied["violations"] == []
     moved = next(x for x in applied["timetable"]["sessions"] if x["id"] == s["id"])
     assert (moved["day"], moved["start_period"]) == (target["day"], target["start_period"])
@@ -251,7 +253,7 @@ def test_exports_excel_and_pdf_with_role_limits(client, admin):
     ws = wb["CSE-3A"]
     assert ws.merged_cells.ranges  # labs span several periods
     text = " ".join(str(c.value) for row in ws.iter_rows() for c in row if c.value)
-    assert "Lunch" in text and "Break" in text
+    assert "Lunch" in text  # each section's lunch, per day (the demo has no fixed breaks)
     pdf = client.get("/api/orgs/demo/export?format=pdf&view=teacher", headers=admin)
     assert pdf.status_code == 200 and pdf.content.startswith(b"%PDF")
     room = client.get("/api/orgs/demo/export?format=pdf&view=venue&id=lh-101", headers=admin)

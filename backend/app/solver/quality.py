@@ -32,7 +32,7 @@ class QualityReport(BaseModel):
 
 def score(college: College, sessions: list[Session], lunches: list[Lunch] | None = None) -> QualityReport:
     days = college.days
-    lunch_at = {(ln.shift_id, ln.year): ln.period for ln in (lunches or [])}
+    lunch_at = {(ln.section_id, ln.day): ln.period for ln in (lunches or []) if ln.section_id}
 
     # Student gaps: empty available periods between a group's first and last class of the day.
     occupied: dict[tuple[str, str], set[int]] = defaultdict(set)
@@ -42,11 +42,12 @@ def score(college: College, sessions: list[Session], lunches: list[Lunch] | None
                 occupied[(g, s.day)].add(p)
     total_gaps, n_groups = 0, 0
     for sec in college.sections:
-        lp = lunch_at.get((sec.shift_id, sec.year))
-        chain = [p for p in available_periods(college, sec.shift_id, sec.year) if p != lp]
+        periods = available_periods(college, sec.shift_id, sec.year)
         for g in group_ids(sec):
             n_groups += 1
             for d in days:
+                lp = lunch_at.get((sec.id, d))  # lunch is never a gap
+                chain = [p for p in periods if p != lp]
                 used = [i for i, p in enumerate(chain) if p in occupied[(g, d)]]
                 if used:
                     total_gaps += (used[-1] - used[0] + 1) - len(used)

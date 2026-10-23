@@ -20,6 +20,7 @@ from dataclasses import dataclass, field
 
 from sqlalchemy import select
 
+from app import lunch
 from app.db.models import AuditRow, OrgRow, PublishedRow, SessionLocal, TimetableRow, init_db
 from app.models.domain import College, Timetable
 
@@ -132,19 +133,22 @@ class Store:
             for row in db.scalars(select(TimetableRow)):
                 if row.org_id in self._orgs:
                     st = self._orgs[row.org_id]
-                    st.timetable, st.version = Timetable.model_validate(row.data), row.version
+                    st.timetable = lunch.upgrade(st.college, Timetable.model_validate(row.data))
+                    st.version = row.version
                     if st.timetable.published_at:
                         st.published = st.timetable
             for row in db.scalars(select(PublishedRow)):
                 st = self._orgs.get(row.org_id)
                 if st is not None and st.published is None:
-                    st.published = Timetable.model_validate(row.data)
+                    st.published = lunch.upgrade(st.college, Timetable.model_validate(row.data))
             for row in db.scalars(select(AuditRow).order_by(AuditRow.seq)):
                 if row.org_id in self._orgs:
-                    self._orgs[row.org_id].audit.append(AuditEntry(
+                    org = self._orgs[row.org_id]
+                    org.audit.append(AuditEntry(
                         id=row.id, at=row.at, action=row.action, source=row.source, actor=row.actor,
-                        changes=row.changes, before=Timetable.model_validate(row.before) if row.before else None,
-                        after=Timetable.model_validate(row.after), undone=row.undone,
+                        changes=row.changes,
+                        before=lunch.upgrade(org.college, Timetable.model_validate(row.before)) if row.before else None,
+                        after=lunch.upgrade(org.college, Timetable.model_validate(row.after)), undone=row.undone,
                     ))
 
     # ---- organisations ------------------------------------------------

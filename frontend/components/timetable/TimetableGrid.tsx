@@ -22,7 +22,6 @@ interface Row {
   end: string;
   s: number;
   e: number;
-  lunch: boolean;
   breakBefore: string | null;
 }
 
@@ -85,21 +84,27 @@ export function TimetableGrid({
     for (const sh of college.shifts.filter((s) => shiftIds.includes(s.id))) {
       for (const p of sh.periods) {
         const key = `${p.start}-${p.end}`;
-        if (!seen.has(key)) seen.set(key, { ...p, s: toMin(p.start), e: toMin(p.end), lunch: false, breakBefore: null });
+        if (!seen.has(key)) seen.set(key, { ...p, s: toMin(p.start), e: toMin(p.end), breakBefore: null });
       }
     }
     const out = [...seen.values()].sort((a, b) => a.s - b.s || a.e - b.e);
 
     if (view === "section") {
-      const sec = lookup.section.get(entityId);
-      const lunch = timetable.lunches.find((l) => l.shift_id === sec?.shift_id && l.year === sec?.year);
       out.forEach((r, i) => {
-        r.lunch = !!lunch && lunch.start === r.start;
         if (i > 0 && out[i - 1].e < r.s) r.breakBefore = `${out[i - 1].end}–${r.start}`;
       });
     }
     return out;
-  }, [view, entityId, college.shifts, lookup, timetable.lunches]);
+  }, [view, entityId, college.shifts, lookup]);
+
+  // Section view: that section's lunch on each day (it can be a different period every day).
+  const lunchOn = useMemo(() => {
+    const m = new Map<string, string>();
+    if (view === "section") {
+      for (const l of timetable.lunches) if (l.section_id === entityId && l.day) m.set(l.day, l.start);
+    }
+    return m;
+  }, [view, entityId, timetable.lunches]);
 
   if (rows.length === 0) {
     return <p className="p-6 text-sm text-muted">Nothing scheduled here.</p>;
@@ -129,6 +134,11 @@ export function TimetableGrid({
                 const isOrigin = moving && moving.day === day && moving.start === row.start;
                 return (
                   <TargetCell option={opt} origin={!!isOrigin} edit={edit} day={day} start={row.start}>
+                    {items.length === 0 && lunchOn.get(day) === row.start && (
+                      <div className="flex h-full min-h-[56px] items-center justify-center gap-1.5 rounded-md border border-dashed border-border-strong text-xs text-muted">
+                        <Utensils size={13} aria-hidden /> Lunch
+                      </div>
+                    )}
                     {items.map((s) => (
                       <SessionCard
                         key={s.id}
@@ -168,19 +178,11 @@ function GridRow({ row, days, children }: { row: Row; days: string[]; children: 
           <br />
           <span className="opacity-70">{row.end}</span>
         </td>
-        {row.lunch ? (
-          <td colSpan={days.length} className="px-2 py-2">
-            <div className="flex items-center justify-center gap-2 rounded-md border border-dashed border-border-strong py-2 text-xs text-muted">
-              <Utensils size={13} aria-hidden /> Lunch
-            </div>
+        {days.map((d) => (
+          <td key={d} className="h-[68px] p-1 align-top">
+            {children(d)}
           </td>
-        ) : (
-          days.map((d) => (
-            <td key={d} className="h-[68px] p-1 align-top">
-              {children(d)}
-            </td>
-          ))
-        )}
+        ))}
       </tr>
     </>
   );

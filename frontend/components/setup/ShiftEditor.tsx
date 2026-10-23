@@ -114,8 +114,9 @@ export function ShiftEditor({ plan, single = false, onChange }: {
           Lunch inside the mess timings
         </label>
         <p className="mt-1 text-xs text-muted">
-          The timetable picks each year&apos;s lunch period inside this window (same time every day), whichever gives the
-          best timetable and room use.
+          Every section gets one free period for lunch inside this window, every day. The timetable chooses it per
+          section and per day (11:30 one day, 12:30 the next is fine), whichever gives the best timetable and room use.
+          Make the window at least 2–3 periods long so it has room to choose.
         </p>
         {plan.lunch && (
           <div className="mt-2 flex items-center gap-2 text-sm">

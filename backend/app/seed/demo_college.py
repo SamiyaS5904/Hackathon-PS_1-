@@ -35,6 +35,8 @@ from app.models.domain import (
 
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"]
 
+# Back-to-back periods; lunch is the only break. The mess window spans three periods and the
+# solver gives each section a free one in it every day (11:00 on Monday, 12:40 on Tuesday, ...).
 MORNING = Shift(
     id="morning",
     name="Morning",
@@ -43,11 +45,12 @@ MORNING = Shift(
         Period(start="09:20", end="10:10"),
         Period(start="10:10", end="11:00"),
         Period(start="11:00", end="11:50"),
-        # lunch 11:50-12:30
-        Period(start="12:30", end="13:20"),
-        Period(start="13:20", end="14:10"),
-        Period(start="14:10", end="15:00"),
+        Period(start="11:50", end="12:40"),
+        Period(start="12:40", end="13:30"),
+        Period(start="13:30", end="14:20"),
+        Period(start="14:20", end="15:10"),
     ],
+    lunch=LunchRule(window_start="11:00", window_end="13:30"),
 )
 
 EVENING = Shift(
@@ -58,13 +61,11 @@ EVENING = Shift(
         Period(start="11:50", end="12:40"),
         Period(start="12:40", end="13:30"),
         Period(start="13:30", end="14:20"),
-        # tea break 14:20-14:40
-        Period(start="14:40", end="15:30"),
-        Period(start="15:30", end="16:20"),
-        Period(start="16:20", end="17:10"),
+        Period(start="14:20", end="15:10"),
+        Period(start="15:10", end="16:00"),
+        Period(start="16:00", end="16:50"),
     ],
-    # Mess serves 12:40-14:20; the solver picks each year's lunch period inside it.
-    lunch=LunchRule(window_start="12:40", window_end="14:20"),
+    lunch=LunchRule(window_start="12:40", window_end="15:10"),
 )
 
 DEPARTMENTS = [

@@ -194,33 +194,43 @@ def validate(
             if shared:
                 bad("student_clash", f"Students of {_group_label(college, shared)} have two classes on {when}.", a, b)
 
-    # Flexible lunch: each year in a shift with a mess window gets exactly one
-    # lunch period inside the window, and none of its students have class then.
-    for sh in college.shifts:
-        if sh.lunch is None:
+    # Flexible lunch: every section has at least one free period inside its mess window on every
+    # day it has classes, and a lunch the timetable names for a section/day is in the window and free.
+    by_section_day: dict[tuple[str, str], list[tuple[int, int]]] = defaultdict(list)
+    for s in sessions:
+        if s.id not in interval:
+            continue
+        mine = set(groups_of.get(s.id, []))
+        for x in college.sections:
+            if mine & set(_groups(x)):
+                by_section_day[(x.id, s.day)].append(interval[s.id])
+    named = {(ln.section_id, ln.day): ln for ln in lunches if ln.section_id}
+    for x in college.sections:
+        sh = next((h for h in college.shifts if h.id == x.shift_id), None)
+        if sh is None or sh.lunch is None:
             continue
         lo, hi = _m(sh.lunch.window_start), _m(sh.lunch.window_end)
-        for year in sorted({x.year for x in college.sections if x.shift_id == sh.id}):
-            mine = [ln for ln in lunches if ln.shift_id == sh.id and ln.year == year]
-            if len(mine) != 1:
-                out.append(Violation(type="lunch_missing",
-                                     message=f"Year {year} ({sh.name}) needs exactly one lunch period; found {len(mine)}."))
+        blocked = [b for b in sh.year_breaks if x.year in b.years]
+        window = [p for p in sh.periods if lo <= _m(p.start) and _m(p.end) <= hi
+                  and not any(_m(p.start) < _m(b.end) and _m(b.start) < _m(p.end) for b in blocked)]
+        for day in college.days:
+            busy = by_section_day.get((x.id, day), [])
+            if not busy:
+                continue  # no classes that day: nothing to keep free
+            free = [p for p in window if not any(a < _m(p.end) and _m(p.start) < z for a, z in busy)]
+            if not free:
+                out.append(Violation(type="lunch_missing", message=(
+                    f"{x.name} has no free period for lunch on {day} "
+                    f"(mess window {sh.lunch.window_start}-{sh.lunch.window_end}).")))
+            ln = named.get((x.id, day))
+            if ln is None:
                 continue
-            ln = mine[0]
-            if not 0 <= ln.period < len(sh.periods):
-                out.append(Violation(type="lunch_outside_window", message=f"Year {year} lunch period doesn't exist."))
-                continue
-            p = sh.periods[ln.period]
-            if not (lo <= _m(p.start) and _m(p.end) <= hi):
+            if not (lo <= _m(ln.start) and _m(ln.end) <= hi):
                 out.append(Violation(type="lunch_outside_window",
-                                     message=f"Year {year} lunch {p.start}-{p.end} is outside the mess window."))
-            year_groups = {g for x in college.sections if x.shift_id == sh.id and x.year == year for g in _groups(x)}
-            for s in sessions:
-                if s.id not in interval or not set(groups_of.get(s.id, [])) & year_groups:
-                    continue
-                b0, b1 = interval[s.id]
-                if b0 < _m(p.end) and _m(p.start) < b1:
-                    bad("class_during_lunch", f"{subjects[s.subject_id].name} on {s.day} is during year {year} lunch.", s)
+                                     message=f"{x.name}'s lunch on {day} ({ln.start}-{ln.end}) is outside the mess window."))
+            elif any(a < _m(ln.end) and _m(ln.start) < z for a, z in busy):
+                out.append(Violation(type="class_during_lunch",
+                                     message=f"{x.name} has a class during its lunch on {day} ({ln.start}-{ln.end})."))
 
     # Must rules (rule cards set by the Admin / Coordinators).
     for rule in college.rules:
