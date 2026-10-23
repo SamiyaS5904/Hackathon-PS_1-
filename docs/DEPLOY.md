@@ -40,7 +40,10 @@ After this, every push to `main` on GitHub redeploys automatically.
    - **Variables**: `ANTHROPIC_API_KEY` = your Claude key, `BACKEND_URL` = the backend domain from 3,
      `CORS_ORIGINS` = same as the backend.
 6. Both deploy by themselves (start commands and health checks come from `railway.toml` in each
-   folder). Check in the browser:
+   folder). If a deploy log says it doesn't know how to start the app, set it by hand in
+   *Settings → Deploy → Custom Start Command*:
+   `uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1`
+   (or *Settings → Config-as-code* → `backend/railway.toml` / `chatbot/railway.toml`). Then check in the browser:
    - `<backend domain>/api/health` → `{"ok":true}` (the first start also loads the demo college: ~30 s)
    - `<assistant domain>/health` → `"assistant_configured":true`
 
