@@ -179,8 +179,9 @@ def parse(college: College, dept: str, content: bytes) -> ImportResult:
         errors.append(RowError(sheet=sheet, row=row, message=msg))
 
     try:
-        wb = load_workbook(io.BytesIO(content), data_only=True, read_only=True)
-    except Exception:  # not an Excel file
+        # Not read_only: a damaged file then fails here (plain message), not half-way through the rows (500).
+        wb = load_workbook(io.BytesIO(content), data_only=True)
+    except Exception:  # not an Excel file, or a damaged one
         return ImportResult(errors=[RowError(sheet="", row=0, message="This isn't an Excel (.xlsx) file.")], counts={})
 
     old = dept_slice(college, dept)

@@ -95,12 +95,15 @@ def template() -> bytes:
 
 def parse(content: bytes) -> tuple[list[YearRow], list[RowError], list[str]]:
     try:
-        wb = load_workbook(io.BytesIO(content), read_only=True, data_only=True)
+        # Not read_only: a damaged file then fails here, inside the try, instead of half-way through the rows.
+        wb = load_workbook(io.BytesIO(content), data_only=True)
+        ws = wb["Students"] if "Students" in wb.sheetnames else wb.worksheets[0]
+        all_rows = list(ws.iter_rows(values_only=True))
     except Exception:  # noqa: BLE001 - any unreadable file gets the same plain answer
-        return [], [RowError(sheet="", row=0, message="This file isn't an Excel workbook (.xlsx).")], []
-    ws = wb["Students"] if "Students" in wb.sheetnames else wb.worksheets[0]
+        return [], [RowError(sheet="", row=0, message="This file isn't a readable Excel workbook (.xlsx). "
+                                                      "Save it again from Excel and upload it.")], []
     sheet = ws.title
-    rows_iter = ws.iter_rows(values_only=True)
+    rows_iter = iter(all_rows)
     header = [str(c or "").replace("*", "").strip() for c in next(rows_iter, [])]
     missing = [c for c in REQUIRED if c.lower() not in {h.lower() for h in header}]
     if missing:

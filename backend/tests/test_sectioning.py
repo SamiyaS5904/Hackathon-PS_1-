@@ -53,7 +53,10 @@ def test_row_errors_name_the_row():
     assert "also on row 3" in msgs[5] and "valid email" in msgs[6] and "all needed" in msgs[7]
     _, errors, _ = sectioning.parse(_sheet(_year(2), header=("Roll", "Name", "Email", "Hostel")))
     assert "Missing column" in errors[0].message
-    assert "isn't an Excel" in sectioning.parse(b"hello")[1][0].message
+    assert "isn't a readable Excel" in sectioning.parse(b"hello")[1][0].message
+    good = _sheet(_year(50))
+    damaged = good[:len(good) // 2] + bytes([good[len(good) // 2] ^ 0xFF]) + good[len(good) // 2 + 1:]
+    assert "isn't a readable Excel" in sectioning.parse(damaged)[1][0].message  # never a server error
 
 
 def test_resectioning_keeps_section_and_student_ids():

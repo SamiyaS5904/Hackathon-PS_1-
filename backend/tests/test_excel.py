@@ -61,6 +61,11 @@ def test_row_errors_name_the_sheet_and_row():
 def test_not_an_excel_file():
     r = parse(build_demo_college(), "cse", b"hello")
     assert r.errors and "isn't an Excel" in r.errors[0].message
+    good = template(build_demo_college(), "cse")
+    mid = len(good) // 2
+    damaged = good[:mid] + bytes([good[mid] ^ 0xFF]) + good[mid + 1:]
+    r = parse(build_demo_college(), "cse", damaged)  # a damaged file is a plain error, never a server error
+    assert r.errors and "isn't an Excel" in r.errors[0].message
 
 
 def test_api_template_preview_and_commit():
