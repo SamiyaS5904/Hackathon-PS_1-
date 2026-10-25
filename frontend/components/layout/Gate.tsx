@@ -37,7 +37,12 @@ export function Gate({ children }: { children: React.ReactNode }) {
         </AuthLayout>
       );
     }
-    return <PlatformShell>{children}</PlatformShell>;
+    return (
+      <ChatPageProvider>
+        <PlatformShell>{children}</PlatformShell>
+        <ChatPanel />
+      </ChatPageProvider>
+    );
   }
   if (!ready || !user || toPlatform) {
     return (

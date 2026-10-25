@@ -8,6 +8,7 @@ before/after, or a prepared one-day change) that the user applies in the app.
 from __future__ import annotations
 
 import json
+import time
 from dataclasses import dataclass, field
 from datetime import date, timedelta
 from typing import Any
@@ -112,6 +113,25 @@ class MakeupIn(BaseModel):
 
 class SectionNameIn(BaseModel):
     section: str
+
+
+class FindCollegesIn(BaseModel):
+    stage: str | None = None
+    plan: str | None = None
+    status: str | None = None
+    needs_attention: bool | None = None
+    text: str | None = None
+
+
+class CollegeIn(BaseModel):
+    college: str
+
+
+class CollegeChangeIn(BaseModel):
+    college: str
+    plan: str | None = None
+    status: str | None = None
+    note: str | None = None
 
 
 class DoubtSlotsIn(BaseModel):
@@ -246,6 +266,27 @@ TOOLS: dict[str, tuple[dict, type[BaseModel], tuple[str, ...]]] = {
          "start_time": {**TIME, "description": "For move: new start time (must be a free time)."},
          "reason": {"type": "string", "description": "Short reason shown to students."}},
         ["session_id", "date", "kind"]), OneDayIn, ("teacher", "coordinator", "admin")),
+    "platform_overview": (_tool(
+        "platform_overview",
+        "Platform totals (colleges, live, students, accounts, classes, attendance, bookings, plans) and the colleges "
+        "that need attention with the reasons.", {}, []), NoInput, ("platform",)),
+    "find_colleges": (_tool(
+        "find_colleges",
+        "List colleges, optionally filtered: stage (Setting up, Collecting data, Ready to generate, Draft, Live, Out of "
+        "date), plan (trial, pro, campus), status (active, read_only, paused), needs_attention, or text in the name.",
+        {"stage": {"type": "string"}, "plan": {"type": "string"}, "status": {"type": "string"},
+         "needs_attention": {"type": "boolean"}, "text": {"type": "string"}}, []), FindCollegesIn, ("platform",)),
+    "college_details": (_tool(
+        "college_details",
+        "Everything the platform knows about one college: size, setup progress, timetable, adoption, health notes.",
+        {"college": {"type": "string", "description": "College name or id."}}, ["college"]), CollegeIn, ("platform",)),
+    "prepare_college_change": (_tool(
+        "prepare_college_change",
+        "Prepare a change to a college's plan (trial, pro, campus), status (active, read_only, paused) or private "
+        "note. The platform owner sees a card and applies it. Never changes the college's own data.",
+        {"college": {"type": "string"}, "plan": {"type": "string", "enum": ["trial", "pro", "campus"]},
+         "status": {"type": "string", "enum": ["active", "read_only", "paused"]}, "note": {"type": "string"}},
+        ["college"]), CollegeChangeIn, ("platform",)),
     "my_bookings": (_tool(
         "my_bookings",
         "The user's upcoming bookings: doubt slots (students: theirs; teachers: with them) and meetings (teachers: "
@@ -460,7 +501,66 @@ async def run_tool(ctx: ToolContext, name: str, raw: Any) -> str:
     return json.dumps(result, ensure_ascii=False)
 
 
+def _ago(t: float) -> str:
+    days = int((time.time() - t) // 86400)
+    return "today" if days <= 0 else "yesterday" if days == 1 else f"{days} days ago"
+
+
+def _college_line(x: dict) -> str:
+    return (f"{x['name']} ({x['id']}{', demo' if x['is_demo'] else ''}): {x['stage']}, plan {x['plan']}, "
+            f"{x['status'].replace('_', '-')}, {x['students']} students, {x['accounts']} accounts, "
+            f"last activity {_ago(x['last_activity'])}" + (f". Notes: {' '.join(x['flags'])}" if x["flags"] else ""))
+
+
+async def _run_platform(ctx: ToolContext, name: str, a: Any) -> Any:
+    data = await ctx.backend.platform_overview()
+    items = data["items"]
+    if name == "platform_overview":
+        stages: dict[str, int] = {}
+        for x in items:
+            stages[x["stage"]] = stages.get(x["stage"], 0) + 1
+        return {"colleges": data["colleges"], "live": data["live"], "stages": stages, "plans": data["plans"],
+                "students": data["students"], "accounts": data["accounts"], "classes_scheduled": data["classes"],
+                "attendance_sheets": data["attendance_marked"], "upcoming_bookings": data["bookings"],
+                "needs_attention": [_college_line(x) for x in items if x["needs_attention"]][:15]}
+    if name == "find_colleges":
+        def keep(x: dict) -> bool:
+            return ((not a.stage or x["stage"].lower() == a.stage.lower())
+                    and (not a.plan or x["plan"] == a.plan.lower())
+                    and (not a.status or x["status"] == a.status.lower().replace("-", "_"))
+                    and (a.needs_attention is None or x["needs_attention"] == a.needs_attention)
+                    and (not a.text or a.text.lower() in f"{x['name']} {x['id']}".lower()))
+        found = [x for x in items if keep(x)]
+        return {"count": len(found), "colleges": [_college_line(x) for x in found[:30]]}
+    x = _find(items, a.college, ("name", "id"))
+    if name == "college_details":
+        return {k: x[k] for k in ("name", "id", "is_demo", "stage", "plan", "status", "note", "departments",
+                                  "departments_ready", "sections", "teachers", "students", "accounts", "classes",
+                                  "attendance_marked", "bookings", "flags")} | {
+            "joined": _ago(x["created_at"]), "last_activity": _ago(x["last_activity"]),
+            "published": _ago(x["published_at"]) if x["published_at"] else "never"}
+    if name == "prepare_college_change":
+        if a.plan is None and a.status is None and a.note is None:
+            raise ToolError("Say what to change: plan, status or note.")
+        if a.status and a.status != "active" and x["is_demo"]:
+            raise ToolError("The demo college stays open for everyone.")
+        parts = ([f"plan {x['plan']} -> {a.plan}"] if a.plan and a.plan != x["plan"] else []) + (
+            [f"status {x['status'].replace('_', '-')} -> {a.status.replace('_', '-')}"]
+            if a.status and a.status != x["status"] else []) + (["update the private note"] if a.note is not None else [])
+        if not parts:
+            raise ToolError(f"{x['name']} already has that plan and status.")
+        change = {"org": x["id"], "name": x["name"], "plan": a.plan, "status": a.status, "note": a.note,
+                  "summary": f"{x['name']}: {', '.join(parts)}"}
+        ctx.cards.append({"type": "platform", "change": change})
+        return {"prepared": True, "summary": change["summary"],
+                "note": "A card with Apply is shown to the platform owner. Nothing changed yet."
+                        + (" Pausing stops every member from opening the college." if a.status == "paused" else "")}
+    raise ToolError(f"Unknown tool {name}.")
+
+
 async def _run(ctx: ToolContext, name: str, a: Any) -> Any:
+    if ctx.role == "platform":
+        return await _run_platform(ctx, name, a)
     c = await ctx.college()
 
     if name == "my_schedule":

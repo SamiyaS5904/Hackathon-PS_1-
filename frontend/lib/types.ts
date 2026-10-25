@@ -189,7 +189,8 @@ export interface BookingAction {
 export type ChatCard =
   | { type: "proposal"; proposal: Proposal }
   | { type: "one_day"; action: OneDayAction }
-  | { type: "booking"; booking: BookingAction };
+  | { type: "booking"; booking: BookingAction }
+  | { type: "platform"; change: { org: string; name: string; plan: string | null; status: string | null; note: string | null; summary: string } };
 export type ChatEvent =
   | { type: "start"; conversation_id: string }
   | { type: "token"; text: string }

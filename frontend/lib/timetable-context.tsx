@@ -108,4 +108,9 @@ export function useTimetable(): State {
   return v;
 }
 
+/** The timetable context, or null outside a college (the platform owner's pages). */
+export function useTimetableOptional(): State | null {
+  return useContext(Ctx);
+}
+
 export const isGenerating = (job: Job | null) => job?.status === "running";

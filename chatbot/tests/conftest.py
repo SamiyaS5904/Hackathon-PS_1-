@@ -113,6 +113,18 @@ class FakeBackend:
                  "low": True},
                 {"student_id": "st2", "roll_no": "02", "name": "Diya", "held": 4, "attended": 4, "percent": 100.0,
                  "low": False}]})
+        if path == "/api/platform/overview":
+            item = {"id": "new-college", "name": "New College", "is_demo": False, "created_at": 0, "plan": "trial",
+                    "status": "active", "note": "", "stage": "Setting up", "departments": 0, "departments_ready": 0,
+                    "sections": 0, "teachers": 0, "students": 0, "accounts": 1, "classes": 0, "published_at": None,
+                    "attendance_marked": 0, "bookings": 0, "last_activity": 0,
+                    "flags": ["Signed up 5 days ago but hasn't started the setup."], "needs_attention": True}
+            demo = item | {"id": "demo", "name": "Demo Institute", "is_demo": True, "stage": "Live", "students": 720,
+                           "flags": [], "needs_attention": False}
+            return httpx.Response(200, json={"colleges": 2, "live": 1, "needs_attention": 1, "students": 720,
+                                             "teachers": 40, "sections": 12, "classes": 238, "accounts": 800,
+                                             "attendance_marked": 3, "bookings": 1, "plans": {"trial": 2},
+                                             "items": [item, demo]})
         if path.endswith("/bookings/doubt-slots"):
             return httpx.Response(200, json=[{"date": "2026-10-20", "label": "Tue 20 Oct", "start": "11:00", "end": "12:00",
                                               "teacher_id": "t1", "teacher_name": "Dr. Anita Sharma",
@@ -150,3 +162,4 @@ def backend(fake):
 STUDENT = {"role": "student", "name": "Aarav", "section_id": "s1", "batch_id": "b1", "teacher_id": None}
 TEACHER = {"role": "teacher", "name": "Dr. Anita Sharma", "teacher_id": "t1", "department_id": "cse"}
 ADMIN = {"role": "admin", "name": "Principal", "teacher_id": None}
+PLATFORM = {"role": "platform", "name": "Platform owner", "teacher_id": None}

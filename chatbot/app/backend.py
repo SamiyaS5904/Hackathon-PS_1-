@@ -92,6 +92,9 @@ class Backend:
     async def insights(self) -> list:
         return await self._call("GET", self._o("/insights"))
 
+    async def platform_overview(self) -> dict:
+        return await self._call("GET", "/api/platform/overview")
+
     async def my_bookings(self) -> list:
         return await self._call("GET", self._o("/bookings"))
 

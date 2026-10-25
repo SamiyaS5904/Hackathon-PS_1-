@@ -148,3 +148,25 @@ def test_meeting_is_prepared_only_at_a_common_free_time(backend, fake):
         run(run_tool(ctx, "prepare_meeting", {"teachers": ["Anita"], "date": "2026-10-20", "start_time": "09:00"}))
     mine = json.loads(run(run_tool(ctx, "my_bookings", {})))
     assert "Doubt slot: Limits" in mine["bookings"][0]
+
+
+def test_platform_assistant_sees_colleges_and_only_prepares_changes(backend, fake):
+    from tests.conftest import PLATFORM
+
+    assert names("platform") == {"platform_overview", "find_colleges", "college_details", "prepare_college_change"}
+    assert not names("admin") & names("platform")
+    ctx = ToolContext(backend=backend, member=PLATFORM, today="2026-10-19", now="09:00")
+    over = json.loads(run(run_tool(ctx, "platform_overview", {})))
+    assert over["colleges"] == 2 and "New College" in over["needs_attention"][0]
+    stuck = json.loads(run(run_tool(ctx, "find_colleges", {"stage": "setting up"})))
+    assert stuck["count"] == 1
+    out = json.loads(run(run_tool(ctx, "prepare_college_change", {"college": "New College", "plan": "pro"})))
+    assert out["prepared"] and ctx.cards[0] == {"type": "platform", "change": {
+        "org": "new-college", "name": "New College", "plan": "pro", "status": None, "note": None,
+        "summary": "New College: plan trial -> pro"}}
+    with pytest.raises(ToolError, match="demo college"):
+        run(run_tool(ctx, "prepare_college_change", {"college": "Demo Institute", "status": "paused"}))
+    assert all(m == "GET" for m, _, _ in fake.calls)  # the assistant never writes
+    with pytest.raises(ToolError):  # a college admin can't use platform tools
+        run(run_tool(ToolContext(backend=backend, member=ADMIN, today="2026-10-19", now="09:00"),
+                     "platform_overview", {}))

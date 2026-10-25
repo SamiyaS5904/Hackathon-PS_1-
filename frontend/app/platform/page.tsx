@@ -33,6 +33,9 @@ export default function PlatformPage() {
   }, []);
   useEffect(() => {
     load();
+    // The assistant can change a plan or status (the owner applies its card): show it right away.
+    window.addEventListener("platform:changed", load);
+    return () => window.removeEventListener("platform:changed", load);
   }, [load]);
 
   const items = useMemo(() => (data?.items ?? []).filter((c) =>

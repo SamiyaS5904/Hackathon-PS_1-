@@ -18,9 +18,10 @@ export async function streamChat(
   conversationId: string | null,
   page: PageInfo,
   onEvent: (e: ChatEvent) => void,
-  opts: { signal?: AbortSignal; voice?: boolean } = {},
+  opts: { signal?: AbortSignal; voice?: boolean; org?: string } = {},
 ): Promise<void> {
-  const { token, org } = getSession();
+  const { token, org: current } = getSession();
+  const org = opts.org ?? current;
   const now = new Date();
   let res: Response;
   try {

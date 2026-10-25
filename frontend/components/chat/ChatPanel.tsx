@@ -9,8 +9,8 @@ import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
 import { createRecognition, speak, stopSpeaking, streamChat, voiceErrorText } from "@/lib/chat";
 import { useChatPage } from "@/lib/chat-context";
-import { useTimetable } from "@/lib/timetable-context";
-import type { ChatCard, ChatEvent, Insight, Role } from "@/lib/types";
+import { useTimetableOptional } from "@/lib/timetable-context";
+import type { ChatCard, ChatEvent, Insight, Role, TimetableOut } from "@/lib/types";
 
 interface Msg {
   role: "user" | "assistant";
@@ -20,7 +20,9 @@ interface Msg {
   error?: string;
 }
 
-const SUGGESTIONS: Record<Role, string[]> = {
+const SUGGESTIONS: Record<Role | "platform", string[]> = {
+  platform: ["Which colleges need attention, and why?", "Who is stuck in onboarding?",
+    "How many colleges are live, and on which plans?", "Which colleges had no activity this week?"],
   student: ["What do I have tomorrow?", "What's my attendance, and can I miss a class?",
     "Book a doubt slot with my maths teacher this week", "Which rooms are free right now?"],
   teacher: ["What do I teach tomorrow?", "Which classes haven't I marked attendance for?",
@@ -53,7 +55,10 @@ function Rich({ text }: { text: string }) {
 export function ChatPanel() {
   const path = usePathname();
   const { role, user } = useAuth();
-  const { setData } = useTimetable();
+  const setData = useTimetableOptional()?.setData;
+  // The platform owner's assistant (on the platform page, outside any college).
+  const platform = !role && !!user?.platform_owner;
+  const who = platform ? "platform" : role;
   const { page, open, setOpen, pending, clearPending } = useChatPage();
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
@@ -132,11 +137,11 @@ export function ChatPanel() {
         });
       else if (e.type === "card") update((m) => ({ ...m, cards: [...m.cards, e.card] }));
       else if (e.type === "error") update((m) => ({ ...m, error: e.message }));
-    }, { voice: spoken });
+    }, { voice: spoken, org: platform ? "platform" : undefined });
     setBusy(false);
     // Spoken question -> spoken answer (the text stays on screen too).
     if (spoken && speakReplies && speak(answer, () => setSpeaking(false))) setSpeaking(true);
-  }, [busy, convId, path, page, speakReplies]);
+  }, [busy, convId, path, page, speakReplies, platform]);
 
   // Questions sent from elsewhere (e.g. an insight's "Ask" button).
   useEffect(() => {
@@ -197,7 +202,7 @@ export function ChatPanel() {
     setConvId(null);
   };
 
-  if (!role) return null;
+  if (!who) return null;
 
   return (
     <>
@@ -216,7 +221,7 @@ export function ChatPanel() {
             <div className="min-w-0 flex-1">
               <p className="text-sm font-semibold">Assistant</p>
               <p className="truncate text-xs text-muted">
-                {page.entity ? `Looking at ${page.entity}` : "Answers from your timetable"} · changes need your Apply
+                {platform ? "Answers from the platform" : page.entity ? `Looking at ${page.entity}` : "Answers from your timetable"} · changes need your Apply
               </p>
             </div>
             {voice && (
@@ -240,7 +245,7 @@ export function ChatPanel() {
             {msgs.length === 0 && (
               <div className="space-y-4">
                 <p className="text-sm text-muted">
-                  Hi {user?.name.split(" ")[0]}. Ask about your timetable in plain words
+                  Hi {user?.name.split(" ")[0]}. {platform ? "Ask about the colleges on the platform" : "Ask about your timetable"} in plain words
                   {voice ? ", or tap the mic and speak" : ""}. English or Hinglish both work: I answer in the language you use.
                 </p>
                 {insights && insights.length > 0 && (
@@ -258,7 +263,7 @@ export function ChatPanel() {
                 )}
                 <div className="space-y-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted">Try asking</p>
-                  {SUGGESTIONS[role].map((s) => (
+                  {SUGGESTIONS[who].map((s) => (
                     <button key={s} onClick={() => send(s)}
                       className="flex w-full items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm hover:bg-surface-2">
                       {s} <ArrowRight size={14} className="shrink-0 text-muted" />
@@ -286,7 +291,7 @@ export function ChatPanel() {
                 {m.text ? <Rich text={m.text} /> : !m.error && busy && i === msgs.length - 1 && m.tools.length === 0 && (
                   <p className="flex items-center gap-2 text-muted"><Loader2 size={14} className="animate-spin" /> Thinking…</p>
                 )}
-                {m.cards.map((c, j) => <CardView key={j} card={c} onApplied={(out) => out && setData(out)} />)}
+                {m.cards.map((c, j) => <CardView key={j} card={c} onApplied={(out) => out && setData?.(out)} />)}
                 {m.error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-danger">{m.error}</p>}
               </div>
             ))}
@@ -320,7 +325,7 @@ export function ChatPanel() {
             <div className="flex items-end gap-2 rounded-xl border border-border-strong bg-surface px-3 py-2 focus-within:border-accent">
               <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} rows={1} maxLength={2000}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
-                placeholder={listening ? "Listening…" : "Ask about your timetable…"} aria-label="Message"
+                placeholder={listening ? "Listening…" : platform ? "Ask about the colleges…" : "Ask about your timetable…"} aria-label="Message"
                 className="max-h-32 min-h-[24px] flex-1 resize-none bg-transparent text-sm outline-none" />
               {voice && (
                 <button type="button" onClick={toggleMic} aria-label={listening ? "Stop listening" : "Speak your question"}
@@ -334,7 +339,7 @@ export function ChatPanel() {
                 {busy ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
               </button>
             </div>
-            <p className="mt-1.5 px-1 text-[11px] text-muted">Answers come from your timetable. Nothing changes until you click Apply.</p>
+            <p className="mt-1.5 px-1 text-[11px] text-muted">Answers come from {platform ? "the platform" : "your timetable"}. Nothing changes until you click Apply.</p>
           </form>
         </aside>
       )}
@@ -342,7 +347,7 @@ export function ChatPanel() {
   );
 }
 
-function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parameters<ReturnType<typeof useTimetable>["setData"]>[0] | null) => void }) {
+function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: TimetableOut | null) => void }) {
   const [state, setState] = useState<"ready" | "busy" | "applied" | "discarded" | "error">("ready");
   const [message, setMessage] = useState("");
 
@@ -352,6 +357,12 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parame
       if (card.type === "proposal") {
         onApplied(await api.apply(card.proposal.id));
         setMessage("Applied. The timetable is updated and the change is in Activity (undo is there too).");
+      } else if (card.type === "platform") {
+        const c = card.change;
+        await api.updateCollege(c.org, { ...(c.plan ? { plan: c.plan } : {}), ...(c.status ? { status: c.status } : {}),
+          ...(c.note !== null ? { note: c.note } : {}) });
+        window.dispatchEvent(new Event("platform:changed"));
+        setMessage(`Saved: ${c.summary}.`);
       } else if (card.type === "booking") {
         const b = card.booking;
         const out = b.kind === "doubt"
@@ -376,7 +387,8 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parame
     if (card.type === "proposal") api.discard(card.proposal.id);
     setState("discarded");
   };
-  const heading = card.type === "proposal" ? "Permanent change · checked for clashes"
+  const heading = card.type === "platform" ? `College settings · ${state === "applied" ? "saved" : "not saved yet"}`
+    : card.type === "proposal" ? "Permanent change · checked for clashes"
     : card.type === "booking"
       ? `${card.booking.kind === "doubt" ? "Doubt slot" : "Meeting"} · ${state === "applied" ? "booked" : "not booked yet"}`
       : "One-day change";
@@ -398,7 +410,8 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parame
           ))}
         </ul>
       ) : (
-        <p className="mt-1 text-sm">{card.type === "booking" ? card.booking.summary : card.action.summary}</p>
+        <p className="mt-1 text-sm">{card.type === "booking" ? card.booking.summary
+          : card.type === "platform" ? card.change.summary : card.action.summary}</p>
       )}
       {state === "applied" || state === "error" ? (
         <p className={clsx("mt-2 text-xs", state === "applied" ? "text-ok" : "text-danger")}>{message}</p>

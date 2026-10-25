@@ -46,6 +46,9 @@ app = FastAPI(title="Timetabl.ai assistant", version="0.6.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"])
 
 
+PLATFORM = "platform"  # org value the platform page sends
+
+
 class PageContext(BaseModel):
     path: str = ""
     view: str | None = None  # section | teacher | venue
@@ -101,7 +104,10 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
     except BackendError as exc:
         await backend.close()
         raise HTTPException(401 if exc.status == 401 else 502, exc.message) from exc
-    member = next((m for m in me["memberships"] if m["org_id"] == req.org), None)
+    if req.org == PLATFORM:  # the platform owner's assistant: every college, never college data
+        member = {"role": "platform", "name": me["name"], "teacher_id": None} if me.get("platform_owner") else None
+    else:
+        member = next((m for m in me["memberships"] if m["org_id"] == req.org), None)
     if member is None:
         await backend.close()
         raise HTTPException(404, "College not found.")
@@ -125,8 +131,8 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
                                                         "chatbot/.env and restart the assistant service."})
                 yield _sse({"type": "done"})
                 return
-            college = await ctx.college()
-            async for ev in run_turn(get_client(), conv, ctx, college["name"], req.message.strip(),
+            name = "the Timetabl.ai platform" if req.org == PLATFORM else (await ctx.college())["name"]
+            async for ev in run_turn(get_client(), conv, ctx, name, req.message.strip(),
                                      _context_line(req, today, now)):
                 yield _sse(ev)
         except BackendError as exc:
