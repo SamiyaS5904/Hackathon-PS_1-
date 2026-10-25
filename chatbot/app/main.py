@@ -18,6 +18,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from app import language
 from app.agent import Conversation, run_turn
 from app.backend import Backend, BackendError
 from app.config import CORS_ORIGINS, MAX_HISTORY_MESSAGES, has_api_key
@@ -59,6 +60,7 @@ class ChatRequest(BaseModel):
     page: PageContext = PageContext()
     today: str | None = None  # the user's local date (YYYY-MM-DD) and time (HH:MM)
     now: str | None = None
+    voice: bool = False  # the message was spoken (speech-to-text) and the reply may be read aloud
 
 
 @app.get("/health")
@@ -74,7 +76,10 @@ def _context_line(req: ChatRequest, today: str, now: str) -> str:
     on_screen = ""
     if req.page.entity:
         on_screen = f" On screen: {req.page.view or ''} {req.page.entity} ({req.page.mode or 'plan'} view)."
-    return f"Context: today is {d.strftime('%a %Y-%m-%d')}, time {now}. This week: {week}. Next week: {nxt}.{on_screen}"
+    spoken = (" Spoken message (speech-to-text): words may be misheard, so match names, sections and subjects to the "
+              "closest real ones; the reply is read aloud, so keep it short and avoid long lists.") if req.voice else ""
+    return (f"Context: today is {d.strftime('%a %Y-%m-%d')}, time {now}. This week: {week}. Next week: {nxt}."
+            f"{on_screen}{spoken} {language.instruction(language.detect(req.message))}.")
 
 
 def _sse(event: dict) -> str:
