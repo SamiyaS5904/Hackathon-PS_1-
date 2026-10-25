@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, ChangeRequest, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, OfficeHour, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -90,6 +90,22 @@ export const api = {
   withdrawRequest: (id: string) =>
     request<ChangeRequest>(`${org()}/change-requests/${id}/withdraw`, { method: "POST" }),
   notifications: () => request<Feed>(`${org()}/notifications`),
+  // Teacher booking
+  myBookings: (includePast = false) => request<Booking[]>(`${org()}/bookings?include_past=${includePast}`),
+  cancelBooking: (id: string) => request<Booking[]>(`${org()}/bookings/${id}/cancel`, { method: "POST" }),
+  officeHours: () => request<OfficeHour[]>(`${org()}/bookings/office-hours`),
+  addOfficeHour: (body: { day: string; start: string; end: string; seats: number; place: string }) =>
+    request<OfficeHour[]>(`${org()}/bookings/office-hours`, post(body)),
+  removeOfficeHour: (id: string) => request<OfficeHour[]>(`${org()}/bookings/office-hours/${id}`, { method: "DELETE" }),
+  bookingTeachers: () => request<TeacherHours[]>(`${org()}/bookings/teachers`),
+  doubtSlots: (teacherId?: string) =>
+    request<BookingSlot[]>(`${org()}/bookings/doubt-slots${teacherId ? `?teacher_id=${teacherId}` : ""}`),
+  bookDoubt: (body: { office_hour_id: string; date: string; topic: string }) =>
+    request<BookResult>(`${org()}/bookings/doubt`, post(body)),
+  meetingTimes: (body: { teacher_ids: string[]; days: number; periods: number }) =>
+    request<BookingSlot[]>(`${org()}/bookings/meeting-times`, post(body)),
+  bookMeeting: (body: { teacher_ids: string[]; date: string; start: string; end: string; title: string; place: string }) =>
+    request<BookResult>(`${org()}/bookings/meetings`, post(body)),
   seenNotifications: () => request<void>(`${org()}/notifications/seen`, { method: "POST" }),
   publish: () => request<TimetableOut>(`${org()}/timetable/publish`, { method: "POST" }),
   generate: (timeLimit = 45) => request<Job>(`${org()}/timetable/generate`, post({ time_limit: timeLimit })),

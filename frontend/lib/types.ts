@@ -16,7 +16,7 @@ export interface Section {
   id: string; name: string; department_id: string; year: number; strength: number;
   shift_id: string; batches: Batch[];
 }
-export interface Teacher { id: string; name: string; department_id: string; shift_ids: string[]; max_per_day: number }
+export interface Teacher { id: string; name: string; department_id: string; shift_ids: string[]; max_per_day: number; blocked?: TimeBlock[] }
 export interface Subject {
   id: string; code: string; name: string; department_id: string; year: number;
   lectures_per_week: number; labs_per_week: number; lab_tag: string | null;
@@ -189,3 +189,61 @@ export type ChatEvent =
   | { type: "card"; card: ChatCard }
   | { type: "error"; message: string }
   | { type: "done" };
+
+// ---- Teacher booking (office hours, doubt slots, meetings) ----
+
+export interface OfficeHour {
+  id: string;
+  teacher_id: string;
+  day: string;
+  start: string;
+  end: string;
+  seats: number;
+  place: string;
+}
+
+export interface TeacherHours {
+  teacher_id: string;
+  name: string;
+  department: string;
+  teaches_you: boolean;
+  hours: OfficeHour[];
+}
+
+export interface BookingSlot {
+  date: string;
+  label: string;
+  start: string;
+  end: string;
+  teacher_id: string | null;
+  teacher_name: string;
+  office_hour_id: string | null;
+  place: string;
+  seats_left: number | null;
+}
+
+export interface Booking {
+  id: string;
+  kind: "doubt" | "meeting";
+  date: string;
+  label: string;
+  start: string;
+  end: string;
+  teacher_ids: string[];
+  teacher_names: string[];
+  title: string;
+  place: string;
+  student_name: string;
+  section: string;
+  created_by: string;
+  created_by_name: string;
+  status: "booked" | "cancelled";
+  cancelled_by: string;
+  clash: string | null;
+  past: boolean;
+}
+
+export interface BookResult {
+  message: string;
+  booking: Booking;
+}
