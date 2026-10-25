@@ -40,6 +40,7 @@ The assistant answers in your language: English → English, Hinglish (Roman) �
 | Departments ready checklist | **Dashboard** → "Departments ready" |
 | Suggestions ("Prof X has 4 periods on Tue") | **Ask** panel (Ctrl+K), top of the chat |
 | **Generate** the whole college | **Timetable** → *Regenerate* (top right), or Dashboard when there is none (~45 s) |
+| Mid-semester change (new teacher, block time): regenerate moving as few classes as possible | **Timetable** → *Regenerate* → *Keep the current timetable* (summary: "237 stayed, 1 moved") |
 | **Publish** for teachers and students | **Timetable** / Dashboard → *Publish* (appears while a draft waits) |
 | View by section / teacher / room | **Timetable** → *Section · Teacher · Room* + the dropdown |
 | **Drag a class** to a new time (green = free, amber = others move, red = not allowed) → review → Apply | **Timetable** → *Weekly plan* → drag, or click a class then click a slot |
