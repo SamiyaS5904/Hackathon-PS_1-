@@ -225,11 +225,13 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - **Attendance portal** (separate from the timetable): teacher marks a class (everyone present by default, last 7 days editable); student *My attendance* (overall + per subject vs the college rule, "can miss N / attend next M"); Coordinator/Admin per section, below-rule students first; rule set by the Admin
 - **Notifications:** in-app bell, audience-based (changed classes reach the students, teacher and Coordinator involved), only after publishing
 - **Exports:** Excel + PDF per section / teacher / room, one or all
-- **AI assistant** (side panel, Ctrl+K, role-scoped tools with the user's own token): Q&A, free rooms / free times, attendance questions, makeup times, edits as proposals with a diff (person clicks Apply), proactive suggestions after generation, voice input (browser speech)
+- **AI assistant** (side panel, Ctrl+K, role-scoped tools with the user's own token): Q&A, free rooms / free times, attendance questions, makeup times, bookings, edits as proposals with a diff (person clicks Apply), proactive suggestions after generation
+- **Voice + language** (2026-10-25): replies mirror the user's language (English → English, Roman Hinglish → Roman Hinglish, never Devanagari), typed or spoken; mic with live transcript, auto-send after a pause, answers to spoken questions read aloud (toggle + stop), plain messages for a blocked / missing mic
+- **Teacher booking** (2026-10-25): teachers set weekly office hours (seats, place; never on their own classes); students book doubt slots over the next 2 weeks (teacher free that day, seats left, no class for the student, no holiday); Coordinator (own department) / Admin find times when chosen teachers are all free and book meetings; notifications; a class later moved onto a booking is flagged with "Find another time"; the assistant finds slots and prepares bookings as cards
 
 **🔨 Building now (2026-10-25, in this order)**
-1. **Voice + language quality:** the assistant answers in the user's language. **English in → English out. Hindi + English in Roman script (Hinglish) → Hinglish (Roman script) out.** Never switch to Devanagari, never answer English with Hinglish. Same rule for typed and spoken messages. Better voice capture (language setting, live transcript, auto-send, stop)
-2. **Teacher booking:** teachers publish office hours (doubt slots); students book a slot; Coordinators/Admin find a time when chosen teachers are all free and book a meeting; no clash with classes; notifications
+1. ~~Voice + language quality~~ ✅ done
+2. ~~Teacher booking~~ ✅ done
 3. **Auto-sectioning:** upload a whole-year student list → system splits it into sections (and lab batches) by size / room capacity → Coordinator reviews and saves
 4. **Super Admin platform (SaaS):** platform owner sees every college (plan, usage, health, last activity), can suspend / open a college read-only, never edits college data; agentic platform assistant for questions like "which colleges haven't generated yet?"
 5. **Mid-semester regenerate with minimal change** (optional): regenerate keeping as many classes as possible where they are, show the diff

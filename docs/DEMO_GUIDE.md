@@ -53,6 +53,7 @@ The assistant answers in your language: English → English, Hinglish (Roman) �
 | Invite Coordinators and teachers | **People & invites** |
 | Approve teachers' requests to move a class | **Change requests** |
 | Read everything the college has entered | **College data** |
+| Find a time when chosen teachers are all free → book a meeting | **Meetings** |
 
 ### Department Coordinator (CSE)
 
@@ -66,6 +67,7 @@ The assistant answers in your language: English → English, Hinglish (Roman) �
 | Teachers' change requests → *Review and approve* / *Decline* | **Change requests** (dashboard shows a banner when some wait) |
 | Own sections' attendance, below-rule students first | **Attendance** |
 | Department rules | **Rules** |
+| Meeting with own department's teachers at a common free time | **Meetings** |
 
 ### Teacher (sees only their own lectures)
 
@@ -80,6 +82,7 @@ The assistant answers in your language: English → English, Hinglish (Roman) �
 | Follow my requests (waiting / approved / declined) | **My requests** |
 | Times I can't teach (confirmed instantly if no clash) | **My availability** |
 | Download my timetable | **My timetable** → *Download* |
+| Weekly office hours for doubt slots; see who booked | **Bookings** |
 
 ### Student (sees only their own classes)
 
@@ -91,6 +94,7 @@ The assistant answers in your language: English → English, Hinglish (Roman) �
 | Download / print my timetable | **My timetable** → *Download* / *Print* |
 | "When am I free next week?", "What's my attendance?", "Which room is free?" | **Ask** (Ctrl+K) |
 | Changes to my classes | the **bell** |
+| Book a doubt slot with a teacher (only times when I have no class) | **Bookings**, or Ask: "Anita ma'am ke saath doubt slot book karna hai" |
 
 ## 4. A 6-minute demo script (for the video)
 
