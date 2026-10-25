@@ -156,7 +156,7 @@ export function AutoSectionCard({ dept, onSaved }: { dept: string; onSaved: () =
                   <tbody>
                     {plan.sections.map((s) => (
                       <tr key={s.name} className="border-t border-border">
-                        <td className="px-4 py-2 font-medium">{s.name}</td>
+                        <td className="whitespace-nowrap px-4 py-2 font-medium">{s.name}</td>
                         <td className="px-2 py-2">{s.size}</td>
                         <td className="px-2 py-2 text-muted">{s.batches.length ? s.batches.map((b, i) => `B${i + 1}: ${b}`).join(" · ") : "—"}</td>
                         <td className="whitespace-nowrap px-2 py-2 text-muted">{s.first_roll} – {s.last_roll}</td>

@@ -63,6 +63,7 @@ The assistant answers in your language: English → English, Hinglish (Roman) �
 | Excel: download the sheet (already filled), fill it, upload it → row-level errors | **My department** → *Download sheet* / *Upload filled sheet* |
 | Teacher allotment suggestions with reasons → approve | **My department** → *Suggest for empty* / *Re-suggest all* |
 | Mark the department Ready for the Admin | **My department** → *Mark department Ready* |
+| One list of every student in a year → sections + lab batches automatically (by roll number or mixed by hostel, etc.) | **My department** → *Make sections from a whole-year list* |
 | Move or change own department's classes | **Timetable** (same as Admin, own department only) |
 | Teachers' change requests → *Review and approve* / *Decline* | **Change requests** (dashboard shows a banner when some wait) |
 | Own sections' attendance, below-rule students first | **Attendance** |

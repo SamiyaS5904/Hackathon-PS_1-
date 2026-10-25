@@ -180,7 +180,8 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - ✅ **Elective slots** across departments: CSE students in a group taught by an ME teacher in an ME room; all groups of a slot at the same time; home sections blocked; room fits members, not sections.
 - ✅ **Pooled groups**: a few students from several departments taught together in another department (same mechanism).
 - ✅ Student-level lists: every student of a participating section must be in exactly one group of each elective slot; missing or double-assigned students → plain-language error naming the roll numbers.
-- 🔜 Auto-sectioning a whole-year list that doesn't divide evenly (V2).
+- ✅ Auto-sectioning a whole-year list that doesn't divide evenly: sizes differ by at most one; batches too.
+- ✅ A damaged Excel file gets a plain message, never a server error.
 
 **Rooms**
 - ✅ **Not enough big-enough room time college-wide** (checked per group size: 120+, 60+, ...) → error before solving.
@@ -227,12 +228,13 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - **Exports:** Excel + PDF per section / teacher / room, one or all
 - **AI assistant** (side panel, Ctrl+K, role-scoped tools with the user's own token): Q&A, free rooms / free times, attendance questions, makeup times, bookings, edits as proposals with a diff (person clicks Apply), proactive suggestions after generation
 - **Voice + language** (2026-10-25): replies mirror the user's language (English → English, Roman Hinglish → Roman Hinglish, never Devanagari), typed or spoken; mic with live transcript, auto-send after a pause, answers to spoken questions read aloud (toggle + stop), plain messages for a blocked / missing mic
+- **Auto-sectioning** (2026-10-25): upload a whole-year list (roll no, name, email + any columns) → balanced sections (by roll number, or mixed evenly by a column such as Hostel) + lab batches, room / lab size warnings, preview, save; re-sectioning keeps section ids by name and student ids by roll / email, and never drops a section that still has classes
 - **Teacher booking** (2026-10-25): teachers set weekly office hours (seats, place; never on their own classes); students book doubt slots over the next 2 weeks (teacher free that day, seats left, no class for the student, no holiday); Coordinator (own department) / Admin find times when chosen teachers are all free and book meetings; notifications; a class later moved onto a booking is flagged with "Find another time"; the assistant finds slots and prepares bookings as cards
 
 **🔨 Building now (2026-10-25, in this order)**
 1. ~~Voice + language quality~~ ✅ done
 2. ~~Teacher booking~~ ✅ done
-3. **Auto-sectioning:** upload a whole-year student list → system splits it into sections (and lab batches) by size / room capacity → Coordinator reviews and saves
+3. ~~Auto-sectioning~~ ✅ done
 4. **Super Admin platform (SaaS):** platform owner sees every college (plan, usage, health, last activity), can suspend / open a college read-only, never edits college data; agentic platform assistant for questions like "which colleges haven't generated yet?"
 5. **Mid-semester regenerate with minimal change** (optional): regenerate keeping as many classes as possible where they are, show the diff
 
