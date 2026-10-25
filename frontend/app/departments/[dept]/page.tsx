@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { AlertTriangle, CheckCircle2, Download, FileSpreadsheet, Loader2, Sparkles, Upload } from "lucide-react";
 import { useParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AutoSectionCard } from "@/components/departments/AutoSectionCard";
 import { Badge, Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -64,6 +65,7 @@ export default function DepartmentPage() {
             </div>
           )}
           <ExcelCard dept={dept} onSaved={refresh} />
+          <AutoSectionCard dept={dept} onSaved={refresh} />
           <ClassesCard dept={dept} data={data} onSaved={refresh} />
           {problems.length > 0 && (
             <Card className="p-5">

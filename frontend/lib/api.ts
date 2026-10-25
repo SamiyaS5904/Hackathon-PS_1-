@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, OfficeHour, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, OfficeHour, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -156,6 +156,36 @@ export const api = {
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : "Upload failed");
     return body as ImportOut;
+  },
+  autoSections: async (dept: string, file: File, o: SectioningOptions, commit: boolean) => {
+    const form = new FormData();
+    form.append("file", file);
+    const q = new URLSearchParams({ year: String(o.year), max_size: String(o.max_size), batches: String(o.batches),
+      commit: String(commit), ...(o.shift_id ? { shift_id: o.shift_id } : {}), ...(o.mix_by ? { mix_by: o.mix_by } : {}),
+      ...(o.prefix ? { prefix: o.prefix } : {}) });
+    let res: Response;
+    try {
+      res = await fetch(`${BASE}${org()}/departments/${dept}/auto-sections?${q}`, {
+        method: "POST", body: form, headers: { Authorization: `Bearer ${session.token}` },
+      });
+    } catch {
+      throw new ApiError(0, "Can't reach the server. Is the backend running?");
+    }
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : "Upload failed");
+    return body as SectioningOut;
+  },
+  downloadYearTemplate: async (dept: string) => {
+    const res = await fetch(`${BASE}${org()}/departments/${dept}/year-list-template`, {
+      headers: { Authorization: `Bearer ${session.token}` },
+    });
+    if (!res.ok) throw new ApiError(res.status, "Couldn't download the template");
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `year-list-${dept}.xlsx`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
   downloadTemplate: async (dept: string) => {
     const res = await fetch(`${BASE}${org()}/departments/${dept}/template`, {

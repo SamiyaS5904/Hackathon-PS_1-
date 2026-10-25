@@ -255,3 +255,31 @@ export interface BookResult {
   message: string;
   booking: Booking;
 }
+
+// ---- Auto-sectioning (whole-year list -> sections + lab batches) ----
+
+export interface PlannedSection {
+  name: string;
+  size: number;
+  batches: number[];
+  first_roll: string;
+  last_roll: string;
+  mix: Record<string, number>;
+}
+
+export interface SectioningOut {
+  errors: { sheet: string; row: number; message: string }[];
+  columns: string[];
+  plan: { year: number; shift_id: string; students: number; sections: PlannedSection[]; warnings: string[]; replaces: string[] } | null;
+  problems: string[];
+  saved: boolean;
+}
+
+export interface SectioningOptions {
+  year: number;
+  max_size: number;
+  batches: number;
+  shift_id?: string;
+  mix_by?: string;
+  prefix?: string;
+}
