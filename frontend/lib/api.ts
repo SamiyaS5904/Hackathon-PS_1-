@@ -112,7 +112,8 @@ export const api = {
     request<BookResult>(`${org()}/bookings/meetings`, post(body)),
   seenNotifications: () => request<void>(`${org()}/notifications/seen`, { method: "POST" }),
   publish: () => request<TimetableOut>(`${org()}/timetable/publish`, { method: "POST" }),
-  generate: (timeLimit = 45) => request<Job>(`${org()}/timetable/generate`, post({ time_limit: timeLimit })),
+  generate: (timeLimit = 45, keepCurrent = false) =>
+    request<Job>(`${org()}/timetable/generate`, post({ time_limit: timeLimit, keep_current: keepCurrent })),
   job: (id: string) => request<Job>(`${org()}/jobs/${id}`),
   moveOptions: (sessionId: string) => request<MoveOption[]>(`${org()}/timetable/sessions/${sessionId}/options`),
   propose: (body: { session_id: string; day: string; start_period: number; venue_id?: string | null }) =>

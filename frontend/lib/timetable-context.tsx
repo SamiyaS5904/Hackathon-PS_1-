@@ -14,7 +14,9 @@ interface State {
   loading: boolean;
   error: string | null;
   job: Job | null;
-  generate: () => Promise<void>;
+  generate: (keepCurrent?: boolean) => Promise<void>;
+  notice: string | null; // e.g. "237 classes stayed where they were, 1 moved."
+  clearNotice: () => void;
   reload: () => Promise<void>;
   setData: (d: TimetableOut) => void;
 }
@@ -28,6 +30,7 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [job, setJob] = useState<Job | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const { member } = useAuth();
   const orgId = member?.org_id;
@@ -70,10 +73,11 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
     };
   }, [reload, orgId]);
 
-  const generate = useCallback(async () => {
+  const generate = useCallback(async (keepCurrent = false) => {
     setError(null);
+    setNotice(null);
     try {
-      const started = await api.generate(GENERATE_SECONDS);
+      const started = await api.generate(GENERATE_SECONDS, keepCurrent);
       setJob(started);
       timer.current = setInterval(async () => {
         try {
@@ -82,6 +86,7 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
           if (j.status !== "running") {
             if (timer.current) clearInterval(timer.current);
             if (j.status === "failed") setError(j.error ?? "Generation failed");
+            if (j.status === "done" && j.message) setNotice(j.message);
             await loadTimetable();
           }
         } catch (e) {
@@ -96,7 +101,8 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
   }, [loadTimetable]);
 
   return (
-    <Ctx.Provider value={{ college, data, precheck, loading, error, job, generate, reload, setData }}>
+    <Ctx.Provider value={{ college, data, precheck, loading, error, job, generate, reload, setData, notice,
+      clearNotice: () => setNotice(null) }}>
       {children}
     </Ctx.Provider>
   );

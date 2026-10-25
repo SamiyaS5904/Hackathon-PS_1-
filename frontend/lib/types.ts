@@ -68,7 +68,7 @@ export interface TimetableOut {
   timetable: Timetable; quality: QualityReport | null; violations: Violation[]; stale: boolean;
   ever_published: boolean;
 }
-export interface Job { id: string; status: "running" | "done" | "failed"; elapsed: number; error: string | null }
+export interface Job { id: string; status: "running" | "done" | "failed"; elapsed: number; error: string | null; message?: string }
 export interface Precheck { problems: string[]; warnings: string[] }
 
 export type ViewKind = "section" | "teacher" | "venue";
