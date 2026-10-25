@@ -43,6 +43,7 @@ export default function Dashboard() {
     }
   };
 
+  const notReady = readiness?.filter((d) => !d.ready).length ?? 0;
   if (loading || !college) {
     return (
       <div className="mx-auto max-w-5xl space-y-4">
@@ -94,9 +95,12 @@ export default function Dashboard() {
             </div>
             {role === "admin" && (
               <div className="flex flex-wrap gap-2">
-                <Button onClick={loadSample} disabled={sampleBusy}>
-                  {sampleBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Load sample college
-                </Button>
+                {/* Only before the admin enters their own departments: the sample replaces the setup data. */}
+                {college.departments.length === 0 && (
+                  <Button onClick={loadSample} disabled={sampleBusy}>
+                    {sampleBusy ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Load sample college
+                  </Button>
+                )}
                 <Link href={college.departments.length === 0 ? "/setup" : "/departments"}>
                   <Button variant="primary"><Settings2 size={16} /> {college.departments.length === 0 ? "Start setup" : "Open departments"}</Button>
                 </Link>
@@ -159,7 +163,9 @@ export default function Dashboard() {
             <div>
               <h2 className="mt-1 text-lg font-semibold">Generate your first timetable</h2>
               <p className="mt-1 text-sm text-muted">
-                All data checks passed. Generation takes under a minute.
+                {notReady > 0
+                  ? `All data checks passed, but ${notReady} department(s) are not marked Ready yet. Wait for their Coordinators, or generate now with the data they have.`
+                  : "All data checks passed and every department is Ready. Generation takes under a minute."}
               </p>
             </div>
             {role === "admin" ? (

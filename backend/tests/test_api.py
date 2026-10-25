@@ -69,6 +69,8 @@ def test_new_college_is_isolated(client, admin):
     assert pre["problems"] and "No classes" in pre["problems"][0]
     sample = client.post(f"/api/orgs/{org}/load-sample", headers=mine)
     assert sample.status_code == 200 and len(sample.json()["sections"]) == 12
+    assert all(s["ready"] for s in sample.json()["department_status"].values())  # complete data: generate right away
+    assert client.post(f"/api/orgs/{org}/load-sample", headers=mine).status_code == 409  # never overwrites
     again = client.post("/api/auth/signup", json={"name": "X", "email": "asha@newcollege.edu",
                                                    "password": "longenough", "college_name": "Y"})
     assert again.status_code == 409

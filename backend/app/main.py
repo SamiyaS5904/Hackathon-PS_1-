@@ -45,7 +45,7 @@ from app import attendance, change_requests
 from app.change_requests import ChangeRequestOut
 from app.notify import Audience, FeedOut, feed, mark_seen, notify_change, send
 from app.notify import warm as notify_warm
-from app.models.domain import College, Department, Rule, TimeBlock, Timetable, Venue
+from app.models.domain import College, Department, DepartmentStatus, Rule, TimeBlock, Timetable, Venue
 from app.permissions import (
     can_edit_one_day,
     can_edit_weekly,
@@ -275,12 +275,15 @@ def get_college(ctx: Ctx = Depends(org_ctx)) -> College:
 def load_sample(ctx: Ctx = Depends(org_ctx)) -> College:
     """Fill a new college with the sample data (departments, rooms, sections, teachers, subjects)."""
     allow(can_manage_college(ctx.member))
-    if ctx.state.college.allotments:
-        raise HTTPException(409, "This college already has data.")
+    if ctx.state.college.allotments or ctx.state.college.departments:
+        raise HTTPException(409, "This college already has its own departments; the sample is only for a new college.")
     sample = build_demo_college().model_copy(update={"id": ctx.state.id, "name": ctx.state.name})
     # Keep the sample's structure and electives, but this college's own students come from its list.
     sample.students = [st.model_copy(update={"email": st.email.replace("@demo.timetabl.ai", f"@{ctx.state.id}.edu")})
                        for st in sample.students]
+    # The sample's departments are complete, so they arrive Ready and the admin can generate straight away.
+    sample.department_status = {d.id: DepartmentStatus(ready=True, at=time.time(), by="Sample data")
+                                for d in sample.departments}
     return store.update_college(ctx.state.id, sample)
 
 
