@@ -17,6 +17,7 @@ entries for every role (password for all: `demo1234`):
 
 | Choice | Who | Email |
 |---|---|---|
+| Platform owner (SaaS) | the Timetabl.ai team: every college, plans, health, pause / read-only | `owner@demo.timetabl.ai` |
 | College Admin | runs the whole college | `admin@demo.timetabl.ai` |
 | Department Coordinator | pick a department (CSE, ECE, ME, AS) | `cse.coordinator@demo.timetabl.ai` |
 | Teacher | Dr. Anita Sharma | `anita.sharma@demo.timetabl.ai` |

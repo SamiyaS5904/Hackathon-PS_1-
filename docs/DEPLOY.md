@@ -34,6 +34,8 @@ After this, every push to `main` on GitHub redeploys automatically.
    | `APP_SECRET` | a long random string (run `python -c "import secrets; print(secrets.token_urlsafe(48))"`) |
    | `CORS_ORIGINS` | `http://localhost:3000` for now (the Vercel URL is added in step 3) |
    | `FRONTEND_URL` | same as `CORS_ORIGINS` |
+   | `SUPERADMIN_EMAILS` | your own email, to see the Platform page (optional) |
+   | `DEMO_PLATFORM_OWNER` | `1` for the hackathon demo (owner@demo.timetabl.ai); `0` once real colleges sign up |
 
 5. In the project: **+ New → GitHub Repo** → the same repository again (second service):
    - *Root Directory*: `chatbot`, same region, **Generate Domain**

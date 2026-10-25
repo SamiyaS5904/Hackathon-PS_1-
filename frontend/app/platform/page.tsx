@@ -57,7 +57,7 @@ export default function PlatformPage() {
               ["Colleges", data.colleges, `${data.live} live`],
               ["Need attention", data.needs_attention, "stuck or idle"],
               ["Students", data.students, `${data.accounts.toLocaleString()} accounts`],
-              ["Classes scheduled", data.classes, `${data.attendance_marked.toLocaleString()} attendance sheets · ${data.bookings} bookings`],
+              ["Classes scheduled", data.classes, `${data.attendance_marked.toLocaleString()} attendance sheet${data.attendance_marked === 1 ? "" : "s"} · ${data.bookings} booking${data.bookings === 1 ? "" : "s"}`],
             ] as const).map(([k, v, hint]) => (
               <div key={k} className={clsx("rounded-xl border bg-surface px-4 py-3",
                 k === "Need attention" && v > 0 ? "border-warn/40" : "border-border")}>

@@ -229,13 +229,14 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - **AI assistant** (side panel, Ctrl+K, role-scoped tools with the user's own token): Q&A, free rooms / free times, attendance questions, makeup times, bookings, edits as proposals with a diff (person clicks Apply), proactive suggestions after generation
 - **Voice + language** (2026-10-25): replies mirror the user's language (English → English, Roman Hinglish → Roman Hinglish, never Devanagari), typed or spoken; mic with live transcript, auto-send after a pause, answers to spoken questions read aloud (toggle + stop), plain messages for a blocked / missing mic
 - **Auto-sectioning** (2026-10-25): upload a whole-year list (roll no, name, email + any columns) → balanced sections (by roll number, or mixed evenly by a column such as Hostel) + lab batches, room / lab size warnings, preview, save; re-sectioning keeps section ids by name and student ids by roll / email, and never drops a section that still has classes
+- **Super Admin platform** (2026-10-25): platform owners (`SUPERADMIN_EMAILS`, plus a demo owner `owner@demo.timetabl.ai` while `DEMO_PLATFORM_OWNER=1`) see every college: stage (Setting up → Live), size, adoption (accounts, attendance, bookings), health flags ("signed up but no setup", "draft not published", "no activity"), plans; they set plan / read-only / paused (enforced on every college request) and a private note, never college data (they aren't members, so college endpoints stay 404); a platform assistant answers in English or Hinglish and prepares plan / status changes as cards
 - **Teacher booking** (2026-10-25): teachers set weekly office hours (seats, place; never on their own classes); students book doubt slots over the next 2 weeks (teacher free that day, seats left, no class for the student, no holiday); Coordinator (own department) / Admin find times when chosen teachers are all free and book meetings; notifications; a class later moved onto a booking is flagged with "Find another time"; the assistant finds slots and prepares bookings as cards
 
 **🔨 Building now (2026-10-25, in this order)**
 1. ~~Voice + language quality~~ ✅ done
 2. ~~Teacher booking~~ ✅ done
 3. ~~Auto-sectioning~~ ✅ done
-4. **Super Admin platform (SaaS):** platform owner sees every college (plan, usage, health, last activity), can suspend / open a college read-only, never edits college data; agentic platform assistant for questions like "which colleges haven't generated yet?"
+4. ~~Super Admin platform~~ ✅ done
 5. **Mid-semester regenerate with minimal change** (optional): regenerate keeping as many classes as possible where they are, show the diff
 
 **🔭 Future (pitch roadmap, not building now)**
