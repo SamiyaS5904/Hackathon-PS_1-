@@ -79,7 +79,7 @@ export default function MembersPage() {
       <PageHeader title="People & invites" subtitle="Invite coordinators and teachers with a link. Students log in with their college email." />
       {error && <ErrorCard message={error} onRetry={load} />}
 
-      <div className="grid gap-4 lg:grid-cols-[1fr_1.2fr]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_1.2fr] [&>*]:min-w-0">
         <Card className="p-5">
           <h2 className="flex items-center gap-2 text-sm font-semibold"><UserPlus size={16} aria-hidden /> Invite someone</h2>
           <form className="mt-4 space-y-3" onSubmit={submit}>

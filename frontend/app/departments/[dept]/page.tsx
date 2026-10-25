@@ -269,7 +269,7 @@ function ClassesCard({ dept, data, onSaved }: { dept: string; data: DeptData; on
           <h2 className="text-sm font-semibold">Classes & teachers <span className="font-normal text-muted">({data.allotments.length})</span></h2>
           <p className="text-xs text-muted">Suggestions use who can teach what (the Excel &quot;Can teach&quot; sheet), preferences and fair weekly loads.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button onClick={() => suggestAll(true)} disabled={!!busy}>
             {busy === "suggest" ? <Loader2 size={16} className="animate-spin" /> : <Sparkles size={16} />} Suggest for empty
           </Button>

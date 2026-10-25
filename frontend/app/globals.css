@@ -2,22 +2,22 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens: neutral surfaces, one accent. Every colour has a dark-mode value.
+/* Design tokens: cool slate surfaces, one deep indigo accent (formal, readable). Every colour has a dark-mode value.
    Theme: follows the device unless the user picked one (html[data-theme="light" | "dark"]). */
 :root {
-  --bg: 248 248 247;
+  --bg: 246 247 249;
   --surface: 255 255 255;
-  --surface-2: 243 243 242;
-  --border: 226 224 222;
-  --border-strong: 200 197 194;
-  --text: 23 21 19;
-  --muted: 100 94 89;
-  --accent: 79 70 229;
-  --accent-soft: 232 236 255;
-  --accent-text: 55 48 191;
+  --surface-2: 241 243 246;
+  --border: 226 229 235;
+  --border-strong: 203 208 217;
+  --text: 17 24 39;
+  --muted: 92 102 118;
+  --accent: 37 64 175;
+  --accent-soft: 233 238 253;
+  --accent-text: 30 54 156;
   --ok: 4 120 87;
   --ok-soft: 220 247 234;
-  --warn: 166 75 8;
+  --warn: 161 79 8;
   --warn-soft: 254 243 214;
   --danger: 185 28 28;
   --danger-soft: 254 232 232;
@@ -25,16 +25,16 @@
 }
 
 :root[data-theme="dark"] {
-  --bg: 12 10 9;
-  --surface: 23 21 19;
-  --surface-2: 32 29 27;
-  --border: 41 37 36;
-  --border-strong: 68 64 60;
-  --text: 245 245 244;
-  --muted: 168 162 158;
-  --accent: 129 140 248;
-  --accent-soft: 30 27 75;
-  --accent-text: 165 180 252;
+  --bg: 10 12 17;
+  --surface: 17 20 27;
+  --surface-2: 25 29 38;
+  --border: 36 41 52;
+  --border-strong: 56 63 78;
+  --text: 235 238 243;
+  --muted: 150 158 173;
+  --accent: 138 158 255;
+  --accent-soft: 27 33 66;
+  --accent-text: 172 187 255;
   --ok: 52 211 153;
   --ok-soft: 6 44 34;
   --warn: 251 191 36;
@@ -46,16 +46,16 @@
 
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: 12 10 9;
-    --surface: 23 21 19;
-    --surface-2: 32 29 27;
-    --border: 41 37 36;
-    --border-strong: 68 64 60;
-    --text: 245 245 244;
-    --muted: 168 162 158;
-    --accent: 129 140 248;
-    --accent-soft: 30 27 75;
-    --accent-text: 165 180 252;
+    --bg: 10 12 17;
+    --surface: 17 20 27;
+    --surface-2: 25 29 38;
+    --border: 36 41 52;
+    --border-strong: 56 63 78;
+    --text: 235 238 243;
+    --muted: 150 158 173;
+    --accent: 138 158 255;
+    --accent-soft: 27 33 66;
+    --accent-text: 172 187 255;
     --ok: 52 211 153;
     --ok-soft: 6 44 34;
     --warn: 251 191 36;
@@ -73,7 +73,9 @@ body {
 }
 
 body {
-  font-family: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv11", "ss01";
+  letter-spacing: -0.005em;
 }
 
 @media print {

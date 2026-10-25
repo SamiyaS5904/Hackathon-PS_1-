@@ -19,7 +19,7 @@ export default function DataPage() {
         subtitle="Read-only for now. The setup wizard and Excel import arrive in a later stage."
       />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Card className="p-5">
           <h2 className="text-sm font-semibold">{college.shifts.length > 1 ? "Shifts" : "College day"}</h2>
           <ul className="mt-3 space-y-2 text-sm">
