@@ -431,3 +431,71 @@ def test_attendance_advice_numbers():
     status, text = advice(5, 10, 75)
     assert status == "low" and "next 10 classes" in text  # (5+10)/(10+10) = 75%
     assert advice(0, 0, 75)[0] == "none"
+
+
+def test_teacher_booking_roles_and_notifications(client, admin):
+    client.post("/api/orgs/demo/timetable/publish", headers=admin)
+    anita = login(client, "anita.sharma@demo.timetabl.ai")
+    st = login(client, "cse1a.01@demo.timetabl.ai")
+    other_st = login(client, "cse1a.02@demo.timetabl.ai")
+    co = login(client, "cse.coordinator@demo.timetabl.ai")
+    college = client.get("/api/orgs/demo/college", headers=admin).json()
+    sessions = client.get("/api/orgs/demo/timetable", headers=admin).json()["timetable"]["sessions"]
+    sec = next(s for s in college["sections"] if s["id"] == "cse-1a")
+    periods = next(sh for sh in college["shifts"] if sh["id"] == sec["shift_id"])["periods"]
+    anita_t = next(t for t in college["teachers"] if t["id"] == "t-anita")
+
+    def overlaps(a0, a1, b0, b1):
+        return a0 < b1 and b0 < a1
+
+    def free(day, p):
+        return not any(s["day"] == day and overlaps(s["start"], s["end"], p["start"], p["end"])
+                       and (s["teacher_id"] == "t-anita" or "cse-1a" in s["section_ids"]) for s in sessions) \
+            and not any(b["day"] == day and overlaps(b["start"], b["end"], p["start"], p["end"])
+                        for b in anita_t["blocked"])
+
+    day, p = next((d, p) for d in college["days"] for p in periods if free(d, p))
+
+    # Office hours: teachers only, for themselves.
+    assert client.post("/api/orgs/demo/bookings/office-hours", headers=st,
+                       json={"day": day, "start": p["start"], "end": p["end"]}).status_code == 403
+    r = client.post("/api/orgs/demo/bookings/office-hours", headers=anita,
+                    json={"day": day, "start": p["start"], "end": p["end"], "seats": 2, "place": "AS staff room"})
+    assert r.status_code == 201, r.text
+    hour = r.json()[0]
+
+    # Students see their own teachers first and book a seat; the teacher is notified.
+    teachers = client.get("/api/orgs/demo/bookings/teachers", headers=st).json()
+    assert teachers[0]["teacher_id"] == "t-anita"
+    slots = client.get("/api/orgs/demo/bookings/doubt-slots?teacher_id=t-anita", headers=st).json()
+    assert slots and all(s["office_hour_id"] == hour["id"] for s in slots)
+    booked = client.post("/api/orgs/demo/bookings/doubt", headers=st,
+                         json={"office_hour_id": hour["id"], "date": slots[0]["date"], "topic": "Integration"})
+    assert booked.status_code == 201, booked.text
+    bid = booked.json()["booking"]["id"]
+    assert any(b["id"] == bid for b in client.get("/api/orgs/demo/bookings", headers=anita).json())
+    assert any(n["title"].startswith("Doubt slot booked")
+               for n in client.get("/api/orgs/demo/notifications", headers=anita).json()["items"])
+    assert client.post(f"/api/orgs/demo/bookings/{bid}/cancel", headers=other_st).status_code == 404
+
+    # Meetings: a Coordinator only with their own department's teachers; the Admin with anyone.
+    cse_teachers = [t["id"] for t in college["teachers"] if t["department_id"] == "cse"][:2]
+    assert client.post("/api/orgs/demo/bookings/meeting-times", headers=co,
+                       json={"teacher_ids": ["t-anita"]}).status_code == 403
+    assert client.post("/api/orgs/demo/bookings/meeting-times", headers=co,
+                       json={"teacher_ids": cse_teachers}).status_code == 200
+    assert client.post("/api/orgs/demo/bookings/meeting-times", headers=st,
+                       json={"teacher_ids": cse_teachers}).status_code == 403
+    times = client.post("/api/orgs/demo/bookings/meeting-times", headers=admin,
+                        json={"teacher_ids": ["t-anita", cse_teachers[0]], "days": 14}).json()
+    assert times
+    m = client.post("/api/orgs/demo/bookings/meetings", headers=admin, json={
+        "teacher_ids": ["t-anita", cse_teachers[0]], "date": times[0]["date"], "start": times[0]["start"],
+        "end": times[0]["end"], "title": "First-year maths plan", "place": "Board room"})
+    assert m.status_code == 201, m.text
+    assert any(b["title"] == "First-year maths plan" for b in client.get("/api/orgs/demo/bookings", headers=anita).json())
+
+    # The student cancels their own doubt slot; the teacher hears about it.
+    assert client.post(f"/api/orgs/demo/bookings/{bid}/cancel", headers=st).status_code == 200
+    assert any(n["title"].startswith("Doubt slot cancelled")
+               for n in client.get("/api/orgs/demo/notifications", headers=anita).json()["items"])

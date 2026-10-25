@@ -160,6 +160,17 @@ class NotificationSeenRow(Base):
     seen_at: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+class BookingRow(Base):
+    """Teacher booking: a teacher's weekly office hour (kind "office_hour") or a booked doubt slot /
+    meeting on a real date (kind "booking"). The fields live in ``data`` (see app/bookings.py)."""
+
+    __tablename__ = "bookings"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    kind: Mapped[str] = mapped_column(String(20))
+    data: Mapped[dict] = mapped_column(JSON)
+
+
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 # Postgres: requests rarely touch the database (memory first, background writer), so a liveness
 # ping per checkout is cheap; TCP keepalives stop idle Supabase connections from silently dying.

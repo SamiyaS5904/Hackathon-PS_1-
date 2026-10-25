@@ -42,6 +42,7 @@ from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
 from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
 from app import attendance, change_requests
+from app.routers.bookings import router as bookings_router
 from app.change_requests import ChangeRequestOut
 from app.notify import Audience, FeedOut, feed, mark_seen, notify_change, send
 from app.notify import warm as notify_warm
@@ -102,6 +103,7 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="Timetabl.ai API", version="0.4.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"],
                    expose_headers=["Content-Disposition"])  # file names for downloads
+app.include_router(bookings_router)
 
 
 @app.get("/api/health")
