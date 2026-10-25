@@ -8,8 +8,9 @@ model:
   hard  every class gets one teacher who can teach that subject and works in that shift;
         no teacher above their weekly limit (max periods/day x working days), counting
         classes they already teach elsewhere
-  soft  preferred subjects first; fair, even loads; the same teacher for a section's
-        lecture and lab of one subject
+  soft  fair, even loads (the busiest teacher as light as possible, and nobody who could
+        help left idle); preferred subjects; the same teacher for a section's lecture
+        and lab of one subject
 
 Nothing is saved: the Coordinator reviews, edits and approves.
 """
@@ -23,8 +24,9 @@ from pydantic import BaseModel
 
 from app.models.domain import Allotment, College, Kind
 
-W_PREFERENCE = 4
+W_PREFERENCE = 2
 W_PEAK = 3
+W_SPREAD = 2  # busiest minus least busy teacher who can take one of these classes
 W_SPLIT = 2
 
 
@@ -99,6 +101,10 @@ def suggest(college: College, allotment_ids: list[str], time_limit: float = 10.0
         model.Add(total <= cap[tid])
         model.Add(peak >= total)
     cost.append(W_PEAK * peak)
+    low = model.NewIntVar(0, max(cap.values(), default=0) or 1, "low")
+    for tid, terms in load.items():
+        model.Add(low <= sum(terms) + base_load[tid])
+    cost.append(W_SPREAD * (peak - low))
 
     # Same teacher for a section's lecture and labs of one subject where possible.
     by_subject_section = defaultdict(list)

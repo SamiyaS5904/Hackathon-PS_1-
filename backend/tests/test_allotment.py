@@ -54,3 +54,17 @@ def test_unfillable_class_is_explained():
     r = suggest(c, ["a1"])
     assert r.suggestions[0].teacher_id is None
     assert r.unfilled and "Add Maths to a teacher's subjects" in r.unfilled[0]
+
+
+def test_nobody_who_could_help_is_left_idle():
+    c = tiny_college()
+    c.teachers.append(Teacher(id="t3", name="Dr. C", department_id="cse", shift_ids=["day"], max_per_day=4))
+    c.teachers[0].max_per_day = 5  # Dr. A could take everything (9 periods) within the weekly limit
+    c.teacher_subjects = [TeacherSubject(teacher_id="t1", subject_id="maths", preference=1),
+                          TeacherSubject(teacher_id="t1", subject_id="prog", preference=1),
+                          TeacherSubject(teacher_id="t3", subject_id="prog", preference=2)]
+    blank(c, {"a1", "a2", "a3", "a4"})
+    r = suggest(c, ["a1", "a2", "a3", "a4"])
+    # Fair share beats Dr. A's preference: Dr. C takes part of programming instead of sitting idle.
+    assert r.loads["t3"] >= 4 and abs(r.loads["t1"] - r.loads["t3"]) <= 2
+    assert r.loads["t1"] + r.loads["t3"] == 9
