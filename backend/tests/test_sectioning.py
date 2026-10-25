@@ -28,6 +28,11 @@ def _year(n, hostel_every=4, prefix="R"):
             for i in range(1, n + 1)]
 
 
+def test_template_reads_back_with_its_extra_columns_only():
+    rows, errors, cols = sectioning.parse(sectioning.template())
+    assert errors == [] and len(rows) == 2 and cols == ["Hostel", "Gender"]  # not the help note
+
+
 def test_split_by_roll_is_balanced_and_in_natural_order():
     rows, errors, cols = sectioning.parse(_sheet(_year(125)))
     assert errors == [] and cols == ["Hostel"]

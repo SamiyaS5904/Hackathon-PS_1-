@@ -110,7 +110,10 @@ def parse(content: bytes) -> tuple[list[YearRow], list[RowError], list[str]]:
         return [], [RowError(sheet=sheet, row=1, message=f"Missing column(s): {', '.join(missing)}. "
                                                            "Download the year list template to see the format.")], []
     idx = {h.lower(): i for i, h in enumerate(header) if h}
-    extras = [h for h in header if h and h.lower() not in {c.lower() for c in REQUIRED}]
+    # Extra columns to mix by: short headers with at least one value (skips the template's help note).
+    filled = {i for values in all_rows[1:] for i, v in enumerate(values) if v not in (None, "")}
+    extras = [h for i, h in enumerate(header) if h and len(h) <= 40 and i in filled
+              and h.lower() not in {c.lower() for c in REQUIRED}]
     out: list[YearRow] = []
     errors: list[RowError] = []
     seen_roll: dict[str, int] = {}
