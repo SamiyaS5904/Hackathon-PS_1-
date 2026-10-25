@@ -92,6 +92,27 @@ class FakeBackend:
         if path.endswith("/free-rooms"):
             return httpx.Response(200, json=[{"venue_id": "lab", "name": "Lab", "type": "lab", "capacity": 30,
                                               "department": "cse", "free_until": None}])
+        if path.endswith("/makeup"):
+            return httpx.Response(200, json=[{"date": "2026-10-21", "label": "Wed 21 Oct", "start_period": 0,
+                                              "start": "09:00", "end": "10:00", "venue_id": "r1", "venue": "Room 1"}])
+        if path.endswith("/attendance/me"):
+            return httpx.Response(200, json={
+                "min_percent": 75, "held": 4, "attended": 2, "percent": 50.0, "status": "low",
+                "advice": "Below 75%: attend the next 4 classes in a row to get back.",
+                "subjects": [{"subject_id": "ma", "code": "MA", "name": "Maths", "held": 4, "attended": 2,
+                              "percent": 50.0, "status": "low", "advice": "Below 75%."}],
+                "recent": [{"date": "2026-10-19", "subject": "Maths", "present": False}]})
+        if path.endswith("/attendance/my-classes"):
+            return httpx.Response(200, json=[
+                {"session_id": "m1", "date": "2026-10-19", "label": "Mon 19 Oct", "subject": "Maths",
+                 "sections": "CSE-1A", "start": "09:00", "end": "10:00", "venue": "Room 1", "students": 40,
+                 "marked": False, "absent": 0, "can_edit": True}])
+        if "/attendance/sections/" in path:
+            return httpx.Response(200, json={"section": "CSE-1A", "min_percent": 75, "students": [
+                {"student_id": "st1", "roll_no": "01", "name": "Aarav", "held": 4, "attended": 2, "percent": 50.0,
+                 "low": True},
+                {"student_id": "st2", "roll_no": "02", "name": "Diya", "held": 4, "attended": 4, "percent": 100.0,
+                 "low": False}]})
         if "/teachers/" in path:
             return httpx.Response(200, json={"teacher": "Dr. Anita Sharma", "date": "Mon 19 Oct", "time": "09:30",
                                              "status": "teaching", "subject": "Maths", "room": "Room 1",

@@ -90,3 +90,27 @@ def test_free_rooms_say_whose_room_it_is(backend):
     ctx = ToolContext(backend=backend, member=STUDENT, today="2026-10-19", now="10:00")
     out = json.loads(asyncio.run(run_tool(ctx, "free_rooms", {})))
     assert out["free"][0]["belongs_to"] == "CSE"
+
+
+
+def test_attendance_and_makeup_tools_are_role_scoped():
+    student = {t["name"] for t in tools_for("student")}
+    teacher = {t["name"] for t in tools_for("teacher")}
+    admin = {t["name"] for t in tools_for("admin")}
+    assert "my_attendance" in student and "section_attendance" not in student and "find_makeup_slot" not in student
+    assert {"unmarked_classes", "find_makeup_slot"} <= teacher and "section_attendance" not in teacher
+    assert {"section_attendance", "find_makeup_slot"} <= admin and "my_attendance" not in admin
+
+
+def test_attendance_and_makeup_answers(backend):
+    st = ToolContext(backend=backend, member=STUDENT, today="2026-10-19", now="10:00")
+    me = json.loads(run(run_tool(st, "my_attendance", {})))
+    assert me["overall"] == "50.0%" and "next 4 classes" in me["advice"]
+    ad = ToolContext(backend=backend, member=ADMIN, today="2026-10-19", now="10:00")
+    sec = json.loads(run(run_tool(ad, "section_attendance", {"section": "CSE-1A"})))
+    assert sec["below_minimum"] == 1 and sec["below"][0].startswith("01 Aarav")
+    mk = json.loads(run(run_tool(ad, "find_makeup_slot", {"session_id": "m1", "date": "2026-10-19"})))
+    assert mk["found"] == 1 and "Wed 21 Oct" in mk["options"][0]
+    tc = ToolContext(backend=backend, member=TEACHER, today="2026-10-19", now="10:00")
+    todo = json.loads(run(run_tool(tc, "unmarked_classes", {})))
+    assert todo["not_marked"] and "Maths" in todo["not_marked"][0]

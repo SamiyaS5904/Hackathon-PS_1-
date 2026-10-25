@@ -21,14 +21,14 @@ interface Msg {
 }
 
 const SUGGESTIONS: Record<Role, string[]> = {
-  student: ["What do I have tomorrow?", "When is my next lab?", "When am I free next week to fix a meeting?",
-    "Which rooms are free right now?"],
-  teacher: ["What do I teach tomorrow?", "Cancel my lecture tomorrow, I'm on duty", "When is CSE-3A free this week for a makeup class?",
-    "Where is Dr. Anita Sharma right now?"],
-  coordinator: ["Which classes in my department still need attention?", "When is CSE-2A free on Friday?",
-    "Move CSE-2A's Data Structures to Thursday morning", "Explain the quality score"],
-  admin: ["Explain the quality score and what to improve", "Which departments aren't Ready yet?",
-    "Which rooms are almost unused?", "Rebalance the busiest teacher's week"],
+  student: ["What do I have tomorrow?", "What's my attendance, and can I miss a class?",
+    "When am I free next week to fix a meeting?", "Which rooms are free right now?"],
+  teacher: ["What do I teach tomorrow?", "Which classes haven't I marked attendance for?",
+    "I cancelled Monday's lecture: find a makeup time", "Where is Dr. Anita Sharma right now?"],
+  coordinator: ["Who is below 75% attendance in CSE-2A?", "Which classes in my department still need attention?",
+    "Move CSE-2A's Data Structures to Thursday morning", "When is CSE-2A free on Friday?"],
+  admin: ["Explain the quality score and what to improve", "Who is below 75% attendance in CSE-3A?",
+    "Which departments aren't Ready yet?", "Which rooms are almost unused?"],
 };
 
 /** Tiny formatter: **bold**, "- " bullets and line breaks. The model's text is never rendered as HTML. */

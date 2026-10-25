@@ -105,6 +105,15 @@ class NoInput(BaseModel):
     pass
 
 
+class MakeupIn(BaseModel):
+    session_id: str
+    date: str
+
+
+class SectionNameIn(BaseModel):
+    section: str
+
+
 # ---------------------------------------------------------------------------
 # Tool definitions (JSON schema for the model) + who may use them
 # ---------------------------------------------------------------------------
@@ -182,6 +191,26 @@ TOOLS: dict[str, tuple[dict, type[BaseModel], tuple[str, ...]]] = {
         {"session_id": {"type": "string"}, "date": {**DATE, "description": "The class's original date."},
          "to_date": {**DATE, "description": "Date to move it to (default: same date)."}},
         ["session_id", "date"]), DayTimesIn, ("teacher", "coordinator", "admin")),
+    "find_makeup_slot": (_tool(
+        "find_makeup_slot",
+        "Makeup class finder: free times in the next 7 days when the class's teacher, every one of its students and a "
+        "suitable room are free together (soonest first). Use for a cancelled or missed class; then offer the best "
+        "one with prepare_one_day_change (kind 'move', to_date + start_time). A makeup replaces a cancellation.",
+        {"session_id": {"type": "string"}, "date": {**DATE, "description": "The class's original date."}},
+        ["session_id", "date"]), MakeupIn, ("teacher", "coordinator", "admin")),
+    "my_attendance": (_tool(
+        "my_attendance",
+        "The student's own attendance: overall and per subject against the college's minimum, how many classes they "
+        "can still miss or must attend in a row, and recent classes.", {}, []), NoInput, ("student",)),
+    "unmarked_classes": (_tool(
+        "unmarked_classes",
+        "The teacher's classes from the last 7 days up to now, with which ones still need attendance marked.",
+        {}, []), NoInput, ("teacher",)),
+    "section_attendance": (_tool(
+        "section_attendance",
+        "Attendance of one section: every student's overall percentage, students below the college's minimum first.",
+        {"section": {"type": "string", "description": "Section name, e.g. 'CSE-2A'."}}, ["section"]),
+        SectionNameIn, STAFF),
     "prepare_one_day_change": (_tool(
         "prepare_one_day_change",
         "Prepare a ONE-DAY change: cancel a class on a date, or move it to a free time on a date. The user sees a "
@@ -476,6 +505,37 @@ async def _run(ctx: ToolContext, name: str, a: Any) -> Any:
         return {"date": _label(a.to_date or a.date),
                 "free": [f"{o['start']}-{o['end']}" for o in opts if o["status"] == "free"],
                 "not_free": [f"{o['start']}: {o['reason']}" for o in opts if o["status"] != "free"][:8]}
+
+    if name == "find_makeup_slot":
+        opts = await ctx.backend.makeup(a.session_id, a.date)
+        if not opts:
+            return {"found": 0, "note": "No time in the next 7 days has the teacher, all students and a room free."}
+        return {"found": len(opts), "options": [f"{o['label']} ({o['date']}) {o['start']}-{o['end']} in {o['venue']}"
+                                               for o in opts]}
+
+    if name == "my_attendance":
+        me = await ctx.backend.my_attendance()
+        return {"overall": f"{me['percent']}%" if me["percent"] is not None else "nothing marked yet",
+                "minimum": f"{me['min_percent']}%", "advice": me["advice"],
+                "subjects": [f"{s['name']}: {s['attended']}/{s['held']}" + (f" ({s['percent']}%)" if s["percent"] is not None else "")
+                             + f" - {s['advice']}" for s in me["subjects"]],
+                "recent": [f"{r['date']} {r['subject']}: {'present' if r['present'] else 'absent'}" for r in me["recent"][:6]]}
+
+    if name == "unmarked_classes":
+        classes = await ctx.backend.my_classes()
+        todo = [c for c in classes if not c["marked"]]
+        return {"not_marked": [f"{c['label']} {c['start']} {c['subject']} ({c['sections']})" for c in todo],
+                "marked": len(classes) - len(todo),
+                "how": "Open Today or Attendance in the app and tap the class; everyone starts present."}
+
+    if name == "section_attendance":
+        sec = _find(c["sections"], a.section, ("name", "id"))
+        out = await ctx.backend.section_attendance(sec["id"])
+        low = [s for s in out["students"] if s["low"]]
+        marked = [s for s in out["students"] if s["held"]]
+        return {"section": out["section"], "minimum": f"{out['min_percent']}%",
+                "students_with_marks": len(marked), "below_minimum": len(low),
+                "below": [f"{s['roll_no']} {s['name']}: {s['percent']}% ({s['attended']}/{s['held']})" for s in low[:20]]}
 
     if name == "prepare_one_day_change":
         tt = await ctx.timetable()

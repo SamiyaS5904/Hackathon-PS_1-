@@ -73,6 +73,19 @@ class Backend:
         return await self._call("GET", self._o(f"/timetable/sessions/{session_id}/day-options"),
                                 params={"date": date, "to_date": to_date})
 
+    async def makeup(self, session_id: str, date: str) -> list:
+        return await self._call("GET", self._o(f"/timetable/sessions/{session_id}/makeup"),
+                                params={"date": date, "days": 7})
+
+    async def my_attendance(self) -> dict:
+        return await self._call("GET", self._o("/attendance/me"))
+
+    async def my_classes(self) -> list:
+        return await self._call("GET", self._o("/attendance/my-classes"))
+
+    async def section_attendance(self, section_id: str) -> dict:
+        return await self._call("GET", self._o(f"/attendance/sections/{section_id}"))
+
     async def readiness(self) -> list:
         return await self._call("GET", self._o("/readiness"))
 
