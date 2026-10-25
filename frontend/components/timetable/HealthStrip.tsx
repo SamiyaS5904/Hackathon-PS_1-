@@ -3,22 +3,24 @@
 import { CheckCircle2, AlertTriangle, Gauge, Clock } from "lucide-react";
 import type { TimetableOut } from "@/lib/types";
 
-export function HealthStrip({ data }: { data: TimetableOut }) {
+/** Timetable health. `compact` = one line at every width (the timetable page, where the grid is the hero). */
+export function HealthStrip({ data, compact = false }: { data: TimetableOut; compact?: boolean }) {
   const clashes = data.violations.length;
   const score = data.quality?.score ?? 0;
   const tone = score >= 85 ? "text-ok" : score >= 70 ? "text-warn" : "text-danger";
   return (
     <>
     {/* Phones: one compact line, so the timetable itself is on the first screen. */}
-    <p className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm sm:hidden" role="status">
+    <p className={`mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm ${compact ? "" : "sm:hidden"}`} role="status">
       <span className="flex items-center gap-1">
         {clashes === 0 ? <CheckCircle2 size={15} className="text-ok" aria-hidden /> : <AlertTriangle size={15} className="text-danger" aria-hidden />}
         <b>{clashes === 0 ? "0 clashes" : `${clashes} problems`}</b>
       </span>
       <span className="flex items-center gap-1"><Gauge size={15} className={tone} aria-hidden /> Quality <b>{score}/100</b></span>
       <span className="text-muted">{data.timetable.sessions.length} classes</span>
+      {compact && <span className="text-muted">· checked by an independent validator</span>}
     </p>
-    <div className="mb-4 hidden grid-cols-2 gap-3 sm:grid lg:grid-cols-4">
+    {!compact && <div className="mb-4 hidden grid-cols-2 gap-3 sm:grid lg:grid-cols-4">
       <Stat
         icon={clashes === 0 ? <CheckCircle2 size={18} className="text-ok" /> : <AlertTriangle size={18} className="text-danger" />}
         label="Clashes"
@@ -38,7 +40,7 @@ export function HealthStrip({ data }: { data: TimetableOut }) {
         value={`${data.timetable.solve_seconds.toFixed(0)}s`}
         hint={data.timetable.status === "optimal" ? "Proven best" : "Best found in time"}
       />
-    </div>
+    </div>}
     </>
   );
 }

@@ -210,7 +210,7 @@ export default function TimetablePage() {
             </div>
           )}
           {isStaff(role) && !data.stale && <PublishStatus data={data} />}
-          {role === "admin" && !data.stale && <HealthStrip data={data} />}
+          {role === "admin" && !data.stale && <HealthStrip data={data} compact />}
 
           <div className="no-print mb-3 flex flex-wrap items-center gap-3">
             {/* Teachers and students see only their own timetable: no switching. */}
