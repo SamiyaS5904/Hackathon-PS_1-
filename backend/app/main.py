@@ -34,6 +34,7 @@ from app.core.config import AUTO_DEMO_TIMETABLE, CORS_ORIGINS
 from app.core.deps import Ctx, allow, current_user, org_ctx
 from app.core.security import create_token
 from app.db.models import UserRow
+from app.edits import regenerate
 from app.edits.moves import Change, MoveOption, diff, move_options, repair_move
 from app.edits.oneday import (DayInfo, MakeupOption, Occurrence, add_override, day_options, label, makeup_options,
                               occurrences, remove_override, week)
@@ -235,6 +236,8 @@ def invite(body: InviteRequest, ctx: Ctx = Depends(org_ctx)) -> InviteOut:
 
 class GenerateRequest(BaseModel):
     time_limit: float = 45.0
+    # Mid-semester: keep the current timetable as much as possible (only classes that must move do).
+    keep_current: bool = False
 
 
 class JobOut(BaseModel):
@@ -242,6 +245,7 @@ class JobOut(BaseModel):
     status: str
     elapsed: float
     error: str | None = None
+    message: str = ""
 
 
 class TimetableOut(BaseModel):
@@ -307,14 +311,26 @@ def start_generation(body: GenerateRequest, ctx: Ctx = Depends(org_ctx)) -> JobO
         raise HTTPException(409, "A timetable is already being generated for this college.")
     job = store.new_job(org)
 
+    old = ctx.state.timetable if body.keep_current else None
+
     def run() -> None:
         try:
-            tt = generate(college, time_limit=max(5.0, min(body.time_limit, 300.0)))
-            tt.college_revision = college.revision
-            if tt.sessions:
-                store.set_timetable(org, tt, action=f"Generated timetable ({len(tt.sessions)} classes)",
-                                    source="generate", actor=actor)
+            limit = max(5.0, min(body.time_limit, 300.0))
+            if old is not None and old.sessions:
+                tt = generate(college, time_limit=limit, keep=regenerate.keep_map(old))
+                if tt.sessions:
+                    tt, summary = regenerate.finish(college, old, tt, actor)
+                    tt.college_revision = college.revision
+                    job.message = summary.sentence()
+                    store.set_timetable(org, tt, action=f"Regenerated with minimal change: {job.message}",
+                                        source="generate", actor=actor, changes=summary.changes)
             else:
+                tt = generate(college, time_limit=limit)
+                tt.college_revision = college.revision
+                if tt.sessions:
+                    store.set_timetable(org, tt, action=f"Generated timetable ({len(tt.sessions)} classes)",
+                                        source="generate", actor=actor)
+            if not tt.sessions:
                 job.error = "; ".join(tt.messages) or "No timetable could be built."
             job.status = "done" if tt.sessions else "failed"
         except Exception as exc:  # surfaced to the UI, never swallowed
@@ -332,7 +348,8 @@ def get_job(job_id: str, ctx: Ctx = Depends(org_ctx)) -> JobOut:
     if job is None or job.org != ctx.state.id:
         raise HTTPException(404, "Job not found")
     end = job.finished_at or time.time()
-    return JobOut(id=job.id, status=job.status, elapsed=round(end - job.started_at, 1), error=job.error)
+    return JobOut(id=job.id, status=job.status, elapsed=round(end - job.started_at, 1), error=job.error,
+                  message=job.message)
 
 
 def _timetable_out(ctx: Ctx) -> TimetableOut:

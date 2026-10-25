@@ -53,6 +53,14 @@ W_ROOM_SPREAD = 3
 W_STUDENT_PEAK = 2
 W_LIGHT_DAY = 6
 W_RULE = 2  # x rule weight (1-10) for "try" rules
+# Minimal-change regenerate: moving a class away from its current day/time costs far more than any
+# quality gain, so only classes that must move (or gain a lot) move. A new room at the same time costs a little.
+W_MOVE = 40
+W_ROOM_MOVE = 4
+
+# (allotment id, day, start period) -> venue id of the current timetable. Elective slots are also keyed
+# as ("e:<slot id>", day, start) for their common time.
+Keep = dict[tuple[str, str, int], str | None]
 
 
 def _window_rules(college: College, section_ids: list[str], day: str, begin: int, end: int) -> int | None:
@@ -248,8 +256,12 @@ def generate(
     pins: dict[str, list[Pin]] | None = None,
     lunch_pins: dict[tuple[str, str], int] | None = None,
     fixed: list[Session] | None = None,
+    keep: Keep | None = None,
 ) -> Timetable:
     """Build a timetable.
+
+    ``keep`` (mid-semester regenerate): the current placements; every class that leaves its day/time
+    is penalised heavily, so the new timetable stays as close to the current one as the new data allows.
 
     Full generation runs in two stages for speed and quality:
       A. times only (day + period for every class and elective slot), with a room-count
@@ -282,18 +294,19 @@ def generate(
         return done(tt)
 
     stage_a = _solve(college, units, eunits, time_limit * 0.8, workers, log, {}, lunch_pins or {},
-                     with_venues=False)
+                     with_venues=False, keep=keep)
     if not stage_a.sessions:
         return done(stage_a)
     remaining = max(time_limit - (time.perf_counter() - t0), 5.0)
-    roomed = assign_rooms(college, units, stage_a.sessions, remaining, workers)
+    roomed = assign_rooms(college, units, stage_a.sessions, remaining, workers, keep=keep)
     if roomed is not None:
         stage_a.sessions = roomed
         return done(stage_a)
 
     # Rare: rooms couldn't be matched to A's times. Keep the elective slots (with rooms of their
     # own), then solve the regular classes' times + rooms together, starting from A.
-    electives = assign_rooms(college, units, [s for s in stage_a.sessions if s.elective_slot_id], 10.0, workers)
+    electives = assign_rooms(college, units, [s for s in stage_a.sessions if s.elective_slot_id], 10.0, workers,
+                             keep=keep)
     if electives is None:
         stage_a.sessions = []
         stage_a.status = "infeasible"
@@ -302,7 +315,7 @@ def generate(
     hints = {(s.allotment_id, s.day, s.start_period) for s in stage_a.sessions if not s.elective_slot_id}
     lunch = {(ln.section_id, ln.day): ln.period for ln in stage_a.lunches}
     full = _solve(college, units, [], max(remaining, 20.0), workers, log, {}, lunch, with_venues=True,
-                  hints=hints, blockers=electives)
+                  hints=hints, blockers=electives, keep=keep)
     if full.sessions:
         full.sessions = full.sessions + electives
     return done(full)
@@ -333,6 +346,7 @@ def _solve(
     with_venues: bool,
     hints: set[tuple[str, str, int]] | None = None,
     blockers: list[Session] | None = None,
+    keep: Keep | None = None,
 ) -> Timetable:
     t0 = time.perf_counter()
     model = cp_model.CpModel()
@@ -415,6 +429,14 @@ def _solve(
                     x[(ui, d, s, vid)] = var
                     if hints is not None:
                         model.AddHint(var, (u.allotment_id, day, s) in hints)
+                    if keep is not None:
+                        kept = (u.allotment_id, day, s) in keep
+                        if hints is None:
+                            model.AddHint(var, kept)
+                        if not kept:
+                            cost_terms.append(W_MOVE * var)
+                        elif vid is not None and keep[(u.allotment_id, day, s)] != vid:
+                            cost_terms.append(W_ROOM_MOVE * var)
                     unit_day[(ui, d)].append(var)
                     for c in points:
                         cover[(f"t:{u.teacher_id}", d, c)].append(var)
@@ -450,6 +472,11 @@ def _solve(
                 var = model.NewBoolVar(f"e{ei}_d{d}_s{s}")
                 if rule_cost:
                     cost_terms.append(rule_cost * var)
+                if keep is not None:
+                    kept = (f"e:{eu.slot.id}", day, s) in keep
+                    model.AddHint(var, kept)
+                    if not kept:
+                        cost_terms.append(W_MOVE * var)
                 z[(ei, d, s)] = var
                 vars_today.append(var)
                 points = [c for c in checkpoints if begin <= c < end]
@@ -667,6 +694,7 @@ def _solve(
 
 def assign_rooms(
     college: College, units: list[Unit], sessions: list[Session], time_limit: float, workers: int = 8,
+    keep: Keep | None = None,
 ) -> list[Session] | None:
     """Stage B: give every timed class a room. Returns None if some class can't get one."""
     model = cp_model.CpModel()
@@ -682,9 +710,14 @@ def assign_rooms(
         options = session_venues(college, s, by_allotment)
         if not options:
             return None
+        before = keep.get((s.allotment_id, s.day, s.start_period), "-") if keep is not None else "-"
         for vid, cost in options:
             var = model.NewBoolVar(f"r{i}_{vid}")
             y[(i, vid)] = var
+            if before != "-":  # same time as now: prefer the same room
+                model.AddHint(var, vid == before)
+                if vid != before:
+                    cost += W_ROOM_MOVE
             for c in points:
                 cover[(vid, s.day, c)].append(var)
             if s.kind == Kind.lecture and not s.elective_slot_id:

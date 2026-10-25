@@ -63,6 +63,7 @@ class Job:
     started_at: float = field(default_factory=time.time)
     finished_at: float | None = None
     error: str | None = None
+    message: str = ""  # e.g. the minimal-change summary
 
 
 @dataclass
