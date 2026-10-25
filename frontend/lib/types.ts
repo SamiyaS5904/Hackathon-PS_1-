@@ -130,7 +130,7 @@ export interface Member {
   user_id: string; org_id: string; org_name: string; name: string; email: string; role: Role;
   department_id: string | null; teacher_id: string | null; section_id: string | null; batch_id: string | null;
 }
-export interface AuthOut { token: string; user_id: string; name: string; email: string; memberships: Member[] }
+export interface AuthOut { token: string; user_id: string; name: string; email: string; memberships: Member[]; platform_owner?: boolean }
 export interface InviteOut {
   token: string; org_id: string; org_name: string; email: string; role: Role;
   department_id: string | null; teacher_id: string | null; status: string;
@@ -282,4 +282,45 @@ export interface SectioningOptions {
   shift_id?: string;
   mix_by?: string;
   prefix?: string;
+}
+
+// ---- Platform owner (Super Admin) ----
+
+export interface CollegeSummary {
+  id: string;
+  name: string;
+  is_demo: boolean;
+  created_at: number;
+  plan: "trial" | "pro" | "campus";
+  status: "active" | "read_only" | "paused";
+  note: string;
+  stage: string;
+  departments: number;
+  departments_ready: number;
+  sections: number;
+  teachers: number;
+  students: number;
+  accounts: number;
+  classes: number;
+  published_at: number | null;
+  attendance_marked: number;
+  bookings: number;
+  last_activity: number;
+  flags: string[];
+  needs_attention: boolean;
+}
+
+export interface PlatformOverview {
+  colleges: number;
+  live: number;
+  needs_attention: number;
+  students: number;
+  teachers: number;
+  sections: number;
+  classes: number;
+  accounts: number;
+  attendance_marked: number;
+  bookings: number;
+  plans: Record<string, number>;
+  items: CollegeSummary[];
 }

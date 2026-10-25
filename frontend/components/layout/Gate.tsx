@@ -1,7 +1,8 @@
 "use client";
 
 import { Loader2 } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 import { ChatPanel } from "@/components/chat/ChatPanel";
 import { PUBLIC_PATHS, useAuth } from "@/lib/auth";
 import { ChatPageProvider } from "@/lib/chat-context";
@@ -9,16 +10,36 @@ import { NotificationsProvider } from "@/lib/notifications";
 import { TimetableProvider } from "@/lib/timetable-context";
 import { ThemeToggle } from "@/lib/theme";
 import { AppShell } from "./AppShell";
+import { PlatformShell } from "./PlatformShell";
 
 /** Public pages (login, signup, invite) render bare; everything else needs a login and a college. */
 export function Gate({ children }: { children: React.ReactNode }) {
   const path = usePathname();
+  const router = useRouter();
   const { ready, user, member } = useAuth();
+  const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
+  const onPlatform = path.startsWith("/platform");
+  // A platform owner without a college lands on the platform page.
+  const toPlatform = ready && !!user?.platform_owner && !member && !onPlatform && !isPublic;
+  useEffect(() => {
+    if (toPlatform) router.replace("/platform");
+  }, [toPlatform, router]);
 
-  if (PUBLIC_PATHS.some((p) => path.startsWith(p))) {
+  if (isPublic) {
     return <AuthLayout>{children}</AuthLayout>;
   }
-  if (!ready || !user) {
+  if (ready && user && onPlatform) {
+    if (!user.platform_owner) {
+      return (
+        <AuthLayout>
+          <h1 className="text-lg font-semibold">Page not found</h1>
+          <p className="mt-2 text-sm text-muted">This page is for the Timetabl.ai platform team.</p>
+        </AuthLayout>
+      );
+    }
+    return <PlatformShell>{children}</PlatformShell>;
+  }
+  if (!ready || !user || toPlatform) {
     return (
       <div className="grid min-h-screen place-items-center text-sm text-muted">
         <Loader2 className="animate-spin" aria-label="Loading" />

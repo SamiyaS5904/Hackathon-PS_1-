@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowLeft, GraduationCap, Loader2, School, User, UserCog } from "lucide-react";
+import { ArrowLeft, Globe2, GraduationCap, Loader2, School, User, UserCog } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
@@ -35,8 +35,9 @@ export default function DemoPage() {
     setBusy(email);
     setError(null);
     try {
-      signIn(await auth.login(email, PASSWORD));
-      router.replace("/");
+      const out = await auth.login(email, PASSWORD);
+      signIn(out);
+      router.replace(out.platform_owner && out.memberships.length === 0 ? "/platform" : "/");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't open the demo");
     } finally {
@@ -107,6 +108,15 @@ export default function DemoPage() {
             </span>
           </span>
         </div>
+
+        <p className="pt-2 text-xs font-medium uppercase tracking-wide text-muted">For the Timetabl.ai team</p>
+        <button className={card} disabled={!!busy} onClick={() => go(`owner@${DOMAIN}`)}>
+          {icon(`owner@${DOMAIN}`, Globe2)}
+          <span>
+            <span className="block font-medium">Platform owner (SaaS)</span>
+            <span className="text-xs text-muted">Every college on the platform: plans, progress, health, pause / read-only</span>
+          </span>
+        </button>
       </div>
       <div className="mt-3"><FormError message={error} /></div>
       <p className="mt-4 text-xs text-muted">

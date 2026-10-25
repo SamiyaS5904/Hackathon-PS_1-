@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, OfficeHour, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -90,6 +90,10 @@ export const api = {
   withdrawRequest: (id: string) =>
     request<ChangeRequest>(`${org()}/change-requests/${id}/withdraw`, { method: "POST" }),
   notifications: () => request<Feed>(`${org()}/notifications`),
+  // Platform owner (Super Admin): not tied to one college
+  platformOverview: () => request<PlatformOverview>("/api/platform/overview"),
+  updateCollege: (id: string, body: { plan?: string; status?: string; note?: string }) =>
+    request<CollegeSummary>(`/api/platform/colleges/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   // Teacher booking
   myBookings: (includePast = false) => request<Booking[]>(`${org()}/bookings?include_past=${includePast}`),
   cancelBooking: (id: string) => request<Booking[]>(`${org()}/bookings/${id}/cancel`, { method: "POST" }),
