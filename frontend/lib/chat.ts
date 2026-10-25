@@ -18,7 +18,7 @@ export async function streamChat(
   conversationId: string | null,
   page: PageInfo,
   onEvent: (e: ChatEvent) => void,
-  signal?: AbortSignal,
+  opts: { signal?: AbortSignal; voice?: boolean } = {},
 ): Promise<void> {
   const { token, org } = getSession();
   const now = new Date();
@@ -26,10 +26,10 @@ export async function streamChat(
   try {
     res = await fetch(`${CHATBOT}/chat`, {
       method: "POST",
-      signal,
+      signal: opts.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        org, message, conversation_id: conversationId, page,
+        org, message, conversation_id: conversationId, page, voice: !!opts.voice,
         today: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
         now: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
       }),
@@ -80,8 +80,55 @@ export function createRecognition(): Recognition | null {
   const Ctor = w.SpeechRecognition ?? w.webkitSpeechRecognition;
   if (!Ctor) return null;
   const r = new Ctor();
+  // Indian English: understands Indian accents and writes Hinglish in Roman script ("kal mera lecture kab hai"),
+  // which is what the assistant mirrors back.
   r.lang = "en-IN";
   r.interimResults = true;
-  r.continuous = false;
+  r.continuous = false; // stops by itself after a pause, then the question is sent
   return r;
+}
+
+/** Plain-language reason for a speech-recognition error (null = nothing worth showing). */
+export function voiceErrorText(code: string): string | null {
+  switch (code) {
+    case "not-allowed":
+    case "service-not-allowed":
+      return "The microphone is blocked. Allow it from the icon at the left of the address bar, then tap the mic again.";
+    case "audio-capture":
+      return "No microphone found. Plug one in or type your question.";
+    case "no-speech":
+      return "I didn't hear anything. Tap the mic and speak, or type your question.";
+    case "network":
+      return "Voice needs an internet connection. You can still type your question.";
+    default:
+      return null; // "aborted": the user stopped it
+  }
+}
+
+/** Read a reply aloud (browser speech). Markdown marks are removed first. Returns false where unsupported. */
+export function speak(text: string, onEnd: () => void): boolean {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) return false;
+  const plain = text
+    .replace(/\*\*/g, "")
+    .replace(/^\s*[-*•]\s+/gm, "")
+    .replace(/[`#_]/g, "")
+    .replace(/(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})/g, "$1:$2 to $3:$4")
+    .trim();
+  if (!plain) return false;
+  const synth = window.speechSynthesis;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(plain);
+  const voices = synth.getVoices();
+  const voice = voices.find((v) => v.lang === "en-IN") ?? voices.find((v) => v.lang.startsWith("en"));
+  if (voice) u.voice = voice;
+  u.lang = voice?.lang ?? "en-IN";
+  u.rate = 1.02;
+  u.onend = onEnd;
+  u.onerror = onEnd;
+  synth.speak(u);
+  return true;
+}
+
+export function stopSpeaking() {
+  if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();
 }

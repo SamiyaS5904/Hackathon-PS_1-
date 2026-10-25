@@ -26,7 +26,8 @@ Any student works by hand: `cse3a.05@…`, `ece2a.12@…` (section + roll 01–6
 **log out** icon (bottom-left, or top-right on a phone).
 
 Everywhere: **sun/moon icon** = light/dark theme · **bell** = notifications · **Ask** button or
-**Ctrl+K** = AI assistant (also by voice: the mic button, in Chrome/Edge).
+**Ctrl+K** = AI assistant (also by voice: the mic button, in Chrome/Edge; answers to spoken questions are read aloud).
+The assistant answers in your language: English → English, Hinglish (Roman) → Hinglish, e.g. "kal mera pehla lecture kab hai?"
 
 ## 3. Where each feature is
 

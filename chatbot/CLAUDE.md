@@ -42,7 +42,7 @@ chatbot/
 ```
 
 ## Voice input
-- V1: the chat panel's mic button uses the **browser's built-in speech recognition** (Web Speech API; Chrome / Edge; `en-IN`). The recognised text fills the input box, the user can fix it, then sends. Replies are text.
+- V1: the chat panel's mic button uses the **browser's built-in speech recognition** (Web Speech API; Chrome / Edge; `en-IN`, which writes Hinglish in Roman script). Live transcript while speaking; after a pause the question is sent by itself ("Send now" / "Cancel" while listening). Spoken questions are sent with `voice: true`, so the model expects misheard words and answers briefly; the answer is shown and **read aloud** (browser speech synthesis, an `en-IN` voice), with a Stop button and a header toggle to turn reading off (remembered per browser). Blocked / missing mic and silence get a plain-language message.
 - The chatbot must be just as good **without** voice: typing is always available, and the mic button hides itself when the browser has no speech support.
 - V2: **OpenAI Whisper** as a second option side by side (frontend records audio → `POST /transcribe` on this service → Whisper → text). Key `OPENAI_API_KEY` lives only in this service. Speech-to-text is behind one `transcribe()` interface so providers can be swapped.
 

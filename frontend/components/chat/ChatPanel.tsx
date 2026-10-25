@@ -1,13 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, CheckCircle2, Loader2, Mic, MicOff, RotateCcw, Send, Sparkles, X, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Loader2, Mic, RotateCcw, Send, Sparkles, Square, Volume2, VolumeX, X, XCircle } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
-import { createRecognition, streamChat } from "@/lib/chat";
+import { createRecognition, speak, stopSpeaking, streamChat, voiceErrorText } from "@/lib/chat";
 import { useChatPage } from "@/lib/chat-context";
 import { useTimetable } from "@/lib/timetable-context";
 import type { ChatCard, ChatEvent, Insight, Role } from "@/lib/types";
@@ -62,13 +62,29 @@ export function ChatPanel() {
   const [insights, setInsights] = useState<Insight[] | null>(null);
   const [listening, setListening] = useState(false);
   const [voice, setVoice] = useState(false);
+  const [heard, setHeard] = useState(""); // live transcript while speaking
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [speakReplies, setSpeakReplies] = useState(true); // replies to spoken questions are read aloud
+  const [speaking, setSpeaking] = useState(false);
   const recRef = useRef<ReturnType<typeof createRecognition>>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     setVoice(createRecognition() !== null);
+    try {
+      setSpeakReplies(localStorage.getItem("tt-speak-replies") !== "0");
+    } catch {
+      /* storage blocked: keep the default */
+    }
   }, []);
+  useEffect(() => {
+    if (!open) {
+      recRef.current?.stop();
+      stopSpeaking();
+      setSpeaking(false);
+    }
+  }, [open]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -88,17 +104,24 @@ export function ChatPanel() {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [msgs]);
 
-  const send = useCallback(async (text: string) => {
+  const send = useCallback(async (text: string, spoken = false) => {
     const q = text.trim();
     if (!q || busy) return;
     setInput("");
+    setVoiceError(null);
+    stopSpeaking();
+    setSpeaking(false);
     setBusy(true);
+    let answer = "";
     setMsgs((m) => [...m, { role: "user", text: q, tools: [], cards: [] },
       { role: "assistant", text: "", tools: [], cards: [] }]);
     const update = (fn: (m: Msg) => Msg) => setMsgs((all) => [...all.slice(0, -1), fn(all[all.length - 1])]);
     await streamChat(q, convId, { path, ...page }, (e: ChatEvent) => {
       if (e.type === "start") setConvId(e.conversation_id);
-      else if (e.type === "token") update((m) => ({ ...m, text: m.text + e.text }));
+      else if (e.type === "token") {
+        answer += e.text;
+        update((m) => ({ ...m, text: m.text + e.text }));
+      }
       else if (e.type === "tool")
         update((m) => {
           const tools = [...m.tools];
@@ -109,9 +132,11 @@ export function ChatPanel() {
         });
       else if (e.type === "card") update((m) => ({ ...m, cards: [...m.cards, e.card] }));
       else if (e.type === "error") update((m) => ({ ...m, error: e.message }));
-    });
+    }, { voice: spoken });
     setBusy(false);
-  }, [busy, convId, path, page]);
+    // Spoken question -> spoken answer (the text stays on screen too).
+    if (spoken && speakReplies && speak(answer, () => setSpeaking(false))) setSpeaking(true);
+  }, [busy, convId, path, page, speakReplies]);
 
   // Questions sent from elsewhere (e.g. an insight's "Ask" button).
   useEffect(() => {
@@ -121,6 +146,7 @@ export function ChatPanel() {
     }
   }, [pending, open, busy, send, clearPending]);
 
+  // Tap the mic, speak (English or Hinglish), pause: the question is sent by itself. Tap again to send early.
   const toggleMic = () => {
     if (listening) {
       recRef.current?.stop();
@@ -128,16 +154,42 @@ export function ChatPanel() {
     }
     const r = createRecognition();
     if (!r) return;
+    stopSpeaking();
+    setSpeaking(false);
+    setVoiceError(null);
     recRef.current = r;
-    const base = input ? `${input} ` : "";
+    const base = input.trim() ? `${input.trim()} ` : "";
+    let said = "";
     r.onresult = (e) => {
-      const said = Array.from(e.results).map((res) => res[0].transcript).join("");
-      setInput(base + said);
+      said = Array.from(e.results).map((res) => res[0].transcript).join("");
+      setHeard(said);
     };
-    r.onend = () => setListening(false);
-    r.onerror = () => setListening(false);
+    r.onerror = (e) => setVoiceError(voiceErrorText(e.error));
+    r.onend = () => {
+      setListening(false);
+      setHeard("");
+      if (said.trim()) send(base + said, true);
+    };
     setListening(true);
-    r.start();
+    try {
+      r.start();
+    } catch {
+      setListening(false);
+    }
+  };
+
+  const toggleSpeakReplies = () => {
+    const next = !speakReplies;
+    setSpeakReplies(next);
+    if (!next) {
+      stopSpeaking();
+      setSpeaking(false);
+    }
+    try {
+      localStorage.setItem("tt-speak-replies", next ? "1" : "0");
+    } catch {
+      /* storage blocked: the choice lasts for this visit */
+    }
   };
 
   const reset = () => {
@@ -167,6 +219,14 @@ export function ChatPanel() {
                 {page.entity ? `Looking at ${page.entity}` : "Answers from your timetable"} · changes need your Apply
               </p>
             </div>
+            {voice && (
+              <button onClick={toggleSpeakReplies} aria-pressed={speakReplies}
+                aria-label={speakReplies ? "Don't read answers aloud" : "Read answers to spoken questions aloud"}
+                title={speakReplies ? "Answers to spoken questions are read aloud" : "Answers are not read aloud"}
+                className="rounded p-1.5 text-muted hover:bg-surface-2">
+                {speakReplies ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              </button>
+            )}
             {msgs.length > 0 && (
               <button onClick={reset} aria-label="New conversation" title="New conversation"
                 className="rounded p-1.5 text-muted hover:bg-surface-2"><RotateCcw size={16} /></button>
@@ -180,7 +240,8 @@ export function ChatPanel() {
             {msgs.length === 0 && (
               <div className="space-y-4">
                 <p className="text-sm text-muted">
-                  Hi {user?.name.split(" ")[0]}. Ask about your timetable in plain words{voice ? ", or tap the mic and speak" : ""}.
+                  Hi {user?.name.split(" ")[0]}. Ask about your timetable in plain words
+                  {voice ? ", or tap the mic and speak" : ""}. English or Hinglish both work: I answer in the language you use.
                 </p>
                 {insights && insights.length > 0 && (
                   <div className="space-y-2">
@@ -233,6 +294,29 @@ export function ChatPanel() {
           </div>
 
           <form className="border-t border-border p-3" onSubmit={(e) => { e.preventDefault(); send(input); }}>
+            {listening && (
+              <div className="mb-2 flex items-center gap-2 rounded-lg bg-danger-soft/60 px-3 py-2 text-sm" role="status">
+                <span className="relative flex h-2.5 w-2.5 shrink-0">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-60" />
+                  <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-danger" />
+                </span>
+                <span className="min-w-0 flex-1 truncate">{heard || <span className="text-muted">Listening… speak in English or Hinglish</span>}</span>
+                <button type="button" onClick={toggleMic} className="shrink-0 text-xs font-medium text-danger hover:underline">
+                  {heard ? "Send now" : "Cancel"}
+                </button>
+              </div>
+            )}
+            {speaking && !listening && (
+              <div className="mb-2 flex items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-text" role="status">
+                <Volume2 size={15} className="shrink-0" aria-hidden />
+                <span className="flex-1">Reading the answer aloud</span>
+                <button type="button" onClick={() => { stopSpeaking(); setSpeaking(false); }}
+                  className="flex items-center gap-1 text-xs font-medium hover:underline">
+                  <Square size={11} aria-hidden /> Stop
+                </button>
+              </div>
+            )}
+            {voiceError && !listening && <p className="mb-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn" role="alert">{voiceError}</p>}
             <div className="flex items-end gap-2 rounded-xl border border-border-strong bg-surface px-3 py-2 focus-within:border-accent">
               <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} rows={1} maxLength={2000}
                 onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
@@ -242,7 +326,7 @@ export function ChatPanel() {
                 <button type="button" onClick={toggleMic} aria-label={listening ? "Stop listening" : "Speak your question"}
                   aria-pressed={listening}
                   className={clsx("rounded-full p-2 transition", listening ? "animate-pulse bg-danger-soft text-danger" : "text-muted hover:bg-surface-2")}>
-                  {listening ? <MicOff size={16} /> : <Mic size={16} />}
+                  {listening ? <Square size={14} /> : <Mic size={16} />}
                 </button>
               )}
               <button type="submit" disabled={busy || !input.trim()} aria-label="Send"
