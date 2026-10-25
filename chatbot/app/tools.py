@@ -114,6 +114,31 @@ class SectionNameIn(BaseModel):
     section: str
 
 
+class DoubtSlotsIn(BaseModel):
+    teacher: str | None = None
+
+
+class DoubtBookingIn(BaseModel):
+    office_hour_id: str
+    date: str
+    topic: str = ""
+
+
+class MeetingTimesIn(BaseModel):
+    teachers: list[str]
+    days: int = 7
+    periods: int = 1
+
+
+class MeetingIn(BaseModel):
+    teachers: list[str]
+    date: str
+    start_time: str
+    periods: int = 1
+    title: str = ""
+    place: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Tool definitions (JSON schema for the model) + who may use them
 # ---------------------------------------------------------------------------
@@ -221,6 +246,39 @@ TOOLS: dict[str, tuple[dict, type[BaseModel], tuple[str, ...]]] = {
          "start_time": {**TIME, "description": "For move: new start time (must be a free time)."},
          "reason": {"type": "string", "description": "Short reason shown to students."}},
         ["session_id", "date", "kind"]), OneDayIn, ("teacher", "coordinator", "admin")),
+    "my_bookings": (_tool(
+        "my_bookings",
+        "The user's upcoming bookings: doubt slots (students: theirs; teachers: with them) and meetings (teachers: "
+        "with them; Coordinator / Admin: the ones they booked). A 'clash' means the timetable changed under it.",
+        {}, []), NoInput, ("student", "teacher", "coordinator", "admin")),
+    "doubt_slots": (_tool(
+        "doubt_slots",
+        "Open doubt slots in teachers' office hours over the next two weeks when the student has no class. Give a "
+        "teacher name, or leave it out for every teacher (the student's own teachers are listed first).",
+        {"teacher": {"type": "string", "description": "Teacher name (optional)."}}, []), DoubtSlotsIn, ("student",)),
+    "prepare_doubt_booking": (_tool(
+        "prepare_doubt_booking",
+        "Prepare booking one doubt slot (from doubt_slots). The student sees a card and books it with one click.",
+        {"office_hour_id": {"type": "string"}, "date": DATE,
+         "topic": {"type": "string", "description": "What the student wants to ask (short)."}},
+        ["office_hour_id", "date"]), DoubtBookingIn, ("student",)),
+    "meeting_times": (_tool(
+        "meeting_times",
+        "Times when every listed teacher is free (no class, no blocked time, no other booking) inside their working "
+        "hours, over the next 1-14 days, earliest first. Coordinators can only include their own department's teachers.",
+        {"teachers": {"type": "array", "items": {"type": "string"}, "description": "Teacher names."},
+         "days": {"type": "integer", "description": "How many days ahead to look (1-14, default 7)."},
+         "periods": {"type": "integer", "description": "Meeting length in periods (1-3, default 1)."}},
+        ["teachers"]), MeetingTimesIn, STAFF),
+    "prepare_meeting": (_tool(
+        "prepare_meeting",
+        "Prepare booking a meeting at a time from meeting_times. The user sees a card and books it; the teachers are "
+        "notified then.",
+        {"teachers": {"type": "array", "items": {"type": "string"}}, "date": DATE,
+         "start_time": {**TIME, "description": "A start time returned by meeting_times."},
+         "periods": {"type": "integer", "description": "Same length as asked from meeting_times."},
+         "title": {"type": "string"}, "place": {"type": "string"}},
+        ["teachers", "date", "start_time"]), MeetingIn, STAFF),
 }
 
 
@@ -566,5 +624,67 @@ async def _run(ctx: ToolContext, name: str, a: Any) -> Any:
         ctx.cards.append({"type": "one_day", "action": action})
         return {"prepared": True, "summary": action["summary"],
                 "note": "A card with Apply is shown to the user. It is NOT applied yet; students are told once applied."}
+
+    if name == "my_bookings":
+        items = await ctx.backend.my_bookings()
+        return {"bookings": [
+            f"{b['label']} {b['start']}-{b['end']} · {'Meeting' if b['kind'] == 'meeting' else 'Doubt slot'}: {b['title']}"
+            + f" · with {', '.join(b['teacher_names'])}" + (f" · student {b['student_name']} ({b['section']})"
+                                                           if b["kind"] == "doubt" and ctx.role != "student" else "")
+            + (f" · {b['place']}" if b["place"] else "") + (" · CANCELLED" if b["status"] == "cancelled" else "")
+            + (f" · CLASH: {b['clash']}" if b["clash"] else "") for b in items],
+            "where": "Bookings page in the app."}
+
+    if name == "doubt_slots":
+        teacher_id = None
+        if a.teacher:
+            teacher_id = _find(c["teachers"], a.teacher, ("name", "id"))["id"]
+        slots = await ctx.backend.doubt_slots(teacher_id)
+        if not slots:
+            hours = await ctx.backend.booking_teachers()
+            return {"slots": [], "teachers_with_office_hours": [
+                f"{t['name']}" + (" (teaches you)" if t["teaches_you"] else "") for t in hours],
+                "note": "No open slot (full, or the student has a class then)." if hours else
+                        "No teacher has set office hours yet."}
+        return {"slots": [{"office_hour_id": s["office_hour_id"], "date": s["date"],
+                           "when": f"{s['label']} {s['start']}-{s['end']}", "teacher": s["teacher_name"],
+                           "place": s["place"], "seats_left": s["seats_left"]} for s in slots[:20]]}
+
+    if name == "prepare_doubt_booking":
+        date.fromisoformat(a.date)
+        slots = await ctx.backend.doubt_slots(None)
+        s = next((x for x in slots if x["office_hour_id"] == a.office_hour_id and x["date"] == a.date), None)
+        if s is None:
+            raise ToolError("That slot isn't open (full, passed, or the student has a class). Use doubt_slots again.")
+        summary = f"Doubt slot with {s['teacher_name']}, {s['label']} {s['start']}-{s['end']}" + (
+            f", {s['place']}" if s["place"] else "") + (f" · {a.topic.strip()}" if a.topic.strip() else "")
+        ctx.cards.append({"type": "booking", "booking": {"kind": "doubt", "office_hour_id": a.office_hour_id,
+                                                         "date": a.date, "topic": a.topic.strip(), "summary": summary}})
+        return {"prepared": True, "summary": summary, "note": "A card with Book is shown. It is NOT booked yet."}
+
+    if name in ("meeting_times", "prepare_meeting"):
+        ids = list(dict.fromkeys(_find(c["teachers"], t, ("name", "id"))["id"] for t in a.teachers))
+        if not ids:
+            raise ToolError("Name at least one teacher.")
+        names = {t["id"]: t["name"] for t in c["teachers"]}
+        periods = max(1, min(3, a.periods))
+        if name == "meeting_times":
+            slots = await ctx.backend.meeting_times(ids, max(1, min(14, a.days)), periods)
+            return {"teachers": [names[i] for i in ids],
+                    "free_times": [f"{s['label']} ({s['date']}) {s['start']}-{s['end']}" for s in slots[:25]],
+                    "note": "" if slots else "No common free time; try more days, a shorter meeting or fewer teachers."}
+        date.fromisoformat(a.date)
+        slots = await ctx.backend.meeting_times(ids, 14, periods)
+        s = next((x for x in slots if x["date"] == a.date and x["start"] == a.start_time), None)
+        if s is None:
+            raise ToolError(f"{_label(a.date)} {a.start_time} isn't free for all of them. Use meeting_times.")
+        title = a.title.strip() or "Meeting"
+        summary = f"{title}: {s['label']} {s['start']}-{s['end']} with {', '.join(names[i] for i in ids)}" + (
+            f", {a.place.strip()}" if a.place.strip() else "")
+        ctx.cards.append({"type": "booking", "booking": {"kind": "meeting", "teacher_ids": ids, "date": a.date,
+                                                         "start": s["start"], "end": s["end"], "title": title,
+                                                         "place": a.place.strip(), "summary": summary}})
+        return {"prepared": True, "summary": summary,
+                "note": "A card with Book is shown. It is NOT booked yet; the teachers are notified once booked."}
 
     raise ToolError(f"Unknown tool {name}.")

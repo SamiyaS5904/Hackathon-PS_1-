@@ -114,3 +114,37 @@ def test_attendance_and_makeup_answers(backend):
     tc = ToolContext(backend=backend, member=TEACHER, today="2026-10-19", now="10:00")
     todo = json.loads(run(run_tool(tc, "unmarked_classes", {})))
     assert todo["not_marked"] and "Maths" in todo["not_marked"][0]
+
+
+def test_booking_tools_are_role_scoped():
+    assert {"doubt_slots", "prepare_doubt_booking", "my_bookings"} <= names("student")
+    assert not names("student") & {"meeting_times", "prepare_meeting"}
+    assert "my_bookings" in names("teacher") and not names("teacher") & {"doubt_slots", "meeting_times"}
+    assert {"meeting_times", "prepare_meeting", "my_bookings"} <= names("admin") and "doubt_slots" not in names("admin")
+
+
+def test_doubt_booking_is_only_prepared(backend, fake):
+    ctx = ToolContext(backend=backend, member=STUDENT, today="2026-10-19", now="09:00")
+    slots = json.loads(run(run_tool(ctx, "doubt_slots", {"teacher": "Anita"})))
+    assert slots["slots"][0]["when"] == "Tue 20 Oct 11:00-12:00"
+    out = json.loads(run(run_tool(ctx, "prepare_doubt_booking",
+                                  {"office_hour_id": "oh1", "date": "2026-10-20", "topic": "Limits"})))
+    assert out["prepared"] and ctx.cards[0]["type"] == "booking" and ctx.cards[0]["booking"]["kind"] == "doubt"
+    assert not any(m == "POST" for m, _, _ in fake.calls)  # nothing booked by the assistant
+    with pytest.raises(ToolError, match="isn't open"):
+        run(run_tool(ctx, "prepare_doubt_booking", {"office_hour_id": "oh1", "date": "2026-10-27"}))
+
+
+def test_meeting_is_prepared_only_at_a_common_free_time(backend, fake):
+    ctx = ToolContext(backend=backend, member=ADMIN, today="2026-10-19", now="09:00")
+    times = json.loads(run(run_tool(ctx, "meeting_times", {"teachers": ["Anita"], "days": 7})))
+    assert times["free_times"] == ["Tue 20 Oct (2026-10-20) 13:00-14:00"]
+    assert fake.calls[-1][2]["teacher_ids"] == ["t1"]
+    out = json.loads(run(run_tool(ctx, "prepare_meeting", {"teachers": ["Anita"], "date": "2026-10-20",
+                                                           "start_time": "13:00", "title": "Exam plan"})))
+    assert out["prepared"] and ctx.cards[0]["booking"]["teacher_ids"] == ["t1"]
+    assert not any(path.endswith("/bookings/meetings") for _, path, _ in fake.calls)
+    with pytest.raises(ToolError, match="isn't free"):
+        run(run_tool(ctx, "prepare_meeting", {"teachers": ["Anita"], "date": "2026-10-20", "start_time": "09:00"}))
+    mine = json.loads(run(run_tool(ctx, "my_bookings", {})))
+    assert "Doubt slot: Limits" in mine["bookings"][0]

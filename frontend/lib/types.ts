@@ -181,7 +181,15 @@ export interface OneDayAction {
   session_id: string; date: string; kind: "cancel" | "move"; to_date?: string; start_period?: number;
   reason: string; summary: string;
 }
-export type ChatCard = { type: "proposal"; proposal: Proposal } | { type: "one_day"; action: OneDayAction };
+export interface BookingAction {
+  kind: "doubt" | "meeting"; date: string; summary: string;
+  office_hour_id?: string; topic?: string; // doubt slot
+  teacher_ids?: string[]; start?: string; end?: string; title?: string; place?: string; // meeting
+}
+export type ChatCard =
+  | { type: "proposal"; proposal: Proposal }
+  | { type: "one_day"; action: OneDayAction }
+  | { type: "booking"; booking: BookingAction };
 export type ChatEvent =
   | { type: "start"; conversation_id: string }
   | { type: "token"; text: string }

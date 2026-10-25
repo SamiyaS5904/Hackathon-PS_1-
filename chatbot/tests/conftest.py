@@ -113,6 +113,23 @@ class FakeBackend:
                  "low": True},
                 {"student_id": "st2", "roll_no": "02", "name": "Diya", "held": 4, "attended": 4, "percent": 100.0,
                  "low": False}]})
+        if path.endswith("/bookings/doubt-slots"):
+            return httpx.Response(200, json=[{"date": "2026-10-20", "label": "Tue 20 Oct", "start": "11:00", "end": "12:00",
+                                              "teacher_id": "t1", "teacher_name": "Dr. Anita Sharma",
+                                              "office_hour_id": "oh1", "place": "Staff room", "seats_left": 2}])
+        if path.endswith("/bookings/teachers"):
+            return httpx.Response(200, json=[])
+        if path.endswith("/bookings/meeting-times"):
+            return httpx.Response(200, json=[{"date": "2026-10-20", "label": "Tue 20 Oct", "start": "13:00", "end": "14:00",
+                                              "teacher_id": None, "teacher_name": "", "office_hour_id": None,
+                                              "place": "", "seats_left": None}])
+        if path.endswith("/bookings"):
+            return httpx.Response(200, json=[{"id": "b1", "kind": "doubt", "date": "2026-10-20", "label": "Tue 20 Oct",
+                                              "start": "11:00", "end": "12:00", "teacher_ids": ["t1"],
+                                              "teacher_names": ["Dr. Anita Sharma"], "title": "Limits", "place": "",
+                                              "student_name": "Aarav", "section": "CSE-1A", "created_by": "u",
+                                              "created_by_name": "Aarav", "status": "booked", "cancelled_by": "",
+                                              "clash": None, "past": False}])
         if "/teachers/" in path:
             return httpx.Response(200, json={"teacher": "Dr. Anita Sharma", "date": "Mon 19 Oct", "time": "09:30",
                                              "status": "teaching", "subject": "Maths", "room": "Room 1",

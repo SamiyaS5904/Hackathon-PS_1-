@@ -92,6 +92,21 @@ class Backend:
     async def insights(self) -> list:
         return await self._call("GET", self._o("/insights"))
 
+    async def my_bookings(self) -> list:
+        return await self._call("GET", self._o("/bookings"))
+
+    async def booking_teachers(self) -> list:
+        return await self._call("GET", self._o("/bookings/teachers"))
+
+    async def doubt_slots(self, teacher_id: str | None) -> list:
+        return await self._call("GET", self._o("/bookings/doubt-slots"),
+                                params={"teacher_id": teacher_id} if teacher_id else None)
+
+    async def meeting_times(self, teacher_ids: list[str], days: int, periods: int) -> list:
+        # A read: finds free times, books nothing.
+        return await self._call("POST", self._o("/bookings/meeting-times"),
+                                json={"teacher_ids": teacher_ids, "days": days, "periods": periods})
+
     # ---- proposals (never applied here: the user applies them in the app) ----
     async def propose(self, session_id: str, day: str, start_period: int) -> dict:
         return await self._call("POST", self._o("/proposals"),

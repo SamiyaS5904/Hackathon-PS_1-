@@ -22,11 +22,11 @@ interface Msg {
 
 const SUGGESTIONS: Record<Role, string[]> = {
   student: ["What do I have tomorrow?", "What's my attendance, and can I miss a class?",
-    "When am I free next week to fix a meeting?", "Which rooms are free right now?"],
+    "Book a doubt slot with my maths teacher this week", "Which rooms are free right now?"],
   teacher: ["What do I teach tomorrow?", "Which classes haven't I marked attendance for?",
     "I cancelled Monday's lecture: find a makeup time", "Where is Dr. Anita Sharma right now?"],
   coordinator: ["Who is below 75% attendance in CSE-2A?", "Which classes in my department still need attention?",
-    "Move CSE-2A's Data Structures to Thursday morning", "When is CSE-2A free on Friday?"],
+    "Move CSE-2A's Data Structures to Thursday morning", "When are all my department's teachers free for a meeting this week?"],
   admin: ["Explain the quality score and what to improve", "Who is below 75% attendance in CSE-3A?",
     "Which departments aren't Ready yet?", "Which rooms are almost unused?"],
 };
@@ -352,6 +352,13 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parame
       if (card.type === "proposal") {
         onApplied(await api.apply(card.proposal.id));
         setMessage("Applied. The timetable is updated and the change is in Activity (undo is there too).");
+      } else if (card.type === "booking") {
+        const b = card.booking;
+        const out = b.kind === "doubt"
+          ? await api.bookDoubt({ office_hour_id: b.office_hour_id ?? "", date: b.date, topic: b.topic ?? "" })
+          : await api.bookMeeting({ teacher_ids: b.teacher_ids ?? [], date: b.date, start: b.start ?? "",
+            end: b.end ?? "", title: b.title ?? "", place: b.place ?? "" });
+        setMessage(`${out.message} It's on your Bookings page.`);
       } else {
         const a = card.action;
         const out = await api.addOverride({ session_id: a.session_id, date: a.date, kind: a.kind, to_date: a.to_date,
@@ -369,12 +376,13 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parame
     if (card.type === "proposal") api.discard(card.proposal.id);
     setState("discarded");
   };
+  const heading = card.type === "proposal" ? "Permanent change · checked for clashes"
+    : card.type === "booking" ? (card.booking.kind === "doubt" ? "Doubt slot · not booked yet" : "Meeting · not booked yet")
+      : "One-day change";
 
   return (
     <div className="rounded-xl border border-accent/30 bg-accent-soft/40 p-3">
-      <p className="text-xs font-medium uppercase tracking-wide text-accent-text">
-        {card.type === "proposal" ? "Permanent change · checked for clashes" : "One-day change"}
-      </p>
+      <p className="text-xs font-medium uppercase tracking-wide text-accent-text">{heading}</p>
       {card.type === "proposal" ? (
         <ul className="mt-2 space-y-1.5 text-xs">
           {card.proposal.changes.map((c) => (
@@ -389,7 +397,7 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parame
           ))}
         </ul>
       ) : (
-        <p className="mt-1 text-sm">{card.action.summary}</p>
+        <p className="mt-1 text-sm">{card.type === "booking" ? card.booking.summary : card.action.summary}</p>
       )}
       {state === "applied" || state === "error" ? (
         <p className={clsx("mt-2 text-xs", state === "applied" ? "text-ok" : "text-danger")}>{message}</p>
@@ -398,7 +406,7 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parame
       ) : (
         <div className="mt-3 flex gap-2">
           <Button variant="primary" onClick={apply} disabled={state === "busy"} className="px-3 py-1.5 text-xs">
-            {state === "busy" && <Loader2 size={14} className="animate-spin" />} Apply
+            {state === "busy" && <Loader2 size={14} className="animate-spin" />} {card.type === "booking" ? "Book" : "Apply"}
           </Button>
           <Button onClick={discard} disabled={state === "busy"} className="px-3 py-1.5 text-xs">Discard</Button>
         </div>
