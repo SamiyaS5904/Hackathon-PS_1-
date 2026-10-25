@@ -85,3 +85,36 @@ def test_occurrence_ids_are_stable_when_a_class_moves():
     assert new is not None, msg
     ids = {o.status: o.occurrence_id for o in occurrences(college, new, day) if o.session.id == s.id}
     assert ids["moved_in"] == ids["moved_out"] == before.occurrence_id
+
+
+def test_makeup_finder_books_a_cancelled_class_and_stays_clash_free():
+    from app.edits.oneday import _day, makeup_options
+
+    college, tt = solved()
+
+    def cancel_and_find(x):
+        c, _, _ = add_override(college, tt, x.id, MONDAY, "cancel", None, None, "Teacher unwell", "Admin")
+        return c, makeup_options(college, c, x.id, MONDAY, today=MONDAY, days=14)
+
+    s, cancelled, opts = next((x, *cancel_and_find(x)) for x in tt.sessions
+                              if x.day == "Mon" and x.kind.value == "lecture" and cancel_and_find(x)[1])
+    assert all(o.date >= MONDAY for o in opts)
+    assert opts == sorted(opts, key=lambda o: (o.date, o.start))  # soonest first
+    pick = opts[0]
+    booked, msg, _ = add_override(college, cancelled, s.id, MONDAY, "move", pick.date, pick.start_period, "Makeup",
+                                  "Admin")
+    assert booked is not None, msg
+    mine = [o for o in booked.overrides if o.session_id == s.id and o.date == MONDAY]
+    assert len(mine) == 1 and mine[0].kind == "move"  # the makeup replaced the cancellation
+    assert validate(college, *_day(college, booked, pick.date), check_counts=False) == []
+    # Nothing in the past is offered.
+    later = makeup_options(college, cancelled, s.id, MONDAY, today="2026-10-21", days=7)
+    assert all(o.date >= "2026-10-21" for o in later)
+
+
+def test_moving_to_another_day_respects_the_classs_own_weekly_slot_there():
+    """Next Monday the same class happens at its usual time: a one-day move must not land on top of it."""
+    college, tt = solved()
+    s = next(x for x in tt.sessions if x.day == "Mon" and x.kind.value == "lecture")
+    opts = day_options(college, tt, s.id, MONDAY, "2026-10-26")
+    assert all(o.status == "blocked" for o in opts if o.start_period == s.start_period)

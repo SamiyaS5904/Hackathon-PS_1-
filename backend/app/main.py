@@ -35,7 +35,8 @@ from app.core.deps import Ctx, allow, current_user, org_ctx
 from app.core.security import create_token
 from app.db.models import UserRow
 from app.edits.moves import Change, MoveOption, diff, move_options, repair_move
-from app.edits.oneday import DayInfo, Occurrence, add_override, day_options, label, occurrences, remove_override, week
+from app.edits.oneday import (DayInfo, MakeupOption, Occurrence, add_override, day_options, label, makeup_options,
+                              occurrences, remove_override, week)
 from app.io.excel import RowError
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
@@ -921,6 +922,15 @@ def get_day_options(session_id: str, date: str, to_date: str, ctx: Ctx = Depends
     state = _current(ctx, for_edit=True)
     allow(can_edit_one_day(ctx.member, state.college, _session(state, session_id)))
     return day_options(state.college, state.timetable, session_id, date, to_date)
+
+
+@app.get("/api/orgs/{org}/timetable/sessions/{session_id}/makeup", response_model=list[MakeupOption])
+def get_makeup_options(session_id: str, date: str, days: int = 7, ctx: Ctx = Depends(org_ctx)) -> list[MakeupOption]:
+    """Makeup class finder: free times in the next ``days`` days for this class (teacher, students, room)."""
+    state = _current(ctx, for_edit=True)
+    allow(can_edit_one_day(ctx.member, state.college, _session(state, session_id)))
+    return makeup_options(state.college, state.timetable, session_id, date, datetime.date.today().isoformat(),
+                          days=max(1, min(days, 21)))
 
 
 @app.post("/api/orgs/{org}/overrides", response_model=OverrideOut, status_code=201)

@@ -124,12 +124,16 @@ def day_options(college: College, tt: Timetable, session_id: str, from_date: str
     wd = weekday(college, to_date)
     if wd is None or any(h.date == to_date for h in college.holidays):
         return []
-    others = [x for x in active(college, tt, to_date) if x.id != s.id]
+    # On its own date the class may move anywhere free; on another date its regular weekly occurrence
+    # there is a separate class that really happens, so it counts like any other.
+    others = [x for x in active(college, tt, to_date) if not (x.id == s.id and to_date == from_date)]
     out = []
     for p in range(len(college.shift(s.shift_id).periods)):
         if to_date == from_date and p == s.start_period:
             continue
-        opt = check_slot(college, s, wd, p, others, tt.lunches, same_day_ok=(to_date == from_date))
+        # A one-off change (moved class or makeup) may share a day with another lecture of the same subject:
+        # "once a day" is a rule for the weekly plan, and makeup classes routinely double up.
+        opt = check_slot(college, s, wd, p, others, tt.lunches, same_day_ok=True)
         if opt is None:
             continue
         if opt.status == "repair":  # one-day changes never reshuffle other classes
@@ -149,8 +153,12 @@ def add_override(
         return None, "Class not found.", ""
     if weekday(college, d) != s.day:
         return None, f"{college.subject(s.subject_id).name} doesn't happen on {label(d)}.", ""
-    if any(o.session_id == session_id and o.date == d for o in tt.overrides):
-        return None, "This class already has a change for that day. Restore it first.", ""
+    existing = next((o for o in tt.overrides if o.session_id == session_id and o.date == d), None)
+    if existing is not None:
+        if not (kind == "move" and existing.kind == "cancel"):
+            return None, "This class already has a change for that day. Restore it first.", ""
+        # A makeup class for a cancelled one: the move replaces the cancellation.
+        tt = tt.model_copy(update={"overrides": [o for o in tt.overrides if o.id != existing.id]})
 
     subj = college.subject(s.subject_id).name
     secs = " + ".join(college.section(i).name for i in s.section_ids)
@@ -191,3 +199,34 @@ def remove_override(college: College, tt: Timetable, override_id: str) -> tuple[
         return None, "Restoring would clash with another change made that day."
     subj = college.subject(s.subject_id).name
     return new, f"Restored {subj} on {label(ov.date)} to its usual time"
+
+
+class MakeupOption(BaseModel):
+    date: str
+    label: str  # "Fri 30 Oct"
+    start_period: int
+    start: str
+    end: str
+    venue_id: str | None
+    venue: str
+
+
+def makeup_options(college: College, tt: Timetable, session_id: str, from_date: str, today: str,
+                   days: int = 7, limit: int = 12) -> list[MakeupOption]:
+    """Times in the coming days when the teacher, every student of the class and a suitable room are free
+    (and lunch stays free): candidates for a makeup class. Soonest first; holidays and past dates skipped."""
+    start = max(date.fromisoformat(from_date), date.fromisoformat(today))
+    venues = {v.id: v.name for v in college.venues}
+    out: list[MakeupOption] = []
+    for i in range(days + 1):
+        d = (start + timedelta(days=i)).isoformat()
+        if weekday(college, d) is None or any(h.date == d for h in college.holidays):
+            continue
+        for o in day_options(college, tt, session_id, from_date, d):
+            if o.status != "free" or (d == from_date and d < today):
+                continue
+            out.append(MakeupOption(date=d, label=label(d), start_period=o.start_period, start=o.start, end=o.end,
+                                    venue_id=o.venue_id, venue=venues.get(o.venue_id or "", "")))
+            if len(out) >= limit:
+                return out
+    return out
