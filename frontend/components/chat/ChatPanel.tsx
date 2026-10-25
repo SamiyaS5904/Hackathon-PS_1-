@@ -377,7 +377,8 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Parame
     setState("discarded");
   };
   const heading = card.type === "proposal" ? "Permanent change · checked for clashes"
-    : card.type === "booking" ? (card.booking.kind === "doubt" ? "Doubt slot · not booked yet" : "Meeting · not booked yet")
+    : card.type === "booking"
+      ? `${card.booking.kind === "doubt" ? "Doubt slot" : "Meeting"} · ${state === "applied" ? "booked" : "not booked yet"}`
       : "One-day change";
 
   return (
