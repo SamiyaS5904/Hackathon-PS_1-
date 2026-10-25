@@ -41,7 +41,7 @@ from app.io.excel import RowError
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
 from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
-from app import attendance, change_requests
+from app import attendance, change_requests, sectioning
 from app.routers.bookings import router as bookings_router
 from app.change_requests import ChangeRequestOut
 from app.notify import Audience, FeedOut, feed, mark_seen, notify_change, send
@@ -1175,6 +1175,45 @@ async def import_excel(dept: str, file: UploadFile, commit: bool = False, ctx: C
         return ImportOut(errors=[], counts=result.counts, problems=check(new), warnings=warnings(new))
     saved = store.update_college(ctx.state.id, new)
     return ImportOut(errors=[], counts=result.counts, problems=check(saved), warnings=warnings(saved), saved=True)
+
+
+@app.get("/api/orgs/{org}/departments/{dept}/year-list-template")
+def year_list_template(dept: str, ctx: Ctx = Depends(org_ctx)) -> Response:
+    _dept_access(ctx, dept)
+    return Response(content=sectioning.template(),
+                    media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="year-list-{dept}.xlsx"'})
+
+
+@app.post("/api/orgs/{org}/departments/{dept}/auto-sections", response_model=sectioning.SectioningOut)
+async def auto_sections(dept: str, file: UploadFile, year: int, max_size: int = 60, batches: int = 2,
+                        shift_id: str | None = None, mix_by: str | None = None, prefix: str | None = None,
+                        commit: bool = False, ctx: Ctx = Depends(org_ctx)) -> sectioning.SectioningOut:
+    """Split a whole-year student list into sections + lab batches. commit=false: preview only."""
+    _dept_access(ctx, dept)
+    college = ctx.state.college
+    if not 1 <= year <= 8:
+        raise HTTPException(422, "Year must be between 1 and 8.")
+    if not 5 <= max_size <= 300:
+        raise HTTPException(422, "Section size must be between 5 and 300.")
+    if not 1 <= batches <= 6:
+        raise HTTPException(422, "Lab batches must be between 1 and 6.")
+    if shift_id and shift_id not in {s.id for s in college.shifts}:
+        raise HTTPException(422, "Unknown shift.")
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "The file is larger than 5 MB.")
+    rows, errors, columns = sectioning.parse(content)
+    if errors:
+        return sectioning.SectioningOut(errors=errors, columns=columns)
+    if mix_by and mix_by not in columns:
+        raise HTTPException(422, f"There is no column '{mix_by}' in the sheet.")
+    plan, groups = sectioning.plan(college, dept, year, rows, max_size, batches, shift_id, mix_by or None, prefix)
+    new, problems = sectioning.apply(college, dept, plan, groups, actor=ctx.user.name)
+    if new is None or not commit:
+        return sectioning.SectioningOut(errors=[], columns=columns, plan=plan, problems=problems)
+    store.update_college(ctx.state.id, new)
+    return sectioning.SectioningOut(errors=[], columns=columns, plan=plan, saved=True)
 
 
 # ---------------------------------------------------------------------------
