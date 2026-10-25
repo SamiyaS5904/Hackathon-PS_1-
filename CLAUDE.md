@@ -206,32 +206,36 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 
 ---
 
-## 8. Version scope
+## 8. Feature status
 
-> Confirmed by the user on the V1/V2 board (2026-10-21).
+> V1/V2 board confirmed 2026-10-21; updated 2026-10-25 after the V1 audit. ✅ done (works end-to-end on the demo
+> college, tested) · 🔨 building now (in this order) · 🔭 future.
 
-**V1: must ship (hackathon)**
-- Self-signup workspace + demo college; roles + email invites (Admin, Coordinator, Teacher)
-- **Student light login with simple dummy emails** (e.g. `cse3a.01@demo.timetabl.ai`, seeded for the demo college; email + password via Supabase Auth)
-- Setup wizard (shifts incl. 2-shift strict, lecture/lab length, breaks per year, holidays list, semester dates)
-- Venues, departments, sections, subjects, teachers; Excel import with row-level error preview
-- Coordinator Ready flow + admin readiness checklist dashboard
-- **Teacher allotment suggestions**: the Coordinator enters which subjects each teacher can teach (+ preferences); the system suggests teacher → subject → section fairly; the Coordinator approves
-- CP-SAT college-wide generation + validator + quality score; labs as blocks with parallel batches; **elective slots and pooled cross-department groups** (student-level lists)
-- **Rules page** (college + dept rule cards)
-- Section / teacher / room views, colour-coded; publish; Excel + PDF export
-- Drag & drop with live clash check; one-day overrides; teacher one-day instant / permanent needs approval; **teacher block times** (auto-confirm if clash-free)
-- Audit log with undo; in-app notifications
-- Chatbot side panel: role-scoped Q&A (student read-only) + edits via solver repair + diff preview + **proactive insights after generation**
-- **Voice input** for the chatbot via the browser's built-in speech recognition (answers in text; typing always works)
-- **Attendance portal** (moved from V2 on 2026-10-24): teachers mark each class (everyone present by default, from *Today* or *Attendance*), students see *My attendance* (overall + per subject vs the college rule, e.g. 75%, with "can miss N / attend the next M"), Coordinators/Admin see each section with below-rule students first. Separate from the timetable
-- **Today view** for students and teachers: Now / Next card (room, countdown), done classes greyed, lunch, cancellations
+**✅ Done: V1 (stages 1–7, deploy pending)**
+- **Accounts:** self-signup creates a college (creator = College Admin); demo page with one-click login per role; email invites with role + department (Admin → Coordinators/teachers, Coordinator → own teachers); **student login with demo emails** (`cse3a.01@demo.timetabl.ai`, password `demo1234`; new colleges: from the student list, first password = roll number)
+- **Tenant isolation:** every `/api/orgs/{org}` request checks membership; another college answers 404
+- **Setup wizard:** 1 or 2 shifts (strict), periods per shift, one lab length, **flexible lunch** (mess window per shift; every section gets one free period inside it every day, chosen per section per day), holidays, semester dates, departments, shared rooms; *Load sample college* for a brand-new college
+- **Department data:** sections, batches, subjects, teachers, who-can-teach, classes, students, rooms; Excel template (pre-filled, example rows for an empty department) → upload → row-level errors → save; re-import keeps ids
+- **Fair teacher suggestions** (busiest teacher as light as possible, nobody who can help left idle, preferences, same teacher for a section's lecture + lab) → Coordinator approves
+- **Ready flow:** Coordinator marks Ready (only once sections, classes and teachers exist); Admin sees the readiness checklist
+- **Generation:** CP-SAT college-wide, labs as blocks with parallel batches, combined classes, elective slots + pooled cross-department groups, shared/borrowed rooms, home room, teacher block times, rules (Must/Try); feasibility pre-check in plain language; **independent validator** on every timetable and every change; quality score
+- **Views:** section / teacher / room, colour-coded, light + dark, phone widths; *Today* (now / next, countdown, room, lunch, greyed done classes) and *This week* (real dates) for teachers and students; teachers see only their own lectures, Coordinators only their department
+- **Publish:** draft vs published; teachers/students keep the published one while a new draft waits
+- **Changes:** drag & drop with green / amber / red slots → solver repair → diff → Apply; one-day cancel / move; **makeup class finder** (next 7 days, teacher + students + room free); teacher one-day change instant, permanent change = request → Coordinator reviews and applies; teacher block times auto-confirmed if clash-free; audit log with undo
+- **Attendance portal** (separate from the timetable): teacher marks a class (everyone present by default, last 7 days editable); student *My attendance* (overall + per subject vs the college rule, "can miss N / attend next M"); Coordinator/Admin per section, below-rule students first; rule set by the Admin
+- **Notifications:** in-app bell, audience-based (changed classes reach the students, teacher and Coordinator involved), only after publishing
+- **Exports:** Excel + PDF per section / teacher / room, one or all
+- **AI assistant** (side panel, Ctrl+K, role-scoped tools with the user's own token): Q&A, free rooms / free times, attendance questions, makeup times, edits as proposals with a diff (person clicks Apply), proactive suggestions after generation, voice input (browser speech)
 
-**V1: if time** (in this order)
-Substitutes on leave · makeup / extra class finder · email notifications · Now & Next TV board
+**🔨 Building now (2026-10-25, in this order)**
+1. **Voice + language quality:** the assistant answers in the user's language. **English in → English out. Hindi + English in Roman script (Hinglish) → Hinglish (Roman script) out.** Never switch to Devanagari, never answer English with Hinglish. Same rule for typed and spoken messages. Better voice capture (language setting, live transcript, auto-send, stop)
+2. **Teacher booking:** teachers publish office hours (doubt slots); students book a slot; Coordinators/Admin find a time when chosen teachers are all free and book a meeting; no clash with classes; notifications
+3. **Auto-sectioning:** upload a whole-year student list → system splits it into sections (and lab batches) by size / room capacity → Coordinator reviews and saves
+4. **Super Admin platform (SaaS):** platform owner sees every college (plan, usage, health, last activity), can suspend / open a college read-only, never edits college data; agentic platform assistant for questions like "which colleges haven't generated yet?"
+5. **Mid-semester regenerate with minimal change** (optional): regenerate keeping as many classes as possible where they are, show the diff
 
-**V2: roadmap**
-OpenAI Whisper as a second voice option (side by side with browser speech) · calendar invites (`.ics`) after the schedule is set · Super admin panel · Google login for students · Hinglish chatbot · auto-sectioning from year list · mid-semester regenerate with minimal change · NAAC/NBA workload report · Google Calendar sync · QR posters · teacher booking (doubt slots, meetings) · WhatsApp/SMS · plain-language rules via chatbot · book/makeup/notify via chat · timetable version compare · attendance extras: QR / self check-in, notify students when they drop below the rule, parent view
+**🔭 Future (pitch roadmap, not building now)**
+Calendar invites (`.ics`) / Google Calendar sync · WhatsApp / SMS notifications · email notifications (Resend) · QR posters · attendance extras (QR / self check-in, alerts below the rule, parent view) · substitutes on leave · Now & Next TV board · Google login for students · OpenAI Whisper as a second voice option · NAAC/NBA workload report · plain-language rules via the assistant · timetable version compare · room maintenance / exam blocks · solve per shift / year for 50+ sections
 
 ---
 
@@ -283,7 +287,7 @@ OpenAI Whisper as a second voice option (side by side with browser speech) · ca
 | **5. Set it up** | Setup wizard (shifts, periods, breaks, holidays), Excel import, Coordinator Ready flow, rules page, electives, teacher block times | A new college goes from signup to timetable without help |
 | **6. Chatbot** | Agent service: role-scoped Q&A, edits via proposals, proactive insights | "Move CSE-3A DBMS to Friday" works with a diff |
 | **7. Ship** | Publish, Excel/PDF export, in-app notifications, approvals, polish, deploy | Live URL with the demo college |
-| 8. If time | V1-if-time list in order | |
+| 8. Grow | §8 *Building now* list, in order | Each item works end-to-end on the demo college |
 
 ---
 
