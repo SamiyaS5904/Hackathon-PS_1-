@@ -88,8 +88,10 @@ export default function SetupPage() {
     else if (plans.length < 2)
       setPlans([
         { ...plans[0], id: plans[0]?.id ?? "morning", name: plans[0]?.name ?? "Morning" },
-        { id: "evening", name: "Evening", start: "12:00", minutes: plans[0]?.minutes ?? 50, count: 6,
-          breaks: [{ after: 3, minutes: 20, label: "Break" }], lunch: false, lunchFrom: "13:00", lunchTo: "14:30" },
+        // Back-to-back periods with a flexible lunch, like the first shift: every section gets one free period
+        // inside the window each day.
+        { id: "evening", name: "Evening", start: "12:00", minutes: plans[0]?.minutes ?? 50, count: 7,
+          breaks: [], lunch: true, lunchFrom: "12:50", lunchTo: "15:20" },
       ]);
   };
 
@@ -241,7 +243,7 @@ export default function SetupPage() {
         {step === 5 && (
           <div>
             <h2 className="font-semibold">College settings saved</h2>
-            <p className="mt-1 text-sm text-muted">Next, each Department Coordinator fills in their department (Excel or on screen) and marks it Ready.</p>
+            <p className="mt-1 text-sm text-muted">Next, each Department Coordinator downloads their department&rsquo;s Excel sheet, fills it in, uploads it, checks the teacher suggestions and marks it Ready.</p>
             <ul className="mt-4 space-y-2 text-sm">
               <li><Link href="/members" className="text-accent-text hover:underline">Invite Department Coordinators →</Link></li>
               {college.departments.map((d) => (

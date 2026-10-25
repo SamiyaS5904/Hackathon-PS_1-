@@ -99,9 +99,20 @@ function ReadyButton({ dept, status, onDone, setError }: {
       <Button variant="ghost" onClick={toggle} disabled={busy}>Mark not ready</Button>
     </div>
   ) : (
-    <Button variant="primary" onClick={toggle} disabled={busy}>
-      {busy ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Mark department Ready
-    </Button>
+    // Only offered once there is something to be Ready with; otherwise say what's missing.
+    (() => {
+      const missing = !status.sections ? "Add sections first (Excel sheet)"
+        : !status.classes ? "Add classes first (Excel sheet, Classes tab)"
+          : status.without_teacher ? `${status.without_teacher} class(es) still need a teacher` : "";
+      return (
+        <div className="flex flex-col items-end gap-1">
+          <Button variant={missing ? "secondary" : "primary"} onClick={toggle} disabled={busy || !!missing}>
+            {busy ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />} Mark department Ready
+          </Button>
+          {missing && <span className="text-xs text-muted">{missing}</span>}
+        </div>
+      );
+    })()
   );
 }
 

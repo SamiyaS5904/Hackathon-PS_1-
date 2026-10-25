@@ -372,12 +372,13 @@ def _students() -> list[Student]:
 
 
 def empty_college(name: str) -> College:
-    """A new college before setup: Mon-Fri, one day shift of 7 periods. The setup wizard edits all of it."""
+    """A new college before setup: Mon-Fri, one day shift of 8 back-to-back periods with a flexible lunch
+    (every section gets one free period between 11:30 and 14:00, chosen per day). The wizard edits all of it."""
     slots = [("09:00", "09:50"), ("09:50", "10:40"), ("10:40", "11:30"), ("11:30", "12:20"),
-             ("13:00", "13:50"), ("13:50", "14:40"), ("14:40", "15:30")]  # lunch 12:20-13:00
+             ("12:20", "13:10"), ("13:10", "14:00"), ("14:00", "14:50"), ("14:50", "15:40")]
     periods = [Period(start=a, end=b) for a, b in slots]
     return College(
         id="new", name=name, days=["Mon", "Tue", "Wed", "Thu", "Fri"], lab_periods=2,
-        shifts=[Shift(id="day", name="Day", periods=periods)],
+        shifts=[Shift(id="day", name="Day", periods=periods, lunch=LunchRule(window_start="11:30", window_end="14:00"))],
         departments=[], venues=[], sections=[], teachers=[], subjects=[], allotments=[],
     )

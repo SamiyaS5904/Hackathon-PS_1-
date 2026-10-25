@@ -1106,6 +1106,8 @@ def mark_ready(dept: str, body: ReadyRequest, ctx: Ctx = Depends(org_ctx)) -> Se
         missing = [a for a in mine.allotments if a.teacher_id is None]
         if not mine.sections:
             raise HTTPException(422, "Add this department's sections first.")
+        if not mine.allotments:
+            raise HTTPException(422, "Add this department's classes (who teaches which subject to which section) first.")
         if missing:
             raise HTTPException(422, f"{len(missing)} class(es) still have no teacher.")
     return _saved(ctx.state, set_ready(college, dept, body.ready, ctx.user.name))
