@@ -1,6 +1,6 @@
 # Timetabl.ai
 
-Clash-free college timetables for any college: a multi-college (SaaS) web app with a timetable engine, safe editing and (coming) an AI assistant.
+Clash-free college timetables for any college: a multi-college (SaaS) web app with a timetable engine, safe editing, attendance, teacher booking and an agentic AI assistant (English or Hinglish, typed or spoken).
 
 **Hackathon 1 · Samiya Sehgal (URN 2302662)**
 
@@ -19,7 +19,8 @@ Each finished stage has a Git tag, so its exact state can be opened on GitHub.
 | **4. Real SaaS** | Signup creates a college workspace, login, roles (Admin / Department Coordinator / Teacher / Student), invite links, students log in with college emails and see only their own timetable, every college's data kept separate, saved in a database (SQLite locally, Supabase Postgres in production) | ✅ Done | `stage-4-real-saas` |
 | **5. Set it up** | Setup wizard (days, 1 or 2 shifts, periods and breaks, mess window, lab length, semester dates, holidays, departments, shared rooms, sections → shifts); department workspace with pre-filled Excel download and upload with row-level errors; teacher allotment suggestions with reasons; Ready flow and readiness checklist; elective slots and pooled cross-department groups; rule cards (Must / Try); teacher block times; "data changed, regenerate" safety | ✅ Done | `stage-5-set-it-up` |
 | **6. Chatbot** | Assistant side panel on every page (Ctrl+K, typing or browser voice): students ask "when am I free next week?", "where is Dr. Kaur now?", "why is my lab on Friday?"; staff get move proposals and one-day changes as cards they Apply or Discard (the assistant never writes on its own, and uses the logged-in user's own permissions); "Worth a look" insights after generation | ✅ Done | `stage-6-chatbot` |
-| 7. Ship | Publish (teachers and students see only published timetables), Excel / PDF for notice boards, in-app notifications for the people affected, teacher change requests approved by the Department Coordinator, light / dark theme, phone layout, fast on a remote database (memory first, background saves); deploy guide in [`docs/DEPLOY.md`](docs/DEPLOY.md) | 🟡 Built, deploying | |
+| 7. Ship | Publish (teachers and students see only published timetables), Excel / PDF for notice boards, in-app notifications for the people affected, teacher change requests approved by the Department Coordinator, attendance portal, Today view, makeup class finder, light / dark theme, phone layout, fast on a remote database (memory first, background saves); deploy guide in [`docs/DEPLOY.md`](docs/DEPLOY.md) | 🟡 Built, deploying | |
+| **8. Grow** | Assistant replies in your language (English → English, Roman Hinglish → Hinglish) with better voice (live transcript, auto-send, spoken answers); teacher booking (office hours, doubt slots, meetings at common free times); auto-sectioning from a whole-year list; Super Admin platform (every college's stage, adoption, health; plans, read-only, pause; platform assistant); minimal-change mid-semester regenerate | ✅ Done | `stage-8-grow` |
 
 ### Results on the demo college
 12 sections · 40 teachers · 15 rooms · 2 overlapping shifts · combined classes · lab batches · a 3rd-year open elective pooled from 4 sections and 3 departments
@@ -29,11 +30,12 @@ Each finished stage has a Git tag, so its exact state can be opened on GitHub.
 - Elective groups meet together, each in a room for its members (Robotics in an ME room); every student sees only their own group
 - Teacher suggestions for a whole department in under 0.1 s
 - Move options in ~0.02 s; repair moves in 0.7–2 s
-- 63 automated backend tests (engine, electives, rules, suggestions, Excel, setup, editing, one-day changes, login, roles, college isolation, assistant facts) + 12 assistant tests (role-scoped tools, agent loop)
+- **Mid-semester change** (one teacher gets a new block time): *Keep the current timetable* moves **1 of 238** classes in ~4 s, 0 clashes; a fresh regenerate would keep only 17 in place
+- 100 automated backend tests (engine, electives, rules, fair suggestions, Excel, auto-sectioning, setup, editing, one-day changes, regenerate, login, roles, college isolation, publish, attendance, bookings, platform) + 40 assistant tests (role-scoped tools, agent loop, language mirroring, bookings, platform)
 
 ## Run it locally
 
-**Quickest:** double-click `start-local.bat` (starts everything and opens the browser). Where every feature is, per role, plus a 5-minute demo script: [`docs/DEMO_GUIDE.md`](docs/DEMO_GUIDE.md).
+**Quickest:** double-click `start-local.bat` (starts everything and opens the browser). Where every feature is, per role, plus a 6-minute demo script: [`docs/DEMO_GUIDE.md`](docs/DEMO_GUIDE.md).
 
 Step by step:
 
