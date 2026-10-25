@@ -41,8 +41,9 @@ from app.io.excel import RowError
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
 from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
-from app import attendance, change_requests, sectioning
+from app import attendance, change_requests, platform, sectioning
 from app.routers.bookings import router as bookings_router
+from app.routers.platform import router as platform_router
 from app.change_requests import ChangeRequestOut
 from app.notify import Audience, FeedOut, feed, mark_seen, notify_change, send
 from app.notify import warm as notify_warm
@@ -104,6 +105,7 @@ app = FastAPI(title="Timetabl.ai API", version="0.4.0", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"],
                    expose_headers=["Content-Disposition"])  # file names for downloads
 app.include_router(bookings_router)
+app.include_router(platform_router)
 
 
 @app.get("/api/health")
@@ -133,6 +135,7 @@ class AuthOut(BaseModel):
     name: str
     email: str
     memberships: list[Member]
+    platform_owner: bool = False  # Super Admin: sees the platform page (every college's health)
 
 
 class InviteRequest(BaseModel):
@@ -149,7 +152,7 @@ class AcceptRequest(BaseModel):
 
 def _auth_out(user: UserRow) -> AuthOut:
     return AuthOut(token=create_token(user.id), user_id=user.id, name=user.name, email=user.email,
-                   memberships=accounts.memberships(user.id))
+                   memberships=accounts.memberships(user.id), platform_owner=platform.is_owner(user))
 
 
 @app.post("/api/auth/signup", response_model=AuthOut, status_code=201)

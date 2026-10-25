@@ -259,6 +259,9 @@ def seed_demo() -> None:
         has_accounts = db.scalar(select(MembershipRow.id).where(MembershipRow.org_id == "demo").limit(1))
     if not has_accounts:
         seed_accounts("demo", store.org("demo").college, "demo.timetabl.ai")
+    from app import platform  # late import: platform reads the store and attendance
+
+    platform.seed_owner(hash_password(DEMO_PASSWORD))
 
 
 def seed_accounts(org_id: str, college: College, domain: str) -> None:

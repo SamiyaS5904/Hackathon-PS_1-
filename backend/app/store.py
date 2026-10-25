@@ -104,6 +104,7 @@ class OrgState:
     version: int = 0
     proposals: dict[str, Proposal] = field(default_factory=dict)
     audit: list[AuditEntry] = field(default_factory=list)
+    created_at: float = 0.0
 
 
 def _dump(changes: list) -> list:
@@ -129,7 +130,7 @@ class Store:
             self._orgs.clear()
             for row in db.scalars(select(OrgRow)):
                 self._orgs[row.id] = OrgState(id=row.id, name=row.name, college=College.model_validate(row.college),
-                                              is_demo=row.is_demo)
+                                              is_demo=row.is_demo, created_at=row.created_at or 0.0)
             for row in db.scalars(select(TimetableRow)):
                 if row.org_id in self._orgs:
                     st = self._orgs[row.org_id]
@@ -169,7 +170,7 @@ class Store:
             college = college.model_copy(update={"id": oid, "name": name})
             db.add(OrgRow(id=oid, name=name, college=college.model_dump(mode="json"), is_demo=is_demo))
             db.commit()
-            state = OrgState(id=oid, name=name, college=college, is_demo=is_demo)
+            state = OrgState(id=oid, name=name, college=college, is_demo=is_demo, created_at=time.time())
             self._orgs[oid] = state
             return state
 

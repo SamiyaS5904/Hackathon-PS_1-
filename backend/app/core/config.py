@@ -43,3 +43,7 @@ CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", FRONTEND_URL).
 DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "demo1234")
 # Build and publish the demo college's timetable at startup when it is missing or out of date.
 AUTO_DEMO_TIMETABLE = os.environ.get("AUTO_DEMO_TIMETABLE", "1") == "1"
+# Platform owners (Super Admin): see every college's health and manage plans / pauses, never college data.
+SUPERADMIN_EMAILS = {e.strip().lower() for e in os.environ.get("SUPERADMIN_EMAILS", "").split(",") if e.strip()}
+# A demo platform owner (owner@demo.timetabl.ai, DEMO_PASSWORD) for showing the SaaS view; set 0 in production.
+DEMO_PLATFORM_OWNER = os.environ.get("DEMO_PLATFORM_OWNER", "1") == "1"

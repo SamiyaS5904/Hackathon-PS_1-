@@ -8,8 +8,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-from fastapi import Depends, Header, HTTPException
+from fastapi import Depends, Header, HTTPException, Request
 
+from app import platform
 from app.accounts import Member, get_user, membership
 from app.core.security import decode_token
 from app.db.models import UserRow
@@ -35,12 +36,22 @@ def current_user(authorization: str | None = Header(default=None)) -> UserRow:
     return user
 
 
-def org_ctx(org: str, user: UserRow = Depends(current_user)) -> Ctx:
+# Reads that use POST (they change nothing), allowed while a college is read-only.
+_READS = ("/notifications/seen", "/bookings/meeting-times")
+
+
+def org_ctx(org: str, request: Request, user: UserRow = Depends(current_user)) -> Ctx:
     state = store.org(org)
     m = membership(user.id, org) if state else None
     if state is None or m is None:
         # Same answer whether the college doesn't exist or you're not in it: no tenant leaks.
         raise HTTPException(404, "College not found.")
+    status = platform.status_of(org)
+    if status == "paused":
+        raise HTTPException(403, "This college is paused on Timetabl.ai. Please contact the Timetabl.ai team.")
+    if status == "read_only" and request.method not in ("GET", "HEAD", "OPTIONS")             and not request.url.path.endswith(_READS):
+        raise HTTPException(403, "This college is read-only right now: you can view everything, but changes are "
+                                 "paused. Please contact the Timetabl.ai team.")
     if m.role in ("teacher", "student"):
         # Teachers and students only ever see a published timetable.
         live = state.published is not None and state.published is state.timetable

@@ -160,6 +160,19 @@ class NotificationSeenRow(Base):
     seen_at: Mapped[float] = mapped_column(Float, default=0.0)
 
 
+class PlatformOrgRow(Base):
+    """Platform-level settings of one college, kept by the platform owner: plan and status.
+    Separate from the college's own data, which the platform owner never edits."""
+
+    __tablename__ = "platform_orgs"
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    plan: Mapped[str] = mapped_column(String(20), default="trial")  # trial | pro | campus
+    status: Mapped[str] = mapped_column(String(20), default="active")  # active | read_only | paused
+    note: Mapped[str] = mapped_column(String(500), default="")
+    updated_at: Mapped[float] = mapped_column(Float, default=time.time)
+    updated_by: Mapped[str] = mapped_column(String(200), default="")
+
+
 class BookingRow(Base):
     """Teacher booking: a teacher's weekly office hour (kind "office_hour") or a booked doubt slot /
     meeting on a real date (kind "booking"). The fields live in ``data`` (see app/bookings.py)."""
