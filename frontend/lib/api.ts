@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, ChangeRequest, ClassAttendance, Feed, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, ChangeRequest, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -70,6 +70,8 @@ export const api = {
   loadSample: () => request<College>(`${org()}/load-sample`, { method: "POST" }),
   precheck: () => request<Precheck>(`${org()}/precheck`),
   timetable: () => request<TimetableOut>(`${org()}/timetable`),
+  makeup: (sessionId: string, date: string) =>
+    request<MakeupOption[]>(`${org()}/timetable/sessions/${sessionId}/makeup?date=${date}&days=7`),
   classAttendance: (sessionId: string, date: string) =>
     request<ClassAttendance>(`${org()}/attendance/class?session_id=${sessionId}&date=${date}`),
   saveAttendance: (sessionId: string, date: string, absent: string[]) =>

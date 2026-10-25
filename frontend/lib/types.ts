@@ -94,6 +94,7 @@ export interface DayInfo { date: string; day: string; label: string; working: bo
 export interface WeekOut { days: DayInfo[]; occurrences: Occurrence[] }
 export interface OverrideOut { message: string; timetable: TimetableOut }
 
+export interface MakeupOption { date: string; label: string; start_period: number; start: string; end: string; venue_id: string | null; venue: string }
 export interface RosterStudent { student_id: string; roll_no: string; name: string }
 export interface ClassAttendance {
   occurrence_id: string; session_id: string; date: string; subject: string; sections: string; start: string; end: string;

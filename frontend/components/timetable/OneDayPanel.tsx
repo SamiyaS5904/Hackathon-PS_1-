@@ -1,13 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { CalendarClock, Loader2, RotateCcw, X, XCircle } from "lucide-react";
+import { CalendarClock, CalendarPlus, Loader2, RotateCcw, X, XCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
-import type { College, DayInfo, MoveOption, Occurrence, OverrideOut } from "@/lib/types";
+import type { College, DayInfo, MakeupOption, MoveOption, Occurrence, OverrideOut } from "@/lib/types";
 
-/** Change one class on one real date: cancel it, move it (free slots only), or restore it. */
+/** Change one class on one real date: cancel it, move it (free slots only), find a makeup time, or restore it. */
 export function OneDayPanel({
   occurrence: occ,
   days,
@@ -28,7 +28,9 @@ export function OneDayPanel({
   const sections = s.section_ids.map((id) => college.sections.find((x) => x.id === id)?.name).join(" + ");
   const dayLabel = days.find((d) => d.date === occ.date)?.label ?? occ.date;
 
-  const [mode, setMode] = useState<"menu" | "cancel" | "move">("menu");
+  const [mode, setMode] = useState<"menu" | "cancel" | "move" | "makeup">("menu");
+  const [makeups, setMakeups] = useState<MakeupOption[] | null>(null);
+  const [makeup, setMakeup] = useState<MakeupOption | null>(null);
   const [reason, setReason] = useState("");
   const [toDate, setToDate] = useState(occ.date);
   const [options, setOptions] = useState<MoveOption[] | null>(null);
@@ -52,6 +54,14 @@ export function OneDayPanel({
       .catch((e) => setError(e instanceof Error ? e.message : "Couldn't load free times"));
   }, [mode, toDate, s.id, occ.date]);
 
+  useEffect(() => {
+    if (mode !== "makeup") return;
+    setMakeups(null);
+    setMakeup(null);
+    api.makeup(s.id, occ.date).then(setMakeups)
+      .catch((e) => setError(e instanceof Error ? e.message : "Couldn't look for makeup times"));
+  }, [mode, s.id, occ.date]);
+
   const run = async (fn: () => Promise<OverrideOut>) => {
     setBusy(true);
     setError(null);
@@ -64,7 +74,9 @@ export function OneDayPanel({
     }
   };
 
-  const changed = occ.status !== "normal";
+  const changed = occ.status !== "normal" && mode !== "makeup";
+  const byDay = new Map<string, MakeupOption[]>();
+  for (const m of makeups ?? []) byDay.set(m.label, [...(byDay.get(m.label) ?? []), m]);
 
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose}>
@@ -94,10 +106,17 @@ export function OneDayPanel({
           {changed ? (
             <div>
               <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm">{occ.note}</p>
-              <Button className="mt-4" variant="primary" disabled={busy}
-                onClick={() => occ.override_id && run(() => api.removeOverride(occ.override_id!))}>
-                {busy ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />} Restore usual time
-              </Button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {occ.status === "cancelled" && (
+                  <Button variant="primary" disabled={busy} onClick={() => setMode("makeup")}>
+                    <CalendarPlus size={16} aria-hidden /> Find a makeup class
+                  </Button>
+                )}
+                <Button variant={occ.status === "cancelled" ? "secondary" : "primary"} disabled={busy}
+                  onClick={() => occ.override_id && run(() => api.removeOverride(occ.override_id!))}>
+                  {busy ? <Loader2 size={16} className="animate-spin" /> : <RotateCcw size={16} />} Restore usual time
+                </Button>
+              </div>
             </div>
           ) : mode === "menu" ? (
             <div className="space-y-2">
@@ -112,6 +131,14 @@ export function OneDayPanel({
                   <span className="text-xs text-muted">Pick a free time this week. Nobody else&apos;s classes move.</span>
                 </span>
               </button>
+              <button onClick={() => setMode("makeup")}
+                className="flex w-full items-center gap-3 rounded-lg border border-border px-4 py-3 text-left hover:bg-surface-2">
+                <CalendarPlus size={18} className="text-ok" aria-hidden />
+                <span>
+                  <span className="block text-sm font-medium">Find a makeup time</span>
+                  <span className="text-xs text-muted">Every free time in the next 7 days for the teacher, students and a room.</span>
+                </span>
+              </button>
               <button onClick={() => setMode("cancel")}
                 className="flex w-full items-center gap-3 rounded-lg border border-border px-4 py-3 text-left hover:bg-surface-2">
                 <XCircle size={18} className="text-danger" aria-hidden />
@@ -123,6 +150,37 @@ export function OneDayPanel({
             </div>
           ) : (
             <div className="space-y-4">
+              {mode === "makeup" && (
+                !makeups ? (
+                  <p className="flex items-center gap-2 text-sm text-muted"><Loader2 size={14} className="animate-spin" /> Looking through the next 7 days…</p>
+                ) : makeups.length === 0 ? (
+                  <p className="rounded-lg bg-surface-2 px-3 py-3 text-sm text-muted">
+                    No time in the next 7 days has the teacher, every student and a suitable room free together.
+                    Try a one-day reschedule on a specific date instead.
+                  </p>
+                ) : (
+                  <div>
+                    <p className="mb-2 text-sm text-muted">
+                      Free for <b className="text-text">{teacher?.name}</b>, <b className="text-text">{sections}</b> and a room. Soonest first.
+                    </p>
+                    {[...byDay.entries()].map(([dayName, list]) => (
+                      <div key={dayName} className="mb-3">
+                        <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted">{dayName}</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          {list.map((m) => (
+                            <button key={m.date + m.start_period} onClick={() => setMakeup(m)}
+                              className={clsx("rounded-lg border border-ok/40 bg-ok-soft px-3 py-2 text-left text-xs text-ok transition hover:ring-2 hover:ring-ok/40",
+                                makeup === m && "ring-2 ring-accent")}>
+                              <span className="block font-mono font-medium">{m.start}–{m.end}</span>
+                              <span className="text-[11px] opacity-80">{m.venue}</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )
+              )}
               {mode === "move" && (
                 <>
                   <label className="block text-sm">
@@ -179,17 +237,26 @@ export function OneDayPanel({
               <label className="block text-sm">
                 <span className="mb-1 block font-medium">Reason <span className="font-normal text-muted">(shown to students)</span></span>
                 <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={120}
-                  placeholder={mode === "cancel" ? "e.g. Teacher at a conference" : "e.g. Guest lecture in the usual slot"}
+                  placeholder={mode === "cancel" ? "e.g. Teacher at a conference" : mode === "makeup" ? "e.g. Makeup for the class missed on Monday" : "e.g. Guest lecture in the usual slot"}
                   className="w-full rounded-lg border border-border-strong bg-surface px-3 py-2 text-sm" />
               </label>
             </div>
           )}
         </div>
 
-        {!changed && mode !== "menu" && (
+        {(mode === "makeup" || (!changed && mode !== "menu")) && (
           <div className="flex justify-between gap-2 border-t border-border px-5 py-4">
             <Button onClick={() => setMode("menu")} disabled={busy}>Back</Button>
-            {mode === "cancel" ? (
+            {mode === "makeup" ? (
+              <Button variant="primary" disabled={busy || !makeup}
+                onClick={() => makeup && run(() => api.addOverride({
+                  session_id: s.id, date: occ.date, kind: "move", to_date: makeup.date, start_period: makeup.start_period,
+                  reason: reason || "Makeup class",
+                }))}>
+                {busy && <Loader2 size={16} className="animate-spin" />}
+                {makeup ? `Book makeup · ${makeup.label} ${makeup.start}` : "Pick a time"}
+              </Button>
+            ) : mode === "cancel" ? (
               <Button variant="primary" disabled={busy}
                 onClick={() => run(() => api.addOverride({ session_id: s.id, date: occ.date, kind: "cancel", reason }))}>
                 {busy && <Loader2 size={16} className="animate-spin" />} Cancel class on {dayLabel}
