@@ -15,6 +15,8 @@ import type { Department, Holiday, Settings, Venue } from "@/lib/types";
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const STEPS = ["Week & labs", "Timings", "Calendar", "Departments & rooms", "Sections → shifts", "Done"];
 const SECTION_SHIFTS = 4; // only shown when the college runs two shifts
+// Links (e.g. from the setup checklist) open a step: /setup?step=timings
+const STEP_KEYS = ["week", "timings", "calendar", "departments", "sections", "done"];
 const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "x";
 const input = "rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm";
 
@@ -36,6 +38,10 @@ export default function SetupPage() {
       setSettings(s);
       setPlans(s.shifts.map(shiftToPlan));
     }).catch((e) => setError(e instanceof Error ? e.message : "Couldn't load settings"));
+  }, []);
+  useEffect(() => {
+    const at = STEP_KEYS.indexOf(new URLSearchParams(window.location.search).get("step") ?? "");
+    if (at >= 0) setStep(at);
   }, []);
   useEffect(() => {
     if (!college) return;
@@ -82,6 +88,16 @@ export default function SetupPage() {
   const next = async () => {
     if (step < STEPS.length - 1 && (await save())) setStep(move(1));
   };
+  // Jumping to another step saves this one first, so nothing typed is lost.
+  const jump = async (to: number) => {
+    if (to === step) return;
+    if (step === STEPS.length - 1 || (await save())) setStep(to);
+  };
+  // A tick means the answers are saved, not just that the step was passed.
+  const saved = (i: number) =>
+    i <= 2 ? college.setup_saved !== false
+      : i === 3 ? college.departments.length > 0
+        : i === SECTION_SHIFTS ? college.sections.length > 0 : false;
 
   const setShiftCount = (n: number) => {
     if (n === 1) setPlans(plans.slice(0, 1));
@@ -102,13 +118,13 @@ export default function SetupPage() {
       <ol className="mb-6 flex flex-wrap gap-2" aria-label="Setup steps">
         {visibleSteps.map(({ label, i }, n) => (
           <li key={label}>
-            <button onClick={() => setStep(i)}
+            <button onClick={() => jump(i)} disabled={busy}
               className={clsx("flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition",
                 i === step ? "border-accent bg-accent-soft font-medium text-accent-text"
-                  : i < step ? "border-border text-text" : "border-border text-muted")}
+                  : saved(i) ? "border-border text-text" : "border-border text-muted")}
               aria-current={i === step ? "step" : undefined}>
               <span className={clsx("grid h-5 w-5 place-items-center rounded-full text-[10px]",
-                i < step ? "bg-ok text-white dark:text-bg" : "bg-surface-2")}>{i < step ? <Check size={12} /> : n + 1}</span>
+                saved(i) ? "bg-ok text-white dark:text-bg" : "bg-surface-2")}>{saved(i) ? <Check size={12} /> : n + 1}</span>
               {label}
             </button>
           </li>

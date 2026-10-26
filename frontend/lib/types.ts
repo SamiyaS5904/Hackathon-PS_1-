@@ -31,6 +31,7 @@ export interface College {
   rules: Rule[];
   department_status: Record<string, { ready: boolean; at: number | null; by: string }>;
   attendance_min_percent: number;
+  setup_saved?: boolean | null;
   revision: number;
 }
 export interface ElectiveGroup { id: string; name: string; subject_id: string; teacher_id: string; student_ids: string[] }

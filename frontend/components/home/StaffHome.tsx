@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
+import { SetupChecklist } from "./SetupChecklist";
 import { TodayCard } from "./TodayCard";
 import { PublishButton } from "@/components/timetable/PublishButton";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
@@ -55,6 +56,7 @@ export function StaffHome() {
     <div className="mx-auto max-w-5xl">
       <PageHeader title="Home" subtitle={college.name} />
       <GenerationProgress />
+      {role === "admin" && <SetupChecklist />}
       {error && <ErrorCard message={error} onRetry={reload} />}
 
       {/* Core first: the next step comes first until the timetable is live; then Today does. */}
