@@ -1,7 +1,7 @@
 import type {
   AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
-  TimetableOut, Venue, WeekOut,
+  TimetableOut, Venue, WeekOut, RescheduleOut,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
@@ -256,4 +256,10 @@ export const api = {
   myBlocked: () => request<{ blocked: TimeBlock[]; message: string }>(`${org()}/me/blocked`),
   saveMyBlocked: (blocked: TimeBlock[]) =>
     request<{ blocked: TimeBlock[]; message: string }>(`${org()}/me/blocked`, { method: "PUT", body: JSON.stringify({ blocked }) }),
+};
+
+/** Reschedule finder, room booking for events and notices (own object so it merges cleanly with `api`). */
+export const extraApi = {
+  reschedule: (sessionId: string, date: string) =>
+    request<RescheduleOut>(`${org()}/timetable/sessions/${sessionId}/reschedule?date=${date}&days=7`),
 };

@@ -346,3 +346,11 @@ export interface TodayReport {
 export interface SetupStep { key: string; title: string; done: boolean; missing: string; link: string }
 export interface SetupStatus { done: boolean; steps: SetupStep[] }
 export interface LocatedProblem { message: string; link: string; where: string }
+
+// ---- Reschedule finder (teacher + students + room free) ----
+
+export interface RescheduleOption {
+  date: string; label: string; day: string; start_period: number; start: string; end: string;
+  venue_id: string | null; venue: string; every_week: boolean;
+}
+export interface RescheduleOut { options: RescheduleOption[]; note: string }

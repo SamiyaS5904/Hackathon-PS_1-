@@ -1488,3 +1488,9 @@ def get_insights(ctx: Ctx = Depends(org_ctx)) -> list[Insight]:
     if state.timetable is None or state.timetable.college_revision != state.college.revision:
         return []
     return insights(state.college, state.timetable)
+
+
+# Session B routers (own files; kept at the end so they merge cleanly)
+from app.routers.reschedule import router as reschedule_router  # noqa: E402
+
+app.include_router(reschedule_router)

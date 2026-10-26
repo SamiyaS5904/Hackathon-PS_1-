@@ -385,7 +385,7 @@ const HINTS: Record<string, Record<"plan" | "week", string | undefined>> = {
   },
   teacher: {
     plan: "Your usual week. Click one of your lectures, then a green or amber slot, to ask your Department Coordinator for a permanent move. For a one-day change, open This week.",
-    week: "Click one of your lectures to cancel it or move it for that day. Students see the change straight away.",
+    week: "Click one of your lectures to see when you, your students and a room are all free. Move it for that day, or ask to move it every week. Students are told straight away.",
   },
   student: {
     plan: "Your usual weekly timetable.",
