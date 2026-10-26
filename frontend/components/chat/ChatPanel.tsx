@@ -12,6 +12,7 @@ import { useChatPage } from "@/lib/chat-context";
 import { greetName } from "@/lib/names";
 import { useTimetableOptional } from "@/lib/timetable-context";
 import { useToast } from "@/lib/toast";
+import { LeavePlanView } from "@/components/leave/LeavePlanView";
 import type { ChatCard, ChatEvent, Insight, Role, TimetableOut } from "@/lib/types";
 
 interface Msg {
@@ -370,6 +371,24 @@ export function ChatPanel() {
 }
 
 function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: TimetableOut | null) => void }) {
+  if (card.type === "leave_plan") return <LeavePlanCard card={card} />;
+  return <ActionCard card={card} onApplied={onApplied} />;
+}
+
+/** A teacher's leave: the full cover plan (per year, per class), applied from the card itself. */
+function LeavePlanCard({ card }: { card: Extract<ChatCard, { type: "leave_plan" }> }) {
+  const l = card.leave;
+  const actions = Object.fromEntries(Object.entries(l.actions).map(([y, a]) => [Number(y), a]));
+  return (
+    <div className="rounded-xl border border-accent/30 bg-accent-soft/40 p-3">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-accent-text">Cover plan · {l.teacher_name} · not applied yet</p>
+      <LeavePlanView teacherId={l.teacher_id} from={l.start_date} to={l.end_date} reason={l.reason}
+        initialActions={actions} via="chatbot" />
+    </div>
+  );
+}
+
+function ActionCard({ card, onApplied }: { card: Exclude<ChatCard, { type: "leave_plan" }>; onApplied: (out: TimetableOut | null) => void }) {
   const [state, setState] = useState<"ready" | "busy" | "applied" | "discarded" | "error">("ready");
   const [message, setMessage] = useState("");
   const showToast = useToast();
@@ -395,6 +414,13 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Timeta
           : await api.bookMeeting({ teacher_ids: b.teacher_ids ?? [], date: b.date, start: b.start ?? "",
             end: b.end ?? "", title: b.title ?? "", place: b.place ?? "" });
         setMessage(`${out.message} It's on your Bookings page.`);
+      } else if (card.type === "leave_request") {
+        const out = await api.askLeave(card.leave);
+        setMessage(`Sent to your Coordinator (${out.status === "pending" ? "waiting for approval" : out.status}).`);
+      } else if (card.type === "undo") {
+        const out = await api.undo(card.entry_id);
+        onApplied(out);
+        setMessage("Undone. The timetable is back to how it was, and everyone affected is told.");
       } else {
         const a = card.action;
         const out = await api.addOverride({ session_id: a.session_id, date: a.date, kind: a.kind, to_date: a.to_date,
@@ -417,6 +443,8 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Timeta
     : card.type === "proposal" ? "Permanent change · checked for clashes"
     : card.type === "booking"
       ? `${card.booking.kind === "doubt" ? "Doubt slot" : "Meeting"} · ${state === "applied" ? "booked" : "not booked yet"}`
+      : card.type === "leave_request" ? `Leave request · ${state === "applied" ? "sent" : "not sent yet"}`
+      : card.type === "undo" ? `Undo · ${state === "applied" ? "done" : "not undone yet"}`
       : "One-day change";
 
   return (
@@ -437,7 +465,10 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Timeta
         </ul>
       ) : (
         <p className="mt-1 text-sm">{card.type === "booking" ? card.booking.summary
-          : card.type === "platform" ? card.change.summary : card.action.summary}</p>
+          : card.type === "platform" ? card.change.summary
+          : card.type === "leave_request" ? `Leave ${card.leave.start_date === card.leave.end_date ? card.leave.start_date
+            : `${card.leave.start_date} to ${card.leave.end_date}`}${card.leave.reason ? ` · ${card.leave.reason}` : ""}`
+          : card.type === "undo" ? `${card.summary} (by ${card.actor})` : card.action.summary}</p>
       )}
       {state === "applied" || state === "error" ? (
         <p className={clsx("mt-2 text-xs", state === "applied" ? "text-ok" : "text-danger")}>{message}</p>
@@ -446,7 +477,7 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Timeta
       ) : (
         <div className="mt-3 flex gap-2">
           <Button variant="primary" onClick={apply} disabled={state === "busy"} className="px-3 py-1.5 text-xs">
-            {state === "busy" && <Loader2 size={14} className="animate-spin" />} {card.type === "booking" ? "Book" : "Apply"}
+            {state === "busy" && <Loader2 size={14} className="animate-spin" />} {card.type === "booking" ? "Book" : card.type === "leave_request" ? "Send" : card.type === "undo" ? "Undo" : "Apply"}
           </Button>
           <Button onClick={discard} disabled={state === "busy"} className="px-3 py-1.5 text-xs">Discard</Button>
         </div>

@@ -4,7 +4,7 @@ import { CheckCircle2, Loader2, ShieldCheck, UserCheck } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
-import { useTimetable } from "@/lib/timetable-context";
+import { useTimetableOptional } from "@/lib/timetable-context";
 import { useToast } from "@/lib/toast";
 import type { CoverAction, LeaveApplied, LeavePlan, PlanItem } from "@/lib/types";
 
@@ -25,7 +25,8 @@ export function LeavePlanView({ teacherId, from, to, reason, leaveId, initialAct
   via?: "app" | "chatbot";
   onApplied?: (out: LeaveApplied) => void;
 }) {
-  const { reload } = useTimetable();
+  // Works inside the chat panel too, which can be open on pages without the timetable.
+  const reload = useTimetableOptional()?.reload ?? (async () => {});
   const showToast = useToast();
   const [actions, setActions] = useState<Record<number, CoverAction>>(initialActions ?? {});
   const [plan, setPlan] = useState<LeavePlan | null>(null);

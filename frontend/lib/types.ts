@@ -215,7 +215,11 @@ export type ChatCard =
   | { type: "proposal"; proposal: Proposal }
   | { type: "one_day"; action: OneDayAction }
   | { type: "booking"; booking: BookingAction }
-  | { type: "platform"; change: { org: string; name: string; plan: string | null; status: string | null; note: string | null; summary: string } };
+  | { type: "platform"; change: { org: string; name: string; plan: string | null; status: string | null; note: string | null; summary: string } }
+  | { type: "leave_plan"; leave: { teacher_id: string; teacher_name: string; start_date: string; end_date: string; reason: string;
+      actions: Record<string, CoverAction> } }
+  | { type: "leave_request"; leave: { start_date: string; end_date: string; reason: string } }
+  | { type: "undo"; entry_id: string; summary: string; actor: string };
 export type ChatEvent =
   | { type: "start"; conversation_id: string }
   | { type: "token"; text: string }
