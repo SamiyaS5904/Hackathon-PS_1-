@@ -25,3 +25,6 @@ Thumbs.db
 # local database
 *.db
 *.db-journal
+
+# Built Hugging Face Space folder (deploy/make_hf_space.py)
+deploy/_hf_space/
