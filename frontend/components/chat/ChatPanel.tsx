@@ -2,8 +2,9 @@
 
 import clsx from "clsx";
 import { ArrowRight, CheckCircle2, Headphones, Loader2, MessageSquare, Mic, PhoneOff, RotateCcw, Send, Sparkles, Square, Volume2, VolumeX, X, XCircle } from "lucide-react";
-import { usePathname } from "next/navigation";
-import { Fragment, useCallback, useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
@@ -14,6 +15,7 @@ import { greetName } from "@/lib/names";
 import { useTimetableOptional } from "@/lib/timetable-context";
 import { useToast } from "@/lib/toast";
 import { LeavePlanView } from "@/components/leave/LeavePlanView";
+import { completions, phrasebook } from "./typeahead";
 import type { ChatCard, ChatEvent, Insight, Role, TimetableOut } from "@/lib/types";
 
 interface Msg {
@@ -65,6 +67,7 @@ function Rich({ text }: { text: string }) {
 
 export function ChatPanel() {
   const path = usePathname();
+  const router = useRouter();
   const { role, user } = useAuth();
   const tt = useTimetableOptional();
   const setData = tt?.setData;
@@ -97,6 +100,7 @@ export function ChatPanel() {
   const pendingRef = useRef<string | null>(null); // said while an answer was still coming (talk mode)
   const spokenDraftRef = useRef(false); // the text in the box came from the mic
   const sendRef = useRef<(text: string, spoken?: boolean) => Promise<void>>(async () => {});
+  const phrases = useMemo(() => (who ? phrasebook(who, college) : []), [who, college]);
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -168,7 +172,14 @@ export function ChatPanel() {
           else if (last >= 0) tools[last] = { label: e.label, status: e.status };
           return { ...m, tools };
         });
-      else if (e.type === "card") update((m) => ({ ...m, cards: [...m.cards, e.card] }));
+      else if (e.type === "card") {
+        // The assistant shows what it talks about: open it beside the chat straight away.
+        if (e.card.type === "navigate") {
+          router.push(e.card.path);
+          window.dispatchEvent(new Event("tt:urlchange"));
+        }
+        update((m) => ({ ...m, cards: [...m.cards, e.card] }));
+      }
       else if (e.type === "error") update((m) => ({ ...m, error: e.message }));
     }, { voice: spoken, org: platform ? "platform" : undefined });
     if (readAloud) speaker?.end();
@@ -178,7 +189,7 @@ export function ChatPanel() {
     const next = pendingRef.current;
     pendingRef.current = null;
     if (next) void sendRef.current(next, true);
-  }, [convId, path, page, platform]);
+  }, [convId, path, page, platform, router]);
   useEffect(() => { sendRef.current = send; }, [send]);
 
   // A message typed in from elsewhere (e.g. Home's "Handle with assistant"): the user checks it and sends.
@@ -312,6 +323,7 @@ export function ChatPanel() {
   };
 
   const stopTalking = () => speakerRef.current?.stop();
+  // Suggestions while typing: real names from this college, matched as you type (Tab takes the first).
 
   const reset = () => {
     setMsgs([]);
@@ -319,6 +331,7 @@ export function ChatPanel() {
   };
 
   if (!who) return null;
+  const typeahead = busy || listening ? [] : completions(input, phrases);
   const suggestions = (page.suggestions?.length ? page.suggestions
     : defaultSuggestions(who, college?.sections[0]?.name ?? "", college?.teachers[0]?.name ?? "")).slice(0, 3);
 
@@ -475,9 +488,23 @@ export function ChatPanel() {
               </div>
             )}
             {voiceError && !listening && <p className="mb-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn" role="alert">{voiceError}</p>}
+            {typeahead.length > 0 && (
+              <div className="mb-2 flex flex-col gap-1" aria-label="Suggestions">
+                {typeahead.map((s, i) => (
+                  <button key={s} type="button" onClick={() => { setInput(s); inputRef.current?.focus(); }}
+                    className="flex items-center gap-2 truncate rounded-lg border border-border px-2.5 py-1.5 text-left text-xs hover:bg-surface-2">
+                    <Sparkles size={11} className="shrink-0 text-accent-text" aria-hidden />
+                    <span className="truncate">{s}</span>
+                    {i === 0 && <kbd className="ml-auto hidden shrink-0 rounded bg-surface-2 px-1 font-mono text-[10px] text-muted sm:inline">Tab</kbd>}
+                  </button>
+                ))}
+              </div>
+            )}
             <div className="flex items-end gap-2 rounded-xl border border-border-strong bg-surface px-3 py-2 focus-within:border-accent">
               <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} rows={1} maxLength={2000}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input, spokenDraftRef.current); spokenDraftRef.current = false; } }}
+                onKeyDown={(e) => {
+                  if (e.key === "Tab" && typeahead[0]) { e.preventDefault(); setInput(typeahead[0]); return; }
+                  if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input, spokenDraftRef.current); spokenDraftRef.current = false; } }}
                 placeholder={listening ? "Listening…" : platform ? "Ask about the colleges…" : "Ask about your timetable…"} aria-label="Message"
                 className="max-h-32 min-h-[24px] flex-1 resize-none bg-transparent text-sm outline-none" />
               {voice && (
@@ -504,6 +531,14 @@ export function ChatPanel() {
 
 function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: TimetableOut | null) => void }) {
   if (card.type === "leave_plan") return <LeavePlanCard card={card} />;
+  if (card.type === "navigate") {
+    return (
+      <Link href={card.path} onClick={() => setTimeout(() => window.dispatchEvent(new Event("tt:urlchange")), 50)}
+        className="inline-flex items-center gap-1.5 rounded-full border border-border px-2.5 py-1 text-xs text-muted hover:bg-surface-2">
+        <ArrowRight size={12} aria-hidden /> On screen: {card.label}
+      </Link>
+    );
+  }
   return <ActionCard card={card} onApplied={onApplied} />;
 }
 
@@ -520,7 +555,7 @@ function LeavePlanCard({ card }: { card: Extract<ChatCard, { type: "leave_plan" 
   );
 }
 
-function ActionCard({ card, onApplied }: { card: Exclude<ChatCard, { type: "leave_plan" }>; onApplied: (out: TimetableOut | null) => void }) {
+function ActionCard({ card, onApplied }: { card: Exclude<ChatCard, { type: "leave_plan" | "navigate" }>; onApplied: (out: TimetableOut | null) => void }) {
   const [state, setState] = useState<"ready" | "busy" | "applied" | "discarded" | "error">("ready");
   const [message, setMessage] = useState("");
   const showToast = useToast();

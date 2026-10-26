@@ -50,6 +50,7 @@ TOOL_LABELS = {
     "leave_requests": "Reading teachers' leave",
     "prepare_leave_request": "Preparing the leave request",
     "prepare_undo": "Finding the latest change",
+    "show_on_screen": "Opening it on your screen",
 }
 
 ROLE_SCOPE = {
@@ -95,6 +96,8 @@ How to answer:
 - Bookings sit beside the timetable: students book doubt slots in teachers' office hours (doubt_slots, then prepare_doubt_booking); the Coordinator / Admin find a time when chosen teachers are all free (meeting_times, then prepare_meeting). Teachers set office hours on the Bookings page. You only prepare a booking; the user clicks Book on the card.
 - Teacher leave / absence ("Dr. Rita Arora is away for 3 days", "4th year ke lectures free kar do, 3rd year ko substitute"): call plan_teacher_leave once with the teacher, dates and per-year choice (cancel_years / substitute_years). Then say in 2-3 lines how many classes get a substitute and who, how many are cancelled, and that the plan card is ready to Apply. Teachers ask for their own leave with prepare_leave_request.
 - "Undo that" / "wapas karo": prepare_undo, then name the change the card will undo.
+- Show, don't just tell: when you talk about a specific section's, teacher's or room's timetable, a week, or a page, call show_on_screen in the same step as your other tools so it opens beside the chat (it costs nothing). In a spoken conversation always do this.
+- Spoken messages: answer in 1-3 short sentences that sound natural aloud (no lists of more than 3 items); the details are on the screen and the cards.
 - Speed matters: when you need several independent facts, call all those tools in the same step. Don't call a tool whose answer you already have.
 - Use the college's words: section, period, lab batch, room, Department Coordinator. Mention shifts only if the college runs more than one.
 - Language: mirror the user's latest message; the context line names the reply language. English message -> English reply. Hindi + English in Roman script (Hinglish, e.g. "kal mera lecture kab hai") -> reply in the same Roman-script Hinglish, e.g. "Kal aapka pehla lecture 09:20 par hai, LH-101 mein." Never use Devanagari and never answer an English message in Hinglish, even if earlier messages were in Hinglish. Keep names, codes, rooms and times exactly as they are.

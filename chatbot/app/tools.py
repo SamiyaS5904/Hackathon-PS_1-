@@ -167,6 +167,20 @@ class LeavePlanIn(_Dates):
     substitute_years: list[int] = []
 
 
+class ShowIn(BaseModel):
+    page: str  # timetable | home | changes | bookings | attendance | rooms
+    kind: str | None = None  # timetable: section | teacher | room
+    name: str | None = None
+    date: str | None = None
+
+    @field_validator("date")
+    @classmethod
+    def _iso(cls, v: str | None) -> str | None:
+        if v is not None:
+            date.fromisoformat(v)
+        return v
+
+
 class AskLeaveIn(_Dates):
     reason: str = ""
 
@@ -332,6 +346,17 @@ TOOLS: dict[str, tuple[dict, type[BaseModel], tuple[str, ...]]] = {
          "periods": {"type": "integer", "description": "Same length as asked from meeting_times."},
          "title": {"type": "string"}, "place": {"type": "string"}},
         ["teachers", "date", "start_time"]), MeetingIn, STAFF),
+    "show_on_screen": (_tool(
+        "show_on_screen",
+        "Open something on the user's screen beside the chat while you talk about it: a section's, teacher's or "
+        "room's timetable (optionally the week of a date, showing that week's real changes), or a page (home, "
+        "changes, bookings, attendance, rooms). Use it whenever you talk about a specific timetable, plan or page, "
+        "especially in a spoken conversation, so the user sees it. Cheap; no need to ask first.",
+        {"page": {"type": "string", "enum": ["timetable", "home", "changes", "bookings", "attendance", "rooms"]},
+         "kind": {"type": "string", "enum": ["section", "teacher", "room"], "description": "For page=timetable."},
+         "name": {"type": "string", "description": "For page=timetable: e.g. 'CSE-3A', 'Anita Sharma', 'LH-101'."},
+         "date": {**DATE, "description": "For page=timetable: show the real week containing this date."}},
+        ["page"]), ShowIn, ("student", "teacher", "coordinator", "admin")),
     "plan_teacher_leave": (_tool(
         "plan_teacher_leave",
         "A teacher is away (leave) on some dates: builds the cover plan for every class of theirs on those dates. Each "
@@ -765,6 +790,29 @@ async def _run(ctx: ToolContext, name: str, a: Any) -> Any:
         ctx.cards.append({"type": "one_day", "action": action})
         return {"prepared": True, "summary": action["summary"],
                 "note": "A card with Apply is shown to the user. It is NOT applied yet; students are told once applied."}
+
+    if name == "show_on_screen":
+        pages = {"home": ("/", "Home"), "changes": ("/changes", "Changes"), "bookings": ("/bookings", "Bookings"),
+                 "attendance": ("/attendance", "Attendance"), "rooms": ("/events", "Room bookings")}
+        if a.page in pages:
+            path, label = pages[a.page]
+        elif a.page == "timetable":
+            q: dict[str, str] = {}
+            label = "Timetable"
+            if a.kind and a.name and ctx.role in STAFF:
+                items, view = {"section": (c["sections"], "section"), "teacher": (c["teachers"], "teacher"),
+                               "room": (c["venues"], "venue")}[a.kind]
+                x = _find(items, a.name, ("name", "id"))
+                q.update(view=view, id=x["id"])
+                label = f"{x['name']}'s timetable" if a.kind == "teacher" else f"{x['name']} timetable"
+            if a.date:
+                q.update(mode="week", date=a.date)
+                label += f", week of {_label(a.date)}"
+            path = "/timetable" + ("?" + "&".join(f"{k}={v}" for k, v in q.items()) if q else "")
+        else:
+            raise ToolError("Unknown page.")
+        ctx.cards.append({"type": "navigate", "path": path, "label": label})
+        return {"shown": label, "note": "It is open on the user's screen now (beside the chat)."}
 
     if name == "plan_teacher_leave":
         t = _find(c["teachers"], a.teacher, ("name", "id"))

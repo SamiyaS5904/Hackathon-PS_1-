@@ -224,7 +224,8 @@ export type ChatCard =
   | { type: "leave_plan"; leave: { teacher_id: string; teacher_name: string; start_date: string; end_date: string; reason: string;
       actions: Record<string, CoverAction> } }
   | { type: "leave_request"; leave: { start_date: string; end_date: string; reason: string } }
-  | { type: "undo"; entry_id: string; summary: string; actor: string };
+  | { type: "undo"; entry_id: string; summary: string; actor: string }
+  | { type: "navigate"; path: string; label: string };
 export type ChatEvent =
   | { type: "start"; conversation_id: string }
   | { type: "token"; text: string }

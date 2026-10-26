@@ -61,9 +61,21 @@ export default function TimetablePage() {
   const [weekStart, setWeekStart] = useState(() => isoDate(new Date()));
   const [week, setWeek] = useState<WeekOut | null>(null);
   const [selected, setSelected] = useState<Occurrence | null>(null);
-  // Links can open an exact view: /timetable?mode=week&view=teacher&id=t-anita
+  // Links can open an exact view: /timetable?mode=week&view=teacher&id=t-anita&date=2026-10-27. The assistant
+  // changes the link while this page is open ("tt:urlchange"), so read it again then.
+  const [search, setSearch] = useState("");
   useEffect(() => {
-    const q = new URLSearchParams(window.location.search);
+    const read = () => setTimeout(() => setSearch(window.location.search), 30);
+    read();
+    window.addEventListener("tt:urlchange", read);
+    window.addEventListener("popstate", read);
+    return () => {
+      window.removeEventListener("tt:urlchange", read);
+      window.removeEventListener("popstate", read);
+    };
+  }, []);
+  useEffect(() => {
+    const q = new URLSearchParams(search);
     const m = q.get("mode");
     if (m === "today" || m === "plan" || m === "week") setMode(m === "today" && isStaff(role) ? "week" : m);
     // Staff on a phone: day-by-day cards of this week instead of the wide weekly grid.
@@ -74,7 +86,9 @@ export default function TimetablePage() {
       const id = q.get("id");
       if (id) setPicked((p) => ({ ...p, [v]: id }));
     }
-  }, [role]);
+    const d = q.get("date");
+    if (d && /^\d{4}-\d{2}-\d{2}$/.test(d)) setWeekStart(d);
+  }, [role, search]);
 
   const loadWeek = useCallback(async () => {
     try {
