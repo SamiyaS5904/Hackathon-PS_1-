@@ -428,7 +428,7 @@ export function ChatPanel() {
               <div className="space-y-4">
                 <p className="text-sm text-muted">
                   Hi {greetName(user?.name)}. {platform ? "Ask about the colleges on the platform" : "Ask about your timetable"} in plain words
-                  {voice ? ", tap the mic, or switch to Talk and just speak" : ""}. English or Hinglish both work: I answer in the language you use.
+                  {voice ? ", tap the mic, or switch to Talk and just speak" : ""}. I reply in English (switch to Hinglish above).
                 </p>
                 {insights && insights.length > 0 && (
                   <div className="space-y-2">
