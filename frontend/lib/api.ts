@@ -1,7 +1,7 @@
 import type {
   AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
-  TimetableOut, Venue, WeekOut, RescheduleOut,
+  TimetableOut, Venue, WeekOut, RescheduleOut, FreeVenue, VenueEventLists, VenueEventResult,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
@@ -262,4 +262,12 @@ export const api = {
 export const extraApi = {
   reschedule: (sessionId: string, date: string) =>
     request<RescheduleOut>(`${org()}/timetable/sessions/${sessionId}/reschedule?date=${date}&days=7`),
+  freeVenues: (date: string, start: string, end: string, minSeats = 0) =>
+    request<FreeVenue[]>(`${org()}/venue-events/free?${new URLSearchParams({ date, start, end, min_seats: String(minSeats) })}`),
+  bookVenue: (body: { venue_id: string; date: string; start: string; end: string; title: string; club: string }) =>
+    request<VenueEventResult>(`${org()}/venue-events`, post(body)),
+  venueEvents: () => request<VenueEventLists>(`${org()}/venue-events`),
+  approveVenueEvent: (id: string) => request<VenueEventResult>(`${org()}/venue-events/${id}/approve`, { method: "POST" }),
+  declineVenueEvent: (id: string, note: string) => request<VenueEventResult>(`${org()}/venue-events/${id}/decline`, post({ note })),
+  cancelVenueEvent: (id: string) => request<VenueEventResult>(`${org()}/venue-events/${id}/cancel`, { method: "POST" }),
 };

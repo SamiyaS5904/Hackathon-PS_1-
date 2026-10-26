@@ -8,16 +8,34 @@ A one-day move only uses free slots: nothing else is reshuffled for a single day
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from datetime import date, timedelta
 
 from pydantic import BaseModel
 
 from app import lunch
 from app.edits.moves import MoveOption, check_slot
-from app.models.domain import College, Override, Session, Timetable
+from app.models.domain import College, Kind, Override, Session, Timetable, to_minutes
 from app.validator.check import validate
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+
+# Rooms held on a real date by approved events (app/venue_events.py sets this):
+# (college, date) -> [(venue id, start, end, what)]. One-day moves and makeups never take a held room.
+room_holds: Callable[[College, str], list[tuple[str, str, str, str]]] = lambda college, d: []
+
+
+def _held_as_classes(college: College, d: str, day: str) -> list[Session]:
+    """Held rooms as placeholder classes (no teacher, no students), so the room is simply busy then."""
+    return [Session(id=f"event:{i}", allotment_id=f"event:{i}", subject_id="", teacher_id="", venue_id=v,
+                    kind=Kind.lecture, section_ids=[], day=day, shift_id="", start_period=0, length=0, start=a, end=b)
+            for i, (v, a, b, _) in enumerate(room_holds(college, d))]
+
+
+def held_by_event(college: College, d: str, venue_id: str, start: str, end: str) -> str | None:
+    """The event holding ``venue_id`` on ``d`` between ``start`` and ``end``, if any."""
+    return next((what for v, a, b, what in room_holds(college, d)
+                 if v == venue_id and to_minutes(a) < to_minutes(end) and to_minutes(start) < to_minutes(b)), None)
 
 
 class Occurrence(BaseModel):
@@ -127,6 +145,7 @@ def day_options(college: College, tt: Timetable, session_id: str, from_date: str
     # On its own date the class may move anywhere free; on another date its regular weekly occurrence
     # there is a separate class that really happens, so it counts like any other.
     others = [x for x in active(college, tt, to_date) if not (x.id == s.id and to_date == from_date)]
+    others += _held_as_classes(college, to_date, wd)
     out = []
     for p in range(len(college.shift(s.shift_id).periods)):
         if to_date == from_date and p == s.start_period:
@@ -197,6 +216,9 @@ def remove_override(college: College, tt: Timetable, override_id: str) -> tuple[
     new = tt.model_copy(update={"overrides": [o for o in tt.overrides if o.id != override_id]})
     if validate(college, *_day(college, new, ov.date), check_counts=False):
         return None, "Restoring would clash with another change made that day."
+    event = held_by_event(college, ov.date, s.venue_id, s.start, s.end)
+    if event:
+        return None, f"{college.venue(s.venue_id).name} is booked for {event} that day, so the class can't go back there."
     subj = college.subject(s.subject_id).name
     return new, f"Restored {subj} on {label(ov.date)} to its usual time"
 

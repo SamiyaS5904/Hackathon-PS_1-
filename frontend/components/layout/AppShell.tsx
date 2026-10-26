@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { Building2, CalendarCheck, CalendarClock, CalendarDays, ChevronDown, ClipboardCheck, Database, GitCompareArrows, Home, ListChecks, Loader2, LogOut, MoreHorizontal, Settings2, Sparkles, Users } from "lucide-react";
+import { Building2, CalendarCheck, CalendarClock, CalendarDays, ChevronDown, ClipboardCheck, Database, DoorOpen, GitCompareArrows, Home, ListChecks, Loader2, LogOut, MoreHorizontal, Settings2, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
@@ -31,6 +31,7 @@ const MORE: Item[] = [
   { href: "/attendance", label: "My attendance", icon: ClipboardCheck, roles: ["student"] },
   { href: "/bookings", label: "Meetings", icon: CalendarCheck, roles: ["admin", "coordinator"] },
   { href: "/availability", label: "My availability", icon: CalendarClock, roles: ["teacher"] },
+  { href: "/events", label: "Room booking", icon: DoorOpen, roles: ["admin", "coordinator", "teacher"] },
   { href: "/rules", label: "Rules", icon: ListChecks, roles: ["admin", "coordinator"] },
   { href: "/data", label: "College data", icon: Database, roles: ["admin", "coordinator"] },
   { href: "/members", label: "People & invites", icon: Users, roles: ["admin", "coordinator"] },

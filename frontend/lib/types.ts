@@ -354,3 +354,16 @@ export interface RescheduleOption {
   venue_id: string | null; venue: string; every_week: boolean;
 }
 export interface RescheduleOut { options: RescheduleOption[]; note: string }
+
+// ---- Room booking for events ----
+
+export interface FreeVenue { venue_id: string; name: string; type: string; capacity: number; owner: string; approver: string }
+export interface VenueEvent {
+  id: string; venue_id: string; date: string; start: string; end: string; title: string; club: string;
+  requested_by: string; requested_by_name: string; requester_role: string; owner_department_id: string | null;
+  status: "pending" | "approved" | "declined" | "cancelled"; decided_by: string; decided_at: number | null; note: string;
+  label: string; venue: string; capacity: number; approver: string; can_decide: boolean; can_cancel: boolean;
+  clash: string | null; past: boolean;
+}
+export interface VenueEventLists { to_review: VenueEvent[]; mine: VenueEvent[]; upcoming: VenueEvent[] }
+export interface VenueEventResult { message: string; event: VenueEvent }
