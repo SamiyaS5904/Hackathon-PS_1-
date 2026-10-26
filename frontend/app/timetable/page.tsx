@@ -286,7 +286,7 @@ export default function TimetablePage() {
             <FindAny college={college} onPick={(v, id) => { setView(v); setPicked((p) => ({ ...p, [v]: id })); }} />
             </>)}
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
               {mode === "week" && week && (
                 <div className="flex items-center gap-1 text-sm">
                   <button aria-label="Previous week" onClick={() => setWeekStart(addDays(weekStart, -7))}
