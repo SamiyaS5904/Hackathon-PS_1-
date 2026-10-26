@@ -1,13 +1,14 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, CheckCircle2, Loader2, Mic, RotateCcw, Send, Sparkles, Square, Volume2, VolumeX, X, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Headphones, Loader2, MessageSquare, Mic, PhoneOff, RotateCcw, Send, Sparkles, Square, Volume2, VolumeX, X, XCircle } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
-import { createRecognition, speak, stopSpeaking, streamChat, voiceErrorText } from "@/lib/chat";
+import { createRecognition, streamChat } from "@/lib/chat";
+import { Mic as Microphone, Speaker, cloudVoice, isStopWord, micErrorText } from "@/lib/voice";
 import { useChatPage } from "@/lib/chat-context";
 import { greetName } from "@/lib/names";
 import { useTimetableOptional } from "@/lib/timetable-context";
@@ -83,25 +84,42 @@ export function ChatPanel() {
   const [voiceError, setVoiceError] = useState<string | null>(null);
   const [speakReplies, setSpeakReplies] = useState(true); // replies to spoken questions are read aloud
   const [speaking, setSpeaking] = useState(false);
-  const recRef = useRef<ReturnType<typeof createRecognition>>(null);
+  // "chat": type, or tap the mic (pauses are fine; Done puts the words in the box to check). "talk": hands-free.
+  const [mode, setMode] = useState<"chat" | "talk">("chat");
+  const [cloud, setCloud] = useState(false); // natural cloud voice set up on the assistant service
+  const [level, setLevel] = useState(0); // microphone level, for the talk-mode ring
+  const [transcribing, setTranscribing] = useState(false);
+  const micRef = useRef<Microphone | null>(null);
+  const speakerRef = useRef<Speaker | null>(null);
+  const modeRef = useRef<"chat" | "talk">("chat");
+  const busyRef = useRef(false);
+  const speakRepliesRef = useRef(true);
+  const pendingRef = useRef<string | null>(null); // said while an answer was still coming (talk mode)
+  const spokenDraftRef = useRef(false); // the text in the box came from the mic
+  const sendRef = useRef<(text: string, spoken?: boolean) => Promise<void>>(async () => {});
   const endRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    setVoice(createRecognition() !== null);
     try {
       setSpeakReplies(localStorage.getItem("tt-speak-replies") !== "0");
     } catch {
       /* storage blocked: keep the default */
     }
+    let live = true;
+    cloudVoice().then((c) => {
+      if (!live) return;
+      setCloud(c);
+      speakerRef.current = new Speaker(c, (on) => {
+        setSpeaking(on);
+        micRef.current?.setStrict(on);
+      });
+      const canMic = typeof navigator !== "undefined" && !!navigator.mediaDevices?.getUserMedia;
+      setVoice(canMic && (c || createRecognition() !== null));
+    });
+    return () => { live = false; };
   }, []);
-  useEffect(() => {
-    if (!open) {
-      recRef.current?.stop();
-      stopSpeaking();
-      setSpeaking(false);
-    }
-  }, [open]);
+  useEffect(() => { speakRepliesRef.current = speakReplies; }, [speakReplies]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
@@ -123,20 +141,23 @@ export function ChatPanel() {
 
   const send = useCallback(async (text: string, spoken = false) => {
     const q = text.trim();
-    if (!q || busy) return;
+    if (!q || busyRef.current) return;
+    busyRef.current = true;
     setInput("");
     setVoiceError(null);
-    stopSpeaking();
-    setSpeaking(false);
+    // Spoken question -> the answer is read aloud sentence by sentence while it streams (always in talk mode).
+    const speaker = speakerRef.current;
+    const readAloud = spoken && (modeRef.current === "talk" || speakRepliesRef.current);
+    if (readAloud) speaker?.reset();
+    else speaker?.stop();
     setBusy(true);
-    let answer = "";
     setMsgs((m) => [...m, { role: "user", text: q, tools: [], cards: [] },
       { role: "assistant", text: "", tools: [], cards: [] }]);
     const update = (fn: (m: Msg) => Msg) => setMsgs((all) => [...all.slice(0, -1), fn(all[all.length - 1])]);
     await streamChat(q, convId, { path, view: page.view, entity: page.entity, mode: page.mode }, (e: ChatEvent) => {
       if (e.type === "start") setConvId(e.conversation_id);
       else if (e.type === "token") {
-        answer += e.text;
+        if (readAloud) speaker?.push(e.text);
         update((m) => ({ ...m, text: m.text + e.text }));
       }
       else if (e.type === "tool")
@@ -150,10 +171,15 @@ export function ChatPanel() {
       else if (e.type === "card") update((m) => ({ ...m, cards: [...m.cards, e.card] }));
       else if (e.type === "error") update((m) => ({ ...m, error: e.message }));
     }, { voice: spoken, org: platform ? "platform" : undefined });
+    if (readAloud) speaker?.end();
+    busyRef.current = false;
     setBusy(false);
-    // Spoken question -> spoken answer (the text stays on screen too).
-    if (spoken && speakReplies && speak(answer, () => setSpeaking(false))) setSpeaking(true);
-  }, [busy, convId, path, page, speakReplies, platform]);
+    // Talk mode: something said while this answer was coming is asked now.
+    const next = pendingRef.current;
+    pendingRef.current = null;
+    if (next) void sendRef.current(next, true);
+  }, [convId, path, page, platform]);
+  useEffect(() => { sendRef.current = send; }, [send]);
 
   // A message typed in from elsewhere (e.g. Home's "Handle with assistant"): the user checks it and sends.
   useEffect(() => {
@@ -172,51 +198,120 @@ export function ChatPanel() {
     }
   }, [pending, open, busy, send, clearPending]);
 
-  // Tap the mic, speak (English or Hinglish), pause: the question is sent by itself. Tap again to send early.
-  const toggleMic = () => {
+  const openMic = async (): Promise<Microphone | null> => {
+    micRef.current?.stop();
+    const m = new Microphone(cloud, setLevel);
+    try {
+      await m.start();
+    } catch (e) {
+      setVoiceError(micErrorText(e));
+      return null;
+    }
+    micRef.current = m;
+    return m;
+  };
+  const closeMic = () => {
+    micRef.current?.stop();
+    micRef.current = null;
+    setListening(false);
+    setHeard("");
+  };
+
+  // Chat mode: tap the mic and speak (English or Hinglish); pauses are fine. Done puts the words in the box so
+  // they can be checked and edited; nothing is sent until the person sends it.
+  const toggleMic = async () => {
     if (listening) {
-      recRef.current?.stop();
+      const m = micRef.current;
+      setListening(false);
+      setTranscribing(true);
+      const text = m ? await m.finishUtterance() : "";
+      closeMic();
+      setTranscribing(false);
+      if (text) {
+        setInput((v) => (v.trim() ? `${v.trim()} ` : "") + text);
+        spokenDraftRef.current = true;
+        setTimeout(() => inputRef.current?.focus(), 30);
+      } else setVoiceError("I didn't catch that. Tap the mic and speak, or type your question.");
       return;
     }
-    const r = createRecognition();
-    if (!r) return;
-    stopSpeaking();
-    setSpeaking(false);
+    speakerRef.current?.stop();
     setVoiceError(null);
-    recRef.current = r;
-    const base = input.trim() ? `${input.trim()} ` : "";
-    let said = "";
-    r.onresult = (e) => {
-      said = Array.from(e.results).map((res) => res[0].transcript).join("");
-      setHeard(said);
-    };
-    r.onerror = (e) => setVoiceError(voiceErrorText(e.error));
-    r.onend = () => {
-      setListening(false);
-      setHeard("");
-      if (said.trim()) send(base + said, true);
-    };
+    const m = await openMic();
+    if (!m) return;
+    m.beginUtterance({ autoEnd: false, onPreview: setHeard });
     setListening(true);
-    try {
-      r.start();
-    } catch {
+  };
+
+  // Talk mode: hands-free. Each pause ends a question, which is sent; the answer is spoken; talking over it
+  // interrupts it. "Stop" quiets it, "bye" ends talk mode.
+  const endTalk = useCallback(() => {
+    modeRef.current = "chat";
+    setMode("chat");
+    pendingRef.current = null;
+    micRef.current?.stop();
+    micRef.current = null;
+    speakerRef.current?.stop();
+    setHeard("");
+    setLevel(0);
+  }, []);
+  const listenTalk = useCallback(() => {
+    const m = micRef.current;
+    if (!m || modeRef.current !== "talk") return;
+    setHeard("");
+    m.beginUtterance({
+      autoEnd: true,
+      onPreview: setHeard,
+      onSpeech: () => speakerRef.current?.stop(),
+      onAutoEnd: async () => {
+        const text = (await m.finishUtterance()).trim();
+        if (modeRef.current !== "talk") return;
+        listenTalkRef.current();
+        if (!text) return;
+        if (isStopWord(text)) {
+          speakerRef.current?.stop();
+          return;
+        }
+        if (/^(bye|bye bye|goodbye|end|that's all|bas itna hi|chalo bye)[\s.!]*$/i.test(text)) {
+          endTalk();
+          return;
+        }
+        if (busyRef.current) pendingRef.current = text;
+        else void sendRef.current(text, true);
+      },
+    });
+  }, [endTalk]);
+  const listenTalkRef = useRef(listenTalk);
+  useEffect(() => { listenTalkRef.current = listenTalk; }, [listenTalk]);
+  const startTalk = async () => {
+    closeMic();
+    setVoiceError(null);
+    const m = await openMic();
+    if (!m) return;
+    modeRef.current = "talk";
+    setMode("talk");
+    listenTalk();
+  };
+  useEffect(() => {
+    if (!open) {
+      endTalk();
+      micRef.current?.stop();
+      micRef.current = null;
       setListening(false);
     }
-  };
+  }, [open, endTalk]);
 
   const toggleSpeakReplies = () => {
     const next = !speakReplies;
     setSpeakReplies(next);
-    if (!next) {
-      stopSpeaking();
-      setSpeaking(false);
-    }
+    if (!next) speakerRef.current?.stop();
     try {
       localStorage.setItem("tt-speak-replies", next ? "1" : "0");
     } catch {
       /* storage blocked: the choice lasts for this visit */
     }
   };
+
+  const stopTalking = () => speakerRef.current?.stop();
 
   const reset = () => {
     setMsgs([]);
@@ -248,6 +343,19 @@ export function ChatPanel() {
               </p>
             </div>
             {voice && (
+              <div className="flex rounded-lg border border-border p-0.5 text-xs" role="group" aria-label="How to work with the assistant">
+                <button onClick={endTalk} aria-pressed={mode === "chat"} title="Type, or tap the mic"
+                  className={clsx("flex items-center gap-1 rounded-md px-2 py-1", mode === "chat" ? "bg-surface-2 font-medium" : "text-muted")}>
+                  <MessageSquare size={12} aria-hidden /> Chat
+                </button>
+                <button onClick={() => mode === "talk" ? undefined : void startTalk()} aria-pressed={mode === "talk"}
+                  title="Talk hands-free: it answers aloud and works while you talk"
+                  className={clsx("flex items-center gap-1 rounded-md px-2 py-1", mode === "talk" ? "bg-accent text-white dark:text-bg" : "text-muted")}>
+                  <Headphones size={12} aria-hidden /> Talk
+                </button>
+              </div>
+            )}
+            {voice && mode === "chat" && (
               <button onClick={toggleSpeakReplies} aria-pressed={speakReplies}
                 aria-label={speakReplies ? "Don't read answers aloud" : "Read answers to spoken questions aloud"}
                 title={speakReplies ? "Answers to spoken questions are read aloud" : "Answers are not read aloud"}
@@ -269,7 +377,7 @@ export function ChatPanel() {
               <div className="space-y-4">
                 <p className="text-sm text-muted">
                   Hi {greetName(user?.name)}. {platform ? "Ask about the colleges on the platform" : "Ask about your timetable"} in plain words
-                  {voice ? ", or tap the mic and speak" : ""}. English or Hinglish both work: I answer in the language you use.
+                  {voice ? ", tap the mic, or switch to Talk and just speak" : ""}. English or Hinglish both work: I answer in the language you use.
                 </p>
                 {insights && insights.length > 0 && (
                   <div className="space-y-2">
@@ -321,24 +429,46 @@ export function ChatPanel() {
             <div ref={endRef} />
           </div>
 
-          <form className="border-t border-border p-3" onSubmit={(e) => { e.preventDefault(); send(input); }}>
-            {listening && (
+          {mode === "talk" ? (
+            <div className="border-t border-border p-4" role="status">
+              <div className="flex items-center gap-3">
+                <div className="relative grid h-14 w-14 shrink-0 place-items-center">
+                  <span className="absolute inset-0 rounded-full bg-accent/25 transition-transform duration-75"
+                    style={{ transform: `scale(${1 + Math.min(level * 1.6, 0.9)})` }} aria-hidden />
+                  <span className="relative grid h-11 w-11 place-items-center rounded-full bg-accent text-white dark:text-bg">
+                    {speaking ? <Volume2 size={20} aria-hidden /> : busy ? <Loader2 size={20} className="animate-spin" aria-hidden /> : <Mic size={20} aria-hidden />}
+                  </span>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium">{speaking ? "Speaking… talk any time to interrupt" : busy ? "Working on it…" : "Listening… just speak"}</p>
+                  <p className="truncate text-xs text-muted">{heard || "Say \"stop\" to quiet me, \"bye\" to end"}</p>
+                </div>
+                {speaking && <Button onClick={stopTalking} className="px-2.5 py-1.5 text-xs"><Square size={12} aria-hidden /> Stop</Button>}
+                <Button onClick={endTalk} className="px-2.5 py-1.5 text-xs"><PhoneOff size={13} aria-hidden /> End</Button>
+              </div>
+              <p className="mt-2 text-[11px] text-muted">{cloud ? "Natural voice" : "Your browser's voice"} · Tap any card to apply it. Nothing changes until you do.</p>
+            </div>
+          ) : (
+          <form className="border-t border-border p-3" onSubmit={(e) => { e.preventDefault(); send(input, spokenDraftRef.current); spokenDraftRef.current = false; }}>
+            {(listening || transcribing) && (
               <div className="mb-2 flex items-center gap-2 rounded-lg bg-danger-soft/60 px-3 py-2 text-sm" role="status">
                 <span className="relative flex h-2.5 w-2.5 shrink-0">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-danger opacity-60" />
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-danger" />
                 </span>
-                <span className="min-w-0 flex-1 truncate">{heard || <span className="text-muted">Listening… speak in English or Hinglish</span>}</span>
-                <button type="button" onClick={toggleMic} className="shrink-0 text-xs font-medium text-danger hover:underline">
-                  {heard ? "Send now" : "Cancel"}
-                </button>
+                <span className="min-w-0 flex-1 truncate">{transcribing ? <span className="text-muted">Writing down what you said…</span>
+                  : heard || <span className="text-muted">Listening… take your time, pauses are fine</span>}</span>
+                {listening && <>
+                  <button type="button" onClick={closeMic} className="shrink-0 text-xs text-muted hover:underline">Cancel</button>
+                  <button type="button" onClick={toggleMic} className="shrink-0 text-xs font-medium text-danger hover:underline">Done</button>
+                </>}
               </div>
             )}
             {speaking && !listening && (
               <div className="mb-2 flex items-center gap-2 rounded-lg bg-accent-soft px-3 py-2 text-sm text-accent-text" role="status">
                 <Volume2 size={15} className="shrink-0" aria-hidden />
                 <span className="flex-1">Reading the answer aloud</span>
-                <button type="button" onClick={() => { stopSpeaking(); setSpeaking(false); }}
+                <button type="button" onClick={stopTalking}
                   className="flex items-center gap-1 text-xs font-medium hover:underline">
                   <Square size={11} aria-hidden /> Stop
                 </button>
@@ -347,11 +477,12 @@ export function ChatPanel() {
             {voiceError && !listening && <p className="mb-2 rounded-lg bg-warn-soft px-3 py-2 text-xs text-warn" role="alert">{voiceError}</p>}
             <div className="flex items-end gap-2 rounded-xl border border-border-strong bg-surface px-3 py-2 focus-within:border-accent">
               <textarea ref={inputRef} value={input} onChange={(e) => setInput(e.target.value)} rows={1} maxLength={2000}
-                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); } }}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input, spokenDraftRef.current); spokenDraftRef.current = false; } }}
                 placeholder={listening ? "Listening…" : platform ? "Ask about the colleges…" : "Ask about your timetable…"} aria-label="Message"
                 className="max-h-32 min-h-[24px] flex-1 resize-none bg-transparent text-sm outline-none" />
               {voice && (
-                <button type="button" onClick={toggleMic} aria-label={listening ? "Stop listening" : "Speak your question"}
+                <button type="button" onClick={() => void toggleMic()} disabled={transcribing}
+                  aria-label={listening ? "Done speaking" : "Speak your question"}
                   aria-pressed={listening}
                   className={clsx("rounded-full p-2 transition", listening ? "animate-pulse bg-danger-soft text-danger" : "text-muted hover:bg-surface-2")}>
                   {listening ? <Square size={14} /> : <Mic size={16} />}
@@ -364,6 +495,7 @@ export function ChatPanel() {
             </div>
             <p className="mt-1.5 px-1 text-[11px] text-muted">Answers come from {platform ? "the platform" : "your timetable"}. Nothing changes until you click Apply.</p>
           </form>
+          )}
         </aside>
       )}
     </>
