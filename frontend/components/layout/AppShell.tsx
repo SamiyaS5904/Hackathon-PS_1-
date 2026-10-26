@@ -1,47 +1,76 @@
 "use client";
 
 import clsx from "clsx";
-import { Building2, CalendarCheck, CalendarClock, CalendarDays, ClipboardCheck, Database, History, Inbox, LayoutDashboard, ListChecks, Loader2, LogOut, Settings2, Users } from "lucide-react";
+import { Building2, CalendarCheck, CalendarClock, CalendarDays, ChevronDown, ClipboardCheck, Database, GitCompareArrows, Home, ListChecks, Loader2, LogOut, MoreHorizontal, Settings2, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 import { ROLE_LABEL, useAuth } from "@/lib/auth";
+import { useChatPage } from "@/lib/chat-context";
 import { ThemeToggle } from "@/lib/theme";
 import { isGenerating, useTimetable } from "@/lib/timetable-context";
 import type { Role } from "@/lib/types";
 import { NotificationBell } from "./NotificationBell";
 
-type Item = { href: string; label: string; icon: typeof LayoutDashboard; roles: Role[] };
+type Item = { href: string; label: string; icon: typeof Home; roles: Role[] };
 
-// Core-first order (root CLAUDE.md §2A). Secondary items sit below a divider. Each role sees only its items.
+// Core first (root CLAUDE.md §2A): the main items are the daily core actions; everything else sits under "More".
 const CORE: Item[] = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["admin", "coordinator"] },
+  { href: "/", label: "Home", icon: Home, roles: ["admin", "coordinator", "teacher", "student"] },
   { href: "/timetable", label: "Timetable", icon: CalendarDays, roles: ["admin", "coordinator"] },
   { href: "/timetable", label: "My timetable", icon: CalendarDays, roles: ["teacher", "student"] },
-  { href: "/setup", label: "College setup", icon: Settings2, roles: ["admin"] },
-  { href: "/departments", label: "Departments", icon: Building2, roles: ["admin"] },
+  { href: "/setup", label: "Setup", icon: Settings2, roles: ["admin"] },
   { href: "/departments", label: "My department", icon: Building2, roles: ["coordinator"] },
-  { href: "/attendance", label: "Attendance", icon: ClipboardCheck, roles: ["teacher"] },
-  { href: "/attendance", label: "My attendance", icon: ClipboardCheck, roles: ["student"] },
-  { href: "/availability", label: "My availability", icon: CalendarClock, roles: ["teacher"] },
+  { href: "/changes", label: "Changes", icon: GitCompareArrows, roles: ["admin", "coordinator", "teacher", "student"] },
 ];
-const SECONDARY: Item[] = [
-  { href: "/requests", label: "Change requests", icon: Inbox, roles: ["admin", "coordinator"] },
-  { href: "/requests", label: "My requests", icon: Inbox, roles: ["teacher"] },
-  { href: "/bookings", label: "Bookings", icon: CalendarCheck, roles: ["teacher", "student"] },
-  { href: "/attendance", label: "Attendance", icon: ClipboardCheck, roles: ["admin", "coordinator"] },
+const MORE: Item[] = [
+  { href: "/departments", label: "Departments", icon: Building2, roles: ["admin"] },
+  { href: "/attendance", label: "Attendance", icon: ClipboardCheck, roles: ["admin", "coordinator", "teacher"] },
+  { href: "/attendance", label: "My attendance", icon: ClipboardCheck, roles: ["student"] },
   { href: "/bookings", label: "Meetings", icon: CalendarCheck, roles: ["admin", "coordinator"] },
+  { href: "/bookings", label: "Bookings", icon: CalendarCheck, roles: ["teacher", "student"] },
+  { href: "/availability", label: "My availability", icon: CalendarClock, roles: ["teacher"] },
   { href: "/rules", label: "Rules", icon: ListChecks, roles: ["admin", "coordinator"] },
   { href: "/data", label: "College data", icon: Database, roles: ["admin", "coordinator"] },
   { href: "/members", label: "People & invites", icon: Users, roles: ["admin", "coordinator"] },
-  { href: "/activity", label: "Activity", icon: History, roles: ["admin", "coordinator"] },
 ];
+const MORE_KEY = "tt-nav-more";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const { college, job } = useTimetable();
   const { user, member, role, signOut } = useAuth();
+  const { setOpen: openAssistant } = useChatPage();
   const core = CORE.filter((i) => role && i.roles.includes(role));
-  const secondary = SECONDARY.filter((i) => role && i.roles.includes(role));
+  const more = MORE.filter((i) => role && i.roles.includes(role));
+  const inMore = more.some((i) => path.startsWith(i.href));
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [mobileMore, setMobileMore] = useState(false);
+  const mobileRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    try {
+      setMoreOpen(localStorage.getItem(MORE_KEY) === "1");
+    } catch {
+      /* storage blocked: start closed */
+    }
+  }, []);
+  useEffect(() => setMobileMore(false), [path]);
+  useEffect(() => {
+    if (!mobileMore) return;
+    const close = (e: MouseEvent) => { if (!mobileRef.current?.contains(e.target as Node)) setMobileMore(false); };
+    document.addEventListener("mousedown", close);
+    return () => document.removeEventListener("mousedown", close);
+  }, [mobileMore]);
+  const toggleMore = () => {
+    const next = !moreOpen;
+    setMoreOpen(next);
+    try {
+      localStorage.setItem(MORE_KEY, next ? "1" : "0");
+    } catch {
+      /* keep for this visit */
+    }
+  };
+  const showMore = moreOpen || inMore;
 
   const link = ({ href, label, icon: Icon }: Item) => {
     const active = href === "/" ? path === "/" : path.startsWith(href);
@@ -75,14 +104,22 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
 
         <nav className="flex flex-col gap-0.5" aria-label="Main">
-          <p className="px-2.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-muted">Workspace</p>
           {core.map(link)}
-          {secondary.length > 0 && (
-            <p className="px-2.5 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted">
-              {role === "admin" || role === "coordinator" ? "Manage" : "More"}
-            </p>
+          <button onClick={() => openAssistant(true)}
+            className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-muted transition hover:bg-surface-2 hover:text-text">
+            <Sparkles size={16} aria-hidden /> Assistant
+            <kbd className="ml-auto rounded bg-surface-2 px-1.5 py-0.5 font-mono text-[10px]">Ctrl K</kbd>
+          </button>
+          {more.length > 0 && (
+            <>
+              <button onClick={toggleMore} aria-expanded={showMore}
+                className="mt-3 flex items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-sm text-muted transition hover:bg-surface-2 hover:text-text">
+                <MoreHorizontal size={16} aria-hidden /> More
+                <ChevronDown size={14} className={clsx("ml-auto transition", showMore && "rotate-180")} aria-hidden />
+              </button>
+              {showMore && <div className="ml-3 flex flex-col gap-0.5 border-l border-border pl-2">{more.map(link)}</div>}
+            </>
           )}
-          {secondary.map(link)}
         </nav>
 
         <div className="mt-auto space-y-3">
@@ -115,17 +152,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             <span className="ml-auto flex items-center"><ThemeToggle /><NotificationBell align="right" /></span>
             <button onClick={signOut} aria-label="Log out" className="rounded p-1.5 text-muted hover:bg-surface-2"><LogOut size={16} /></button>
           </div>
-          {/* One scrollable row instead of wrapping on small screens. */}
-          <nav className="flex gap-1 overflow-x-auto whitespace-nowrap px-3 py-2">
-            {[...core, ...secondary].map(({ href, label }) => {
-              const active = href === "/" ? path === "/" : path.startsWith(href);
-              return (
-                <Link key={label} href={href}
-                  className={clsx("shrink-0 rounded-md px-2.5 py-1 text-sm", active ? "bg-accent-soft font-medium text-accent-text" : "text-muted hover:bg-surface-2")}>
-                  {label}
-                </Link>
-              );
-            })}
+          {/* Core actions in one row; everything else behind "More". */}
+          <nav className="relative flex items-center gap-1 px-3 py-2" aria-label="Main">
+            <div className="flex min-w-0 flex-1 gap-1 overflow-x-auto whitespace-nowrap">
+              {core.map(({ href, label }) => {
+                const active = href === "/" ? path === "/" : path.startsWith(href);
+                return (
+                  <Link key={label} href={href}
+                    className={clsx("shrink-0 rounded-md px-2.5 py-1 text-sm", active ? "bg-accent-soft font-medium text-accent-text" : "text-muted hover:bg-surface-2")}>
+                    {label}
+                  </Link>
+                );
+              })}
+            </div>
+            {more.length > 0 && (
+              <div ref={mobileRef} className="shrink-0">
+                <button onClick={() => setMobileMore(!mobileMore)} aria-expanded={mobileMore}
+                  className={clsx("flex items-center gap-1 rounded-md px-2.5 py-1 text-sm", inMore ? "bg-accent-soft font-medium text-accent-text" : "text-muted hover:bg-surface-2")}>
+                  More <ChevronDown size={14} aria-hidden />
+                </button>
+                {mobileMore && (
+                  <div className="absolute right-3 top-full z-30 mt-1 w-52 rounded-xl border border-border bg-surface p-1.5 shadow-xl">
+                    {more.map(({ href, label, icon: Icon }) => (
+                      <Link key={label} href={href} className="flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm hover:bg-surface-2">
+                        <Icon size={15} className="text-muted" aria-hidden /> {label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </nav>
         </header>
         <main className="flex-1 px-4 py-6 md:px-8">{children}</main>

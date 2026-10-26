@@ -56,6 +56,18 @@ export default function TimetablePage() {
   const [weekStart, setWeekStart] = useState(() => isoDate(new Date()));
   const [week, setWeek] = useState<WeekOut | null>(null);
   const [selected, setSelected] = useState<Occurrence | null>(null);
+  // Links can open an exact view: /timetable?mode=week&view=teacher&id=t-anita
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search);
+    const m = q.get("mode");
+    if (m === "today" || m === "plan" || m === "week") setMode(m === "today" && isStaff(role) ? "week" : m);
+    const v = q.get("view");
+    if (v === "section" || v === "teacher" || v === "venue") {
+      setView(v);
+      const id = q.get("id");
+      if (id) setPicked((p) => ({ ...p, [v]: id }));
+    }
+  }, [role]);
 
   const loadWeek = useCallback(async () => {
     try {
