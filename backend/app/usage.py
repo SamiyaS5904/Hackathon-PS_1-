@@ -23,6 +23,7 @@ USD_TO_INR = float(os.environ.get("USD_TO_INR", "84"))
 
 
 class UsageIn(BaseModel):
+    usd_micro: int | None = Field(default=None, ge=0, le=50_000_000)  # cost already priced by the assistant
     input: int = Field(default=0, ge=0, le=5_000_000)
     output: int = Field(default=0, ge=0, le=1_000_000)
     cache_write: int = Field(default=0, ge=0, le=5_000_000)
@@ -55,8 +56,11 @@ def record(org: str, u: UsageIn, day: str | None = None) -> None:
         row = db.get(AssistantUsageRow, (org, day))
         data = dict(row.data) if row else dict.fromkeys(KEYS, 0)
         data["requests"] = data.get("requests", 0) + 1
+        before = _usd(data)  # cost so far, before this answer's tokens are added
         for k in ("input", "output", "cache_write", "cache_read"):
             data[k] = data.get(k, 0) + getattr(u, k)
+        # Each answer's cost at its own model's price (the assistant mixes faster and stronger models).
+        data["usd"] = before + (u.usd_micro / 1_000_000 if u.usd_micro is not None else _usd_tokens(u.model_dump()))
         if row is None:
             db.add(AssistantUsageRow(org_id=org, day=day, data=data))
         else:
@@ -64,8 +68,13 @@ def record(org: str, u: UsageIn, day: str | None = None) -> None:
         db.commit()
 
 
-def _usd(d: dict) -> float:
+def _usd_tokens(d: dict) -> float:
     return sum(d.get(k, 0) * PRICE[k] for k in PRICE) / 1_000_000
+
+
+def _usd(d: dict) -> float:
+    """A day's cost: the priced running total, or (older rows) its tokens at the strong model's price."""
+    return d["usd"] if "usd" in d else _usd_tokens(d)
 
 
 def _period(rows: list[AssistantUsageRow]) -> Period:

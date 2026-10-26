@@ -28,9 +28,22 @@ _load_dotenv()
 BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/").replace("://localhost", "://127.0.0.1")
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
-MODEL = os.environ.get("CHAT_MODEL", "claude-opus-5-5")
-# Chat answers and small tool loops: Claude Opus 5.5 defaults to "medium"; set it explicitly.
+# Agentic work (moves, leave cover, makeups, meetings, explanations): fast and accurate. Measured on the demo
+# college 2026-10-27: Sonnet 5.5 as accurate as Opus 5.5 on these, ~1.7x faster, half the price.
+MODEL = os.environ.get("CHAT_MODEL", "claude-sonnet-5-5")
+# Used once when the chosen model fails with an API error (overloaded, network), so the answer still comes.
+RETRY_MODEL = os.environ.get("CHAT_RETRY_MODEL", "claude-opus-5-5")
+# Thinking effort for MODEL / RETRY_MODEL (the fast model uses its own defaults).
 EFFORT = os.environ.get("CHAT_EFFORT", "medium")
+# Router: simple look-ups ("my next class", "free rooms", "show CSE-3A") go to a fast, much cheaper model;
+# anything that changes the timetable, plans or explains goes to MODEL. Empty CHAT_FAST_MODEL = MODEL for all.
+FAST_MODEL = os.environ.get("CHAT_FAST_MODEL", "claude-haiku-5-5")
+# USD per million tokens: input, output, cache write (5 min), cache read. For the cost card.
+PRICES = {
+    "claude-opus-5-5": (4.0, 20.0, 5.0, 0.20),
+    "claude-sonnet-5-5": (2.0, 10.0, 2.5, 0.10),
+    "claude-haiku-5-5": (0.10, 0.50, 0.125, 0.01),
+}
 MAX_TOKENS = 16000
 MAX_TOOL_STEPS = 8  # tool rounds per user message
 MAX_HISTORY_MESSAGES = 60  # start a fresh conversation beyond this

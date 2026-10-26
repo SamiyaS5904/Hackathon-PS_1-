@@ -270,7 +270,7 @@ Calendar invites (`.ics`) / Google Calendar sync · WhatsApp / SMS notifications
 | Chatbot | Python 3.12, FastAPI, Anthropic SDK (Claude tool use), SSE streaming → Render/Railway |
 | Data / Auth | **Supabase Postgres** as the database (`DATABASE_URL`; SQLite file locally). Login, roles and invite links are handled by our backend (scrypt password hashes, signed JWT). Decided 2026-10-21: option B, one place for every permission rule, testable offline |
 | Email | Resend |
-| LLM model | `claude-opus-5-5` for the assistant (adaptive thinking, effort `medium` set explicitly, server-side refusal fallbacks `fallbacks: "default"`). Generation never uses an LLM |
+| LLM model | Assistant router (decided 2026-10-27, measured on the demo college): **`claude-sonnet-5-5`** for agentic work (moves, leave cover, makeups, meetings, explanations; adaptive thinking, effort `medium`), **`claude-haiku-5-5`** for plain look-ups (schedule, free rooms, where-is, show on screen, undo), **`claude-opus-5-5`** once as a retry when a turn fails with an API error. Server-side refusal fallbacks `fallbacks: "default"`. Settings: `CHAT_MODEL`, `CHAT_FAST_MODEL`, `CHAT_RETRY_MODEL`, `CHAT_EFFORT`. Generation never uses an LLM |
 
 **Environment variables** (never commit values; keep `.env.example` files current)
 `DATABASE_URL` (Supabase Postgres; empty = local SQLite), `APP_SECRET` (signs login tokens), `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` (optional, backend only), `ANTHROPIC_API_KEY` (chatbot only), `OPENAI_API_KEY` (chatbot, V2 Whisper), `RESEND_API_KEY`, `BACKEND_URL`, `CHATBOT_URL`, `NEXT_PUBLIC_*` for public frontend values.

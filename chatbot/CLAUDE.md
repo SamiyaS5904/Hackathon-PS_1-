@@ -18,7 +18,7 @@ It is the "wow" layer, but it must never be the reason something breaks: **all r
 ## Stack
 Python 3.12 · FastAPI · Anthropic Python SDK (Messages API with tool use, streaming) · httpx (backend client) · SSE to the frontend · pytest. Deploy on Render/Railway as its own service.
 
-Model: **`claude-opus-5-5`** for the agent loop (adaptive thinking; effort `medium` set explicitly because it is this model's default; streaming; server-side refusal fallbacks via `fallbacks: "default"` with beta `server-side-fallback-2026-07-01`). No forced `tool_choice` (not supported on this model). Model ID and effort live in `app/config.py` (`CHAT_MODEL`, `CHAT_EFFORT`). `ANTHROPIC_API_KEY` exists **only** in this service.
+Model router (2026-10-27): **`claude-sonnet-5-5`** for agentic work (adaptive thinking, effort `medium`), **`claude-haiku-5-5`** for plain look-ups, **`claude-opus-5-5`** as a one-time retry after an API error; picked per message in `app/agent.py` (`pick_model`), settings in `app/config.py` (`CHAT_MODEL`, `CHAT_FAST_MODEL`, `CHAT_RETRY_MODEL`, `CHAT_EFFORT`). Server-side refusal fallbacks via `fallbacks: "default"` with beta `server-side-fallback-2026-07-01`. No forced `tool_choice`. `ANTHROPIC_API_KEY` exists **only** in this service.
 
 ## Folder structure (planned)
 ```

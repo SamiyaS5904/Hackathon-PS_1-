@@ -5,6 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
+from app.config import FAST_MODEL, MODEL
 from app.agent import Conversation, run_turn
 from app.tools import ToolContext, ToolError, run_tool
 from tests.conftest import ADMIN, STUDENT
@@ -72,8 +73,8 @@ def test_tool_round_trip_and_answer(backend):
     assert [m["role"] for m in conv.messages] == ["user", "assistant", "user", "assistant"]
     assert conv.messages[2]["content"][0]["type"] == "tool_result"
     req = client.requests[0]
-    assert req["model"] == "claude-opus-5-5" and req["fallbacks"] == "default"
-    assert req["output_config"]["effort"] == "medium" and req["thinking"] == {"type": "adaptive"}
+    # A plain look-up goes to the fast model (its own defaults); changes go to the strong one (see below).
+    assert req["model"] == FAST_MODEL and req["fallbacks"] == "default" and "thinking" not in req
     assert "tool_choice" not in req  # forced tool use isn't supported on this model
     assert "propose_move" not in {t["name"] for t in req["tools"]}  # students never see edit tools
     assert "Aarav" in req["system"][0]["text"] and "2026-10-19" not in req["system"][0]["text"]  # stable prompt
@@ -92,6 +93,9 @@ def test_proposal_card_is_emitted_and_tool_errors_flow_back(backend):
                                           "Context")))
     cards = [e for e in events if e["type"] == "card"]
     assert len(cards) == 1 and cards[0]["card"]["proposal"]["id"] == "p-1"
+    req = client.requests[0]  # a change: the strong model, thinking at the set effort
+    assert req["model"] == MODEL and req["output_config"]["effort"] == "medium" and req["thinking"] == {"type": "adaptive"}
+    assert MODEL == "claude-sonnet-5-5" and FAST_MODEL == "claude-haiku-5-5"  # the measured defaults
     results = conv.messages[2]["content"]
     assert len(results) == 2  # all tool results in one message
     assert results[1]["is_error"] and "lunch" in results[1]["content"]
@@ -125,3 +129,15 @@ def test_text_from_separate_steps_gets_a_paragraph_break(backend):
     events = asyncio.run(collect(run_turn(client, Conversation("u", "c"), ctx, "S", "free rooms?", "Context")))
     tokens = [e["text"] for e in events if e["type"] == "token"]
     assert tokens == ["Let me look.", "\n\nLH-101 ", "is free."]
+
+
+
+def test_router_sends_changes_to_the_strong_model_and_look_ups_to_the_fast_one():
+    from app.agent import pick_model
+
+    for q in ["What do I have tomorrow?", "Which rooms are free right now?", "Show CSE-3A timetable", "Undo the last change"]:
+        assert pick_model(q, "coordinator") == FAST_MODEL, q
+    for q in ["Move CSE-3A DBMS to Friday", "Dr. Kaur is away tomorrow, plan cover", "Cancel my lecture tomorrow",
+              "Why is my lab on Friday?", "Find a makeup time for maths", "Book a meeting with the CSE teachers"]:
+        assert pick_model(q, "coordinator") == MODEL, q
+    assert pick_model("Which colleges need attention?", "platform") == MODEL
