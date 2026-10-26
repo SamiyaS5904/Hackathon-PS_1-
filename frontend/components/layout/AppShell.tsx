@@ -15,6 +15,7 @@ import { NotificationBell } from "./NotificationBell";
 type Item = { href: string; label: string; icon: typeof Home; roles: Role[] };
 
 // Core first (root CLAUDE.md §2A): the main items are the daily core actions; everything else sits under "More".
+// Bookings is a main item for teachers and students: it is how they meet outside class.
 const CORE: Item[] = [
   { href: "/", label: "Home", icon: Home, roles: ["admin", "coordinator", "teacher", "student"] },
   { href: "/timetable", label: "Timetable", icon: CalendarDays, roles: ["admin", "coordinator"] },
@@ -22,13 +23,13 @@ const CORE: Item[] = [
   { href: "/setup", label: "Setup", icon: Settings2, roles: ["admin"] },
   { href: "/departments", label: "My department", icon: Building2, roles: ["coordinator"] },
   { href: "/changes", label: "Changes", icon: GitCompareArrows, roles: ["admin", "coordinator", "teacher", "student"] },
+  { href: "/bookings", label: "Bookings", icon: CalendarCheck, roles: ["teacher", "student"] },
 ];
 const MORE: Item[] = [
   { href: "/departments", label: "Departments", icon: Building2, roles: ["admin"] },
   { href: "/attendance", label: "Attendance", icon: ClipboardCheck, roles: ["admin", "coordinator", "teacher"] },
   { href: "/attendance", label: "My attendance", icon: ClipboardCheck, roles: ["student"] },
   { href: "/bookings", label: "Meetings", icon: CalendarCheck, roles: ["admin", "coordinator"] },
-  { href: "/bookings", label: "Bookings", icon: CalendarCheck, roles: ["teacher", "student"] },
   { href: "/availability", label: "My availability", icon: CalendarClock, roles: ["teacher"] },
   { href: "/rules", label: "Rules", icon: ListChecks, roles: ["admin", "coordinator"] },
   { href: "/data", label: "College data", icon: Database, roles: ["admin", "coordinator"] },
