@@ -13,12 +13,12 @@ from contextlib import asynccontextmanager
 from datetime import date, timedelta
 
 import anthropic
-from fastapi import FastAPI, Header, HTTPException
+from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
-from app import language
+from app import language, voice
 from app.agent import Conversation, run_turn
 from app.backend import Backend, BackendError
 from app.config import CORS_ORIGINS, MAX_HISTORY_MESSAGES, has_api_key
@@ -83,6 +83,68 @@ def _context_line(req: ChatRequest, today: str, now: str) -> str:
               "closest real ones; the reply is read aloud, so keep it short and avoid long lists.") if req.voice else ""
     return (f"Context: today is {d.strftime('%a %Y-%m-%d')}, time {now}. This week: {week}. Next week: {nxt}."
             f"{on_screen}{spoken} {language.instruction(language.detect(req.message))}.")
+
+
+async def _member(authorization: str | None, org: str) -> Backend:
+    """The caller's backend client, after checking they are logged in and belong to ``org``."""
+    if not authorization or not authorization.lower().startswith("bearer "):
+        raise HTTPException(401, "Please log in.")
+    backend = Backend(authorization.split(" ", 1)[1], org)
+    try:
+        me = await backend.me()
+    except BackendError as exc:
+        await backend.close()
+        raise HTTPException(401 if exc.status == 401 else 502, exc.message) from exc
+    if org != PLATFORM and not any(m["org_id"] == org for m in me["memberships"]):
+        await backend.close()
+        raise HTTPException(404, "College not found.")
+    return backend
+
+
+@app.get("/voice")
+def voice_info() -> dict:
+    """Whether cloud listening and speaking are set up (otherwise the browser's own voice is used)."""
+    return {"cloud": voice.available()}
+
+
+@app.post("/transcribe")
+async def transcribe(request: Request, org: str, authorization: str | None = Header(default=None)) -> dict:
+    """Speech-to-text for the chat panel. Body: the recorded audio (webm / ogg / mp4)."""
+    backend = await _member(authorization, org)
+    try:
+        names: list[str] = []
+        if org != PLATFORM:
+            try:
+                c = await backend.college()
+                names = [s["name"] for s in c["sections"]] + [t["name"] for t in c["teachers"]]                     + [s["name"] for s in c["subjects"]]
+            except BackendError:
+                names = []
+        audio = await request.body()
+        text = await voice.transcribe(audio, request.headers.get("content-type", "audio/webm"), names)
+    except voice.VoiceError as exc:
+        raise HTTPException(exc.status, exc.message) from exc
+    finally:
+        await backend.close()
+    return {"text": text}
+
+
+class SpeakRequest(BaseModel):
+    org: str
+    text: str
+
+
+@app.post("/speak")
+async def speak(req: SpeakRequest, authorization: str | None = Header(default=None)) -> StreamingResponse:
+    """Text-to-speech (MP3, streamed) for reading answers aloud."""
+    backend = await _member(authorization, req.org)
+    await backend.close()
+    if not req.text.strip():
+        raise HTTPException(422, "Nothing to read.")
+    try:
+        audio = await voice.speech(req.text.strip())
+    except voice.VoiceError as exc:
+        raise HTTPException(exc.status, exc.message) from exc
+    return StreamingResponse(audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
 
 
 def _sse(event: dict) -> str:
