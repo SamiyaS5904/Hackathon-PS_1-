@@ -7,6 +7,7 @@ before/after, or a prepared one-day change) that the user applies in the app.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from dataclasses import dataclass, field
@@ -157,6 +158,17 @@ class MeetingIn(BaseModel):
     periods: int = 1
     title: str = ""
     place: str = ""
+
+
+class LeavePlanIn(_Dates):
+    teacher: str
+    reason: str = ""
+    cancel_years: list[int] = []  # years whose classes are cancelled (others get substitutes)
+    substitute_years: list[int] = []
+
+
+class AskLeaveIn(_Dates):
+    reason: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -320,6 +332,33 @@ TOOLS: dict[str, tuple[dict, type[BaseModel], tuple[str, ...]]] = {
          "periods": {"type": "integer", "description": "Same length as asked from meeting_times."},
          "title": {"type": "string"}, "place": {"type": "string"}},
         ["teachers", "date", "start_time"]), MeetingIn, STAFF),
+    "plan_teacher_leave": (_tool(
+        "plan_teacher_leave",
+        "A teacher is away (leave) on some dates: builds the cover plan for every class of theirs on those dates. Each "
+        "class gets a substitute (a teacher of the same subject, else a colleague of the department, free then, within "
+        "daily limits; ranked fairly) or is cancelled. Choose per year with cancel_years / substitute_years (default: "
+        "substitutes). Shows the user a plan card where they can change any class and Apply; NOTHING changes until "
+        "they apply. Also use it for an approved leave request (leave_requests).",
+        {"teacher": {"type": "string", "description": "Teacher name, e.g. 'Rita Arora'."},
+         "from_date": DATE, "to_date": {**DATE, "description": "Last day of leave, inclusive (default: from_date)."},
+         "reason": {"type": "string", "description": "Short reason shown to students, e.g. 'On leave'."},
+         "cancel_years": {"type": "array", "items": {"type": "integer"}, "description": "Years whose classes are cancelled, e.g. [4]."},
+         "substitute_years": {"type": "array", "items": {"type": "integer"}, "description": "Years that get substitutes, e.g. [3]."}},
+        ["teacher", "from_date"]), LeavePlanIn, STAFF),
+    "leave_requests": (_tool(
+        "leave_requests",
+        "Teachers' leave: waiting for approval, approved (with or without cover in place). Coordinators: own department.",
+        {}, []), NoInput, STAFF),
+    "prepare_leave_request": (_tool(
+        "prepare_leave_request",
+        "Prepare the teacher's own leave request for some dates. The teacher sees a card and sends it to their "
+        "Coordinator with one click (the Coordinator approves and plans cover).",
+        {"from_date": DATE, "to_date": {**DATE, "description": "Last day, inclusive (default: from_date)."},
+         "reason": {"type": "string"}}, ["from_date"]), AskLeaveIn, ("teacher",)),
+    "prepare_undo": (_tool(
+        "prepare_undo",
+        "Undo the latest timetable change ('undo that', 'wapas karo'). Shows what the latest change was on a card "
+        "with an Undo button; nothing is undone until the user clicks it.", {}, []), NoInput, STAFF),
 }
 
 
@@ -351,8 +390,8 @@ class ToolContext:
     member: dict  # this user's membership in the org (role, teacher_id, section_id, batch_id, ...)
     today: str  # YYYY-MM-DD in the college's local time
     now: str  # HH:MM
-    _college: dict | None = None
-    _timetable: dict | None = None
+    _college: asyncio.Future | None = None
+    _timetable: asyncio.Future | None = None
     _weeks: dict[str, dict] = field(default_factory=dict)
     cards: list[dict] = field(default_factory=list)  # proposals / one-day actions for the UI
 
@@ -360,15 +399,16 @@ class ToolContext:
     def role(self) -> str:
         return self.member["role"]
 
+    # Loaded once per message; tools running in parallel share one request (an in-flight task).
     async def college(self) -> dict:
         if self._college is None:
-            self._college = await self.backend.college()
-        return self._college
+            self._college = asyncio.ensure_future(self.backend.college())
+        return await asyncio.shield(self._college)
 
     async def timetable(self) -> dict:
         if self._timetable is None:
-            self._timetable = await self.backend.timetable()
-        return self._timetable
+            self._timetable = asyncio.ensure_future(self.backend.timetable())
+        return await asyncio.shield(self._timetable)
 
     async def week_of(self, d: str) -> dict:
         monday = (date.fromisoformat(d) - timedelta(days=date.fromisoformat(d).weekday())).isoformat()
@@ -724,6 +764,48 @@ async def _run(ctx: ToolContext, name: str, a: Any) -> Any:
         ctx.cards.append({"type": "one_day", "action": action})
         return {"prepared": True, "summary": action["summary"],
                 "note": "A card with Apply is shown to the user. It is NOT applied yet; students are told once applied."}
+
+    if name == "plan_teacher_leave":
+        t = _find(c["teachers"], a.teacher, ("name", "id"))
+        dates = _dates(a.from_date, a.to_date)
+        actions = {y: "cancel" for y in a.cancel_years} | {y: "substitute" for y in a.substitute_years}
+        plan = await ctx.backend.plan_leave(t["id"], dates[0], dates[-1], actions)
+        ctx.cards.append({"type": "leave_plan", "leave": {
+            "teacher_id": t["id"], "teacher_name": t["name"], "start_date": dates[0], "end_date": dates[-1],
+            "reason": a.reason or "On leave", "actions": {str(k): v for k, v in actions.items()}}})
+        return {"summary": plan["summary"], "years": plan["years"],
+                "classes": [f"{i['day_label']} {i['start']} {i['subject']} ({i['sections']}, year {i['year']}): "
+                            + (f"substitute {i['teacher_name']} ({next((o['why'] for o in i['options'] if o['teacher_id'] == i['teacher_id']), '')})"
+                               if i["action"] == "substitute" else "cancel" + (f" - {i['note']}" if i["note"] else ""))
+                            for i in plan["items"]],
+                "not_in_plan": plan["problems"],
+                "note": "A plan card is shown; the user can change any class and clicks Apply. NOTHING is applied yet. "
+                        "Students, teachers and substitutes are notified once applied."}
+
+    if name == "leave_requests":
+        items = await ctx.backend.leaves()
+        return {"leave": [f"{x['teacher_name']} {x['start_date']} to {x['end_date']}: {x['status']}"
+                          + (f", cover in place ({x['plan_summary']})" if x["applied_at"] else
+                             ", cover NOT planned yet" if x["status"] == "approved" else "")
+                          + (f" - reason: {x['reason']}" if x["reason"] else "") for x in items[:20]],
+                "how": "Waiting leave is approved on Home; plan_teacher_leave prepares the cover plan."}
+
+    if name == "prepare_leave_request":
+        dates = _dates(a.from_date, a.to_date)
+        ctx.cards.append({"type": "leave_request", "leave": {"start_date": a.from_date,
+                                                             "end_date": a.to_date or a.from_date, "reason": a.reason}})
+        return {"prepared": True, "teaching_days": [_label(d) for d in dates],
+                "note": "A card with Send is shown. It is NOT sent yet; the Coordinator is told once sent."}
+
+    if name == "prepare_undo":
+        last = (await ctx.timetable()).get("last_change")
+        if not last:
+            return {"found": False, "note": "There is no change to undo."}
+        if not last.get("can_undo"):
+            return {"found": False, "latest": last["action"], "note": "The latest change can't be undone by this user."}
+        ctx.cards.append({"type": "undo", "entry_id": last["id"], "summary": last["action"], "actor": last["actor"]})
+        return {"prepared": True, "latest_change": last["action"], "by": last["actor"],
+                "note": "A card with Undo is shown. Nothing is undone until the user clicks it."}
 
     if name == "my_bookings":
         items = await ctx.backend.my_bookings()

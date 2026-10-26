@@ -5,6 +5,7 @@ import { ArrowRight, CalendarClock } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { DayChangesPanel } from "@/components/changes/DayChangesPanel";
+import { MyLeaveCard } from "./MyLeaveCard";
 import { TodayView } from "@/components/timetable/TodayView";
 import { Badge, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -42,6 +43,7 @@ export function PersonalHome() {
     }));
   }, [week]);
 
+  const subTeacher = (o: { session: { teacher_id: string } }) => o.session.teacher_id;
   const name = (id: string, list?: { id: string; name: string }[]) => list?.find((x) => x.id === id)?.name ?? "";
   const hour = new Date().getHours();
   const hello = `${hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"}, ${greetName(user?.name)}`;
@@ -103,6 +105,11 @@ export function PersonalHome() {
                               ? ` · ${o.session.section_ids.map((id) => name(id, college.sections)).join(" + ")}`
                               : ` · ${name(o.session.teacher_id, college.teachers)}`}
                           </span>
+                          {o.substitute_for && o.status === "normal" && (
+                            <Badge tone="accent">{o.substitute_for === member.teacher_id
+                              ? `Covered by ${name(subTeacher(o), college.teachers)}`
+                              : member.role === "teacher" ? "You're covering" : "Substitute"}</Badge>
+                          )}
                           {o.status !== "normal" && (
                             <Badge tone={o.status === "cancelled" ? "danger" : "warn"}>
                               {o.status === "cancelled" ? "Cancelled" : o.status === "moved_in" ? "Moved here" : "Moved"}
@@ -118,6 +125,7 @@ export function PersonalHome() {
         )}
       </section>
 
+      {member.role === "teacher" && <MyLeaveCard />}
       <div className="mt-8"><DayChangesPanel /></div>
     </div>
   );

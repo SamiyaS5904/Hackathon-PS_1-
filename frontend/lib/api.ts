@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, CoverAction, CoverChoice, Leave, LeaveApplied, LeavePlan, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -135,6 +135,15 @@ export const api = {
   /** Several one-day changes as one step: all or nothing, one log entry, one notification. */
   batchOverrides: (body: { title: string; changes: { session_id: string; date: string; kind: "cancel" | "move"; reason?: string }[] }) =>
     request<OverrideOut>(`${org()}/overrides/batch`, post(body)),
+  /** Teacher leave: teachers ask; Coordinator / Admin approve, preview a cover plan, apply it. */
+  leaves: () => request<Leave[]>(`${org()}/leaves`),
+  askLeave: (body: { teacher_id?: string; start_date: string; end_date: string; reason: string }) =>
+    request<Leave>(`${org()}/leaves`, post(body)),
+  decideLeave: (id: string, approve: boolean, note = "") => request<Leave>(`${org()}/leaves/${id}/decide`, post({ approve, note })),
+  planLeave: (body: { teacher_id: string; start_date: string; end_date: string; actions?: Record<number, CoverAction>; default?: CoverAction }) =>
+    request<LeavePlan>(`${org()}/leaves/plan`, post(body)),
+  applyLeave: (body: { leave_id?: string; teacher_id: string; start_date: string; end_date: string; reason: string;
+    choices: CoverChoice[]; via?: "app" | "chatbot" }) => request<LeaveApplied>(`${org()}/leaves/apply`, post(body)),
   today: (date?: string) => request<TodayReport>(`${org()}/today${date ? `?date=${date}` : ""}`),
   setupStatus: () => request<SetupStatus>(`${org()}/setup-status`),
   members: () => request<Member[]>(`${org()}/members`),

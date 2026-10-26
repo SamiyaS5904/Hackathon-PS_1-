@@ -92,10 +92,32 @@ export type OccurrenceStatus = "normal" | "cancelled" | "moved_out" | "moved_in"
 export interface Occurrence {
   session: Session; date: string; status: OccurrenceStatus; override_id: string | null; note: string;
   occurrence_id: string; // "<session id>@<original date>": stable, for future attendance
+  substitute_for?: string | null; // the usual teacher's id when a substitute takes this class
 }
 export interface DayInfo { date: string; day: string; label: string; working: boolean; holiday: string | null }
 export interface WeekOut { days: DayInfo[]; occurrences: Occurrence[] }
 export interface OverrideOut { message: string; timetable: TimetableOut }
+
+/** Teacher leave and its cover plan (backend app/leave.py). */
+export type LeaveStatus = "pending" | "approved" | "declined" | "withdrawn";
+export interface Leave {
+  id: string; at: number; teacher_id: string; teacher_name: string; department_id: string;
+  start_date: string; end_date: string; reason: string; status: LeaveStatus; requested_by: string;
+  decided_by: string; decided_at: number | null; note: string; applied_at: number | null; plan_summary: string;
+}
+export interface CoverOption { teacher_id: string; name: string; score: number; why: string }
+export type CoverAction = "substitute" | "cancel";
+export interface PlanItem {
+  session_id: string; date: string; day_label: string; start: string; end: string; subject: string; sections: string;
+  year: number | null; venue: string; action: CoverAction; teacher_id: string | null; teacher_name: string;
+  options: CoverOption[]; note: string;
+}
+export interface LeavePlan {
+  teacher_id: string; teacher_name: string; start_date: string; end_date: string; dates: string[]; years: number[];
+  items: PlanItem[]; covered: number; cancelled: number; summary: string; problems: string[];
+}
+export interface CoverChoice { session_id: string; date: string; action: CoverAction; teacher_id: string | null }
+export interface LeaveApplied { message: string; leave: Leave; entry_id: string | null }
 
 export interface MakeupOption { date: string; label: string; start_period: number; start: string; end: string; venue_id: string | null; venue: string }
 export interface RosterStudent { student_id: string; roll_no: string; name: string }

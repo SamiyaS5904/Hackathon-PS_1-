@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
 import { SetupChecklist } from "./SetupChecklist";
+import { LeaveCard } from "./LeaveCard";
 import { TodayCard } from "./TodayCard";
 import { PublishButton } from "@/components/timetable/PublishButton";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
@@ -184,6 +185,7 @@ export function StaffHome() {
       </Card>}
 
       {hasTimetable && <TodayCard />}
+      {hasTimetable && <LeaveCard />}
 
       {role === "admin" && hasTimetable && data && !data.stale && <HealthStrip data={data} />}
 

@@ -110,6 +110,15 @@ class Backend:
         return await self._call("POST", self._o("/bookings/meeting-times"),
                                 json={"teacher_ids": teacher_ids, "days": days, "periods": periods})
 
+    async def leaves(self) -> list:
+        return await self._call("GET", self._o("/leaves"))
+
+    async def plan_leave(self, teacher_id: str, start: str, end: str, actions: dict[int, str]) -> dict:
+        # A read: previews the cover plan, changes nothing.
+        return await self._call("POST", self._o("/leaves/plan"),
+                                json={"teacher_id": teacher_id, "start_date": start, "end_date": end,
+                                      "actions": {str(k): v for k, v in actions.items()}})
+
     # ---- proposals (never applied here: the user applies them in the app) ----
     async def propose(self, session_id: str, day: str, start_period: int) -> dict:
         return await self._call("POST", self._o("/proposals"),
