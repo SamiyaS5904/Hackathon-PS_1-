@@ -327,6 +327,18 @@ def build_demo_college() -> College:
     for g in elective.groups:
         teacher_subjects.append(TeacherSubject(teacher_id=g.teacher_id, subject_id=g.subject_id, preference=1))
 
+    # Spare teachers with no classes yet: each can teach 2-3 existing subjects of their department, so a
+    # subject has a second teacher for substitutes when someone is on leave (and for teacher suggestions).
+    spare = [
+        ("t-sukhwinder", "Dr. Sukhwinder Brar", "cse", ["evening"], ["cs201", "cs301", "cs202"]),
+        ("t-ishita", "Prof. Ishita Malhotra", "cse", ["evening"], ["cs203", "cs303", "cs302"]),
+        ("t-rohan", "Dr. Rohan Bhardwaj", "ece", ["evening"], ["ec201", "ec301", "ec203"]),
+        ("t-kiran", "Dr. Kiran Bala", "as", ["morning"], ["ma101", "ph101", "cy101"]),
+    ]
+    for tid, tname, dept, shifts, can_teach in spare:
+        teachers.append(Teacher(id=tid, name=tname, department_id=dept, shift_ids=shifts, max_per_day=5))
+        teacher_subjects += [TeacherSubject(teacher_id=tid, subject_id=sid, preference=2) for sid in can_teach]
+
     return College(
         students=students,
         elective_slots=[elective],
