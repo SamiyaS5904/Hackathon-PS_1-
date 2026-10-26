@@ -1,95 +1,152 @@
 # Timetabl.ai
 
-Clash-free college timetables for any college: a multi-college (SaaS) web app with a timetable engine, safe editing, attendance, teacher booking and an agentic AI assistant (English or Hinglish, typed or spoken).
+**Clash-free college timetables, made in minutes and kept right all semester.** A multi-college web app: departments
+fill in their data, the College Admin clicks Generate, and every section, teacher and room gets a timetable with no
+clashes and fewer gaps. When a teacher is away or a class moves, an AI assistant plans the fix and a person applies
+it with one click.
 
-**Hackathon 1 · Samiya Sehgal (URN 2302662)**
+**Hackathon · Samiya Sehgal (URN 2302662)**
 
-Project rules and full design: [`CLAUDE.md`](CLAUDE.md) · [`backend/CLAUDE.md`](backend/CLAUDE.md) · [`frontend/CLAUDE.md`](frontend/CLAUDE.md) · [`chatbot/CLAUDE.md`](chatbot/CLAUDE.md) · Session 1 summary: [`docs/`](docs)
+- **Live:** _web app link (Vercel) and API link (Hugging Face Space) go here after deployment_. Steps:
+  [`docs/DEPLOY.md`](docs/DEPLOY.md).
+- **Demo guide** (logins, where every feature is, a demo script): [`docs/DEMO_GUIDE.md`](docs/DEMO_GUIDE.md).
+- **Design and rules:** [`CLAUDE.md`](CLAUDE.md) · [`backend/CLAUDE.md`](backend/CLAUDE.md) ·
+  [`frontend/CLAUDE.md`](frontend/CLAUDE.md) · [`chatbot/CLAUDE.md`](chatbot/CLAUDE.md).
 
-## Progress by stage
+## The problem
 
-Each finished stage has a Git tag, so its exact state can be opened on GitHub.
+Hand-made college timetables clash: one room for two classes, one teacher in two places. Students have scattered
+gaps and don't know where to sit in a free period. When a teacher is away, classes just vanish. Every change means
+checking ten timetables by hand.
 
-| Stage | What it delivers | Status | Tag |
-|---|---|---|---|
-| Planning | Roles, rules, algorithm choice, V1/V2 scope, architecture, project guides | ✅ Done | — |
-| **1. Engine** | CP-SAT timetable generator, independent clash validator, quality score, feasibility checks with plain-language errors, room-capacity edge cases, demo college | ✅ Done | `stage-1-engine` |
-| **2. See it** | FastAPI backend + Next.js app: dashboard, section / teacher / room views, Generate with live progress | ✅ Done | `stage-2-see-it` |
-| **3. Edit it** | Drag and drop with green / amber / red slots, solver repair that moves only what's needed, review before apply, undo, activity log, one-day cancel / reschedule on real dates | ✅ Done | `stage-3-edit-it` |
-| **4. Real SaaS** | Signup creates a college workspace, login, roles (Admin / Department Coordinator / Teacher / Student), invite links, students log in with college emails and see only their own timetable, every college's data kept separate, saved in a database (SQLite locally, Supabase Postgres in production) | ✅ Done | `stage-4-real-saas` |
-| **5. Set it up** | Setup wizard (days, 1 or 2 shifts, periods and breaks, mess window, lab length, semester dates, holidays, departments, shared rooms, sections → shifts); department workspace with pre-filled Excel download and upload with row-level errors; teacher allotment suggestions with reasons; Ready flow and readiness checklist; elective slots and pooled cross-department groups; rule cards (Must / Try); teacher block times; "data changed, regenerate" safety | ✅ Done | `stage-5-set-it-up` |
-| **6. Chatbot** | Assistant side panel on every page (Ctrl+K, typing or browser voice): students ask "when am I free next week?", "where is Dr. Kaur now?", "why is my lab on Friday?"; staff get move proposals and one-day changes as cards they Apply or Discard (the assistant never writes on its own, and uses the logged-in user's own permissions); "Worth a look" insights after generation | ✅ Done | `stage-6-chatbot` |
-| 7. Ship | Publish (teachers and students see only published timetables), Excel / PDF for notice boards, in-app notifications for the people affected, teacher change requests approved by the Department Coordinator, attendance portal, Today view, makeup class finder, light / dark theme, phone layout, fast on a remote database (memory first, background saves); deploy guide in [`docs/DEPLOY.md`](docs/DEPLOY.md) | 🟡 Built, deploying | |
-| **8. Grow** | Assistant replies in your language (English → English, Roman Hinglish → Hinglish) with better voice (live transcript, auto-send, spoken answers); teacher booking (office hours, doubt slots, meetings at common free times); auto-sectioning from a whole-year list; Super Admin platform (every college's stage, adoption, health; plans, read-only, pause; platform assistant); minimal-change mid-semester regenerate | ✅ Done | `stage-8-grow` |
+## What it does
 
-### Results on the demo college
-12 sections · 40 teachers · 15 rooms · 2 overlapping shifts · combined classes · lab batches · a 3rd-year open elective pooled from 4 sections and 3 departments
+| | |
+|---|---|
+| **Generate** | One click builds the whole college's timetable: 1 or 2 shifts, labs as blocks with parallel batches, combined classes, electives and pooled cross-department groups, shared and borrowed rooms, a lunch gap for every section inside the mess timings (chosen per day), rules (Must / Try), teacher block times. |
+| **No clash, ever** | A separate validator (no shared code with the generator) checks every timetable and every change before anyone sees it. |
+| **Set up without help** | Setup wizard, one Excel sheet per department with row-level errors, fair teacher suggestions, a readiness checklist, auto-sectioning from a whole-year list. |
+| **See it** | Section, teacher and room views; Today and This week with real dates; light and dark; phones. |
+| **Change it safely** | Drag and drop with green / amber / red slots (only classes that must move do); one-day cancel or move; makeup finder; teacher requests approved by the Coordinator; undo for every change; mid-semester regenerate that keeps the timetable. |
+| **Teacher leave** | Teacher asks, Coordinator approves. A cover plan gives every class a ranked substitute (same subject first, fair load) or cancels it, chosen per year. Apply notifies the students, the teachers and the substitutes. |
+| **Daily life** | Attendance, doubt slots and meetings, room booking for events (approved by the room's Coordinator), notices, notifications to only the people affected, Excel / PDF exports, tomorrow's brief. |
+| **AI assistant** | Typed or spoken (Chat and hands-free Talk mode). It finds the facts, opens what it talks about on screen, and prepares changes as cards; **a person clicks Apply**. It acts with the user's own permissions. Common questions get instant answers without AI. |
+| **SaaS** | Many colleges, each kept separate; roles from Super Admin (platform) to College Admin, Department Coordinator, teacher and student; plans, read-only and pause. |
 
-- **238 classes placed, 0 clashes** (checked by a validator that shares no code with the solver)
-- **Quality 83-86/100** in 30-45 s: no idle gaps for students, no single-class days, balanced teacher load, right-sized rooms
-- Elective groups meet together, each in a room for its members (Robotics in an ME room); every student sees only their own group
-- Teacher suggestions for a whole department in under 0.1 s
-- Move options in ~0.02 s; repair moves in 0.7–2 s
-- **Mid-semester change** (one teacher gets a new block time): *Keep the current timetable* moves **1 of 238** classes in ~4 s, 0 clashes; a fresh regenerate would keep only 17 in place
-- 100 automated backend tests (engine, electives, rules, fair suggestions, Excel, auto-sectioning, setup, editing, one-day changes, regenerate, login, roles, college isolation, publish, attendance, bookings, platform) + 40 assistant tests (role-scoped tools, agent loop, language mirroring, bookings, platform)
+## The AI assistant, in short
+
+- **The timetable is always made by the algorithm (Google OR-Tools), never by the AI.** The assistant uses tools
+  that call the same backend with the user's own login, so it can never do more than that person could by hand.
+- **Changes are cards, never silent edits:** moves (checked for clashes), one-day changes, leave cover plans,
+  bookings and undo all wait for the person's click.
+- **Fast and cheap by design:**
+  - *Instant answers:* "my next class", "free rooms now", "where is Dr. Arora", "show CSE-3A", "undo". They come
+    straight from the timetable in about 0.6-1.5 s, at no AI cost.
+  - *A model router:* Claude Sonnet 5.5 for agentic work (moves, leave, makeups, meetings), Claude Haiku 5.5 for
+    simple look-ups, and Claude Opus 5.5 as a one-time retry if a call fails.
+  - Measured on the demo college: agentic requests take about 7.7 s and ₹2; look-ups about ₹0.10. The College Admin
+    sees the cost on a small card.
+- **Voice:** OpenAI speech-to-text and natural text-to-speech (browser voice as fallback). It answers aloud
+  sentence by sentence, you can interrupt it, and replies are in English by default with Hinglish as an option.
+
+## Results on the demo college
+
+12 sections · 44 teachers · 15 rooms · 2 overlapping shifts · combined classes · lab batches · a pooled open elective.
+
+- **238 classes, 0 clashes**, quality 83-86/100, generated in 30-45 s.
+- Teacher suggestions for a department in under 0.1 s. Move options in about 0.02 s, repairs in 0.7-2 s.
+- Mid-semester change: *Keep the current timetable* moves **1 of 238** classes in about 4 s.
+- Leave cover: substitutes for every class of a teacher's day in under a second, each checked by the validator.
+- **Tests:** 130+ backend tests and 50 assistant tests.
+  - Backend: engine, electives, rules, Excel, setup, editing, one-day changes, leave cover, regenerate, login and
+    roles, college isolation, attendance, bookings, events, notices, platform, cost card.
+  - Assistant: role-scoped tools, model router, agent loop, instant answers, voice, language.
 
 ## Run it locally
 
-**Quickest:** double-click `start-local.bat` (starts everything and opens the browser). Where every feature is, per role, plus a 6-minute demo script: [`docs/DEMO_GUIDE.md`](docs/DEMO_GUIDE.md).
+**Quickest:** double-click `start-local.bat`. It starts the backend, the assistant and the web app, then opens the
+browser.
 
-Step by step:
-
-Backend (Python 3.12):
+Step by step (Python 3.12, Node 22):
 
 ```bash
-cd backend
-python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements-dev.txt
+cd backend && python -m venv .venv && .venv/Scripts/python -m pip install -r requirements-dev.txt
 .venv/Scripts/python -m uvicorn app.main:app --port 8000
 ```
 
-Frontend (Node 22):
-
 ```bash
-cd frontend
-npm install
-npm run dev
-```
-
-Assistant (optional, Python 3.12):
-
-```bash
-cd chatbot
-python -m venv .venv
-.venv/Scripts/python -m pip install -r requirements.txt
+cd chatbot && python -m venv .venv && .venv/Scripts/python -m pip install -r requirements.txt
 .venv/Scripts/python -m uvicorn app.main:app --port 8001
 ```
 
-The assistant needs a Claude API key: copy `chatbot/.env.example` to `chatbot/.env` and set `ANTHROPIC_API_KEY` (the file is git-ignored). Without it, the rest of the app works and the panel says the assistant isn't set up.
+```bash
+cd frontend && npm install && npm run dev
+```
 
-Open http://localhost:3000 and use a one-click demo login (password `demo1234`):
+Settings go in `backend/.env` and `chatbot/.env`; copy them from the `.env.example` files, which are never
+committed:
+- `DATABASE_URL`: Supabase. Leave it empty to use a local SQLite file.
+- `ANTHROPIC_API_KEY`: the assistant.
+- `OPENAI_API_KEY`: natural voice. Optional.
 
-| Role | Email |
+Without the keys, everything else still works.
+
+Open http://localhost:3000, then **Try the demo**. Every demo account's password is `demo1234`:
+
+| Role | Login |
 |---|---|
 | College Admin | `admin@demo.timetabl.ai` |
 | Department Coordinator | `cse.coordinator@demo.timetabl.ai` (also `ece.`, `me.`, `as.`) |
 | Teacher | `anita.sharma@demo.timetabl.ai` (any teacher: `firstname.lastname@demo.timetabl.ai`) |
-| Student | `cse3a.01@demo.timetabl.ai` (any section and roll number 01-60) |
+| Student | `cse3a.01@demo.timetabl.ai` (any section, roll 01-60) |
+| Platform owner | `owner@demo.timetabl.ai` |
 
-As Admin, click **Generate timetable**. To use Supabase, copy `backend/.env.example` to `backend/.env` and set `DATABASE_URL`.
-
-Tests and the command-line demo:
+Tests:
 
 ```bash
-cd backend
-.venv/Scripts/python -m pytest
-.venv/Scripts/python -m app.cli --section cse-3a
+cd backend && .venv/Scripts/python -m pytest
+cd chatbot && .venv/Scripts/python -m pytest
 ```
+
+On a laptop with little memory, set `SOLVER_WORKERS=2` before the backend tests.
 
 ## Deploy
 
-Vercel (web app) + Railway (backend, assistant) + Supabase (database): step by step in [`docs/DEPLOY.md`](docs/DEPLOY.md). Each service folder has a `railway.toml`; `render.yaml` is an alternative.
+Vercel (web app) + a Hugging Face Space (backend + assistant in one Docker container) + Supabase (database), all
+on free tiers. Step by step: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
-## Tech
+## How it is built
 
-Next.js 15 · Tailwind · FastAPI · Google OR-Tools CP-SAT · (Stage 4+) Supabase · Claude API for the assistant only. Timetables are always built by the algorithm, never by the AI.
+```
+ Browser ──► Next.js web app (Vercel)
+               │ REST                          │ streamed chat, voice
+               ▼                               ▼
+        FastAPI backend  ◄──── REST ────  FastAPI assistant (Claude tool use)
+        engine · validator · Excel · notify     tools = backend calls with the user's login
+               │
+               ▼
+        Supabase Postgres
+```
+
+| Part | Tech |
+|---|---|
+| Web app | Next.js 15, TypeScript, Tailwind |
+| Backend | Python 3.12, FastAPI, Pydantic, Google OR-Tools CP-SAT, openpyxl, ReportLab, SQLAlchemy |
+| Assistant | FastAPI, Anthropic SDK (Claude Sonnet / Haiku / Opus 5.5), OpenAI audio (optional) |
+| Data | Supabase Postgres (SQLite locally); our own logins (scrypt + signed tokens) |
+
+## Progress by stage
+
+Each finished stage has a Git tag.
+
+| Stage | What it delivers | Tag |
+|---|---|---|
+| 1. Engine | Generator, independent validator, quality score, plain-language feasibility checks | `stage-1-engine` |
+| 2. See it | Backend API + web app: section / teacher / room views, Generate | `stage-2-see-it` |
+| 3. Edit it | Drag and drop with repair, review before apply, undo, one-day changes | `stage-3-edit-it` |
+| 4. Real SaaS | Colleges, logins, roles, invites, student logins, database | `stage-4-real-saas` |
+| 5. Set it up | Setup wizard, Excel import, suggestions, Ready flow, electives, rules, block times | `stage-5-set-it-up` |
+| 6. Chatbot | Role-aware assistant with change cards and insights | `stage-6-chatbot` |
+| 7. Ship | Publish, exports, notifications, requests, attendance, Today view, makeup finder | |
+| 8. Grow | Language and voice, teacher booking, auto-sectioning, platform owner view, minimal-change regenerate | `stage-8-grow` |
+| 9. Submission | Teacher leave and cover plans; faster, cheaper assistant (router, instant answers, Talk mode, screen-driving); events, notices, mess split; home page; deployment | |
