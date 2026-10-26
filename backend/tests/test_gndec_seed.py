@@ -43,6 +43,7 @@ def test_builds_with_realistic_size_and_passes_the_precheck(college):
     assert len({st.roll_no for st in college.students}) == len(college.students)
     assert len({t.name for t in college.teachers}) == len(college.teachers)
     assert structural_errors(college) == [] and check(college) == []
+    assert all(college.department_status[d.id].ready for d in college.departments)
     # Leave cover: every regular subject has at least two teachers who can teach it.
     can = Counter(ts.subject_id for ts in college.teacher_subjects)
     regular = {a.subject_id for a in college.allotments}

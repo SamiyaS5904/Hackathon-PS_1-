@@ -34,6 +34,7 @@ from app.models.domain import (
     Batch,
     College,
     Department,
+    DepartmentStatus,
     ElectiveGroup,
     ElectiveSlot,
     Holiday,
@@ -353,6 +354,9 @@ def build_gndec_college() -> College:
         rules=[Rule(id="mess-split", name="Spread lunch evenly (mess split)", kind="spread_lunch", mode="try",
                     weight=4)],
         setup_saved=True,
+        # A finished setup: every department has marked its data Ready (1 Aug 2026), so the Admin can generate.
+        department_status={d.id: DepartmentStatus(ready=True, at=1785542400.0, by=f"{d.short} Coordinator")
+                           for d in DEPARTMENTS},
     )
 
 
