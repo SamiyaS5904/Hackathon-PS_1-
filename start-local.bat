@@ -4,9 +4,29 @@ rem Opens 3 windows (backend, assistant, web app) and then the browser.
 rem Close those 3 windows to stop. Needs: backend\.venv, chatbot\.venv, frontend\node_modules (already set up).
 
 cd /d "%~dp0"
+rem Windows' own timeout (Git for Windows can put a different "timeout" first on the PATH).
+set "WAIT=%SystemRoot%\System32\timeout.exe"
 
 if not exist "backend\.venv\Scripts\python.exe" (
   echo Backend is not installed yet. See README.md - "Run it locally".
+  pause
+  exit /b 1
+)
+
+rem Already running? Then just open the browser.
+powershell -NoProfile -Command "try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://localhost:3000/login).StatusCode } catch { exit 1 }" >nul 2>&1
+if not errorlevel 1 (
+  echo Timetabl.ai is already running. Opening the browser...
+  start "" http://localhost:3000
+  %WAIT% /t 3 >nul
+  exit /b 0
+)
+
+rem A port still held by an old window means the new one can't start.
+powershell -NoProfile -Command "if (Get-NetTCPConnection -State Listen -ErrorAction SilentlyContinue | Where-Object { $_.LocalPort -in 3000,8000,8001 }) { exit 1 }" >nul 2>&1
+if errorlevel 1 (
+  echo Some Timetabl windows from last time are still open ^(port 3000, 8000 or 8001 is busy^).
+  echo Close all "Timetabl" windows, or restart the laptop, then double-click start-local.bat again.
   pause
   exit /b 1
 )
@@ -23,7 +43,7 @@ start "Timetabl - web app (3000)" cmd /k "cd /d "%~dp0frontend" && npm run build
 
 echo Waiting for the web app...
 :wait
-timeout /t 5 /nobreak >nul
+%WAIT% /t 5 /nobreak >nul
 powershell -NoProfile -Command "try { (Invoke-WebRequest -UseBasicParsing -TimeoutSec 3 http://localhost:3000/login).StatusCode } catch { exit 1 }" >nul 2>&1
 if errorlevel 1 goto wait
 
@@ -31,4 +51,4 @@ start "" http://localhost:3000
 echo.
 echo Timetabl.ai is running at http://localhost:3000  (demo password: demo1234)
 echo Close the 3 Timetabl windows to stop it.
-timeout /t 8 >nul
+%WAIT% /t 8 >nul
