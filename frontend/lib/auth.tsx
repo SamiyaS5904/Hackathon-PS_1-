@@ -7,7 +7,7 @@ import type { AuthOut, Member, Role } from "./types";
 
 const TOKEN_KEY = "tt_token";
 const ORG_KEY = "tt_org";
-export const PUBLIC_PATHS = ["/login", "/signup", "/invite", "/demo"];
+export const PUBLIC_PATHS = ["/login", "/signup", "/invite", "/demo", "/welcome"];
 
 interface AuthState {
   ready: boolean;
@@ -99,8 +99,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Guard: private pages need a login.
   const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
   useEffect(() => {
-    if (ready && !user && !isPublic) router.replace("/login");
-  }, [ready, user, isPublic, router]);
+    // The bare address shows the public home page; any other private page asks to log in.
+    if (ready && !user && !isPublic) router.replace(path === "/" ? "/welcome" : "/login");
+  }, [ready, user, isPublic, router, path]);
 
   const member = useMemo(() => user?.memberships.find((m) => m.org_id === orgId) ?? null, [user, orgId]);
 

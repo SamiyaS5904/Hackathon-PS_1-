@@ -27,6 +27,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
     if (toPlatform) router.replace("/platform");
   }, [toPlatform, router]);
 
+  if (path.startsWith("/welcome")) return <>{children}</>; // the public home page has its own full-width layout
   if (isPublic) {
     return <AuthLayout>{children}</AuthLayout>;
   }
@@ -92,7 +93,8 @@ export function AuthLayout({ children }: { children: React.ReactNode }) {
       </div>
       <div className="w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-sm">{children}</div>
       <p className="mt-6 max-w-md text-center text-xs text-muted">
-        Clash-free college timetables for any college. Built by the algorithm, checked by an independent validator.
+        Clash-free college timetables for any college. Built by the algorithm, checked by an independent validator.{" "}
+        <Link href="/welcome" className="text-accent-text hover:underline">What is Timetabl.ai?</Link>
       </p>
     </div>
   );
