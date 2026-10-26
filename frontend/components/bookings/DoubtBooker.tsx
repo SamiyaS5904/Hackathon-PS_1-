@@ -85,7 +85,7 @@ export function DoubtBooker({ onBooked, teacherId: initialTeacher }: { onBooked:
           </label>
           <div className="mt-4 space-y-3">
             {slots === null ? <Skeleton className="h-16 w-full" /> : slots.length === 0 ? (
-              <p className="text-sm text-muted">No open slot in the next two weeks (full, or you have a class then).</p>
+              <p className="text-sm text-muted">No open slot in the next two weeks: it is full, you already booked it, or you have a class then. Try another teacher.</p>
             ) : Object.entries(byDate).map(([day, list]) => (
               <div key={day}>
                 <p className="mb-1.5 text-xs font-medium uppercase tracking-wide text-muted">{day}</p>

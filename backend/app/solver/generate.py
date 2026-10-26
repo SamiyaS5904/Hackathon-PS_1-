@@ -565,6 +565,29 @@ def _solve(
                     if busy_vars:
                         model.Add(sum(busy_vars) + lv <= 1)
 
+    # Mess split (a Try rule, kind "spread_lunch"): spread each day's lunches evenly over the mess window,
+    # weighted by section strength, so half the students eat at 11:30 and half at 12:30 instead of all at once.
+    for rule in (r for r in college.rules if r.enabled and r.kind == "spread_lunch"):
+        for sh in college.shifts:
+            for d in range(len(days)):
+                at: dict[int, list] = defaultdict(list)  # period -> strength-weighted lunch choices
+                total = 0
+                for sec in college.sections:
+                    choice = lunch_vars.get((sec.id, d))
+                    if sec.shift_id != sh.id or not choice or not rule.applies_to(sec):
+                        continue
+                    w = max(1, round(sec.strength / 10))  # in tens of students
+                    total += w
+                    for p, lv in choice.items():
+                        at[p].append(w * lv)
+                if len(at) < 2:
+                    continue
+                even = -(-total // len(at))
+                over = model.NewIntVar(0, total, "")
+                for terms in at.values():
+                    model.Add(over >= sum(terms) - even)
+                cost_terms.append(W_RULE * rule.weight * over)
+
     # Home room: each extra lecture room a section uses costs a little.
     for vars_ in room_use.values():
         used = model.NewBoolVar("")

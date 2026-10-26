@@ -15,6 +15,7 @@ const input = "rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 t
 function describe(r: Rule): string {
   const who = r.years.length ? `Year ${r.years.join(", ")}` : "All years";
   if (r.kind === "max_per_day") return `${who}: at most ${r.max_periods ?? "?"} periods a day`;
+  if (r.kind === "spread_lunch") return `${who}: lunch spread evenly over the mess window (e.g. half the students at the first lunch period, half at the next), so the mess is never crowded`;
   const days = r.days.length ? r.days.join(", ") : "every day";
   const when = r.after && r.before ? `between ${r.after} and ${r.before}` : r.after ? `after ${r.after}` : r.before ? `before ${r.before}` : "all day";
   return `${who}: no classes ${when} on ${days}`;
@@ -42,8 +43,9 @@ export default function RulesPage() {
   const add = (kind: Rule["kind"]) => {
     setSaved(false);
     setRules([...rules, {
-      id: `r-${Date.now()}`, name: kind === "no_classes" ? "No classes late on Friday" : "Not too many periods a day",
-      kind, mode: "must", weight: 5, enabled: true,
+      id: `r-${Date.now()}`,
+      name: kind === "no_classes" ? "No classes late on Friday" : kind === "spread_lunch" ? "Spread lunch evenly" : "Not too many periods a day",
+      kind, mode: kind === "spread_lunch" ? "try" : "must", weight: 5, enabled: true,
       department_id: role === "coordinator" ? member?.department_id ?? null : null, years: [],
       days: kind === "no_classes" ? ["Fri"] : [], after: kind === "no_classes" ? "15:00" : null, before: null,
       max_periods: kind === "max_per_day" ? 6 : null,
@@ -80,7 +82,7 @@ export default function RulesPage() {
                   onChange={(e) => update(r.id, { name: e.target.value })} />
                 <Badge tone={r.department_id ? "neutral" : "accent"}>{r.department_id ? dept.get(r.department_id) : "Whole college"}</Badge>
                 <div className="inline-flex rounded-lg border border-border p-0.5">
-                  {(["must", "try"] as const).map((m) => (
+                  {(r.kind === "spread_lunch" ? (["try"] as const) : (["must", "try"] as const)).map((m) => (
                     <button key={m} disabled={!editable} aria-pressed={r.mode === m} onClick={() => update(r.id, { mode: m })}
                       className={clsx("rounded-md px-2.5 py-1 text-xs", r.mode === m ? "bg-accent-soft font-medium text-accent-text" : "text-muted")}>
                       {m === "must" ? "Must" : "Try"}
@@ -125,7 +127,7 @@ export default function RulesPage() {
                       <label className="flex items-center gap-1">before <input type="time" className={input} value={r.before ?? ""}
                         onChange={(e) => update(r.id, { before: e.target.value || null })} /></label>
                     </>
-                  ) : (
+                  ) : r.kind === "spread_lunch" ? null : (
                     <label className="flex items-center gap-1">at most <input type="number" min={1} max={12} className={`${input} w-16`}
                       value={r.max_periods ?? ""} onChange={(e) => update(r.id, { max_periods: Number(e.target.value) || null })} /> periods a day</label>
                   )}
@@ -143,6 +145,9 @@ export default function RulesPage() {
         <div className="mt-4 flex flex-wrap gap-2">
           <Button onClick={() => add("no_classes")}><Plus size={16} /> No classes at certain times</Button>
           <Button onClick={() => add("max_per_day")}><Plus size={16} /> Max periods a day</Button>
+          {!rules.some((r) => r.kind === "spread_lunch" && r.department_id === (role === "coordinator" ? member?.department_id ?? null : null)) && (
+            <Button onClick={() => add("spread_lunch")}><Plus size={16} /> Spread lunch evenly (mess split)</Button>
+          )}
         </div>
       )}
     </div>

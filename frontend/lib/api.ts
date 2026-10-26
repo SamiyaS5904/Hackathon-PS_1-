@@ -1,7 +1,7 @@
 import type {
   AuditEntry, AuthOut, CoverAction, CoverChoice, Leave, LeaveApplied, LeavePlan, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
-  TimetableOut, Venue, WeekOut,
+  TimetableOut, Venue, WeekOut, RescheduleOut, FreeVenue, VenueEventLists, VenueEventResult, Notice, NoticeIn,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
@@ -265,4 +265,21 @@ export const api = {
   myBlocked: () => request<{ blocked: TimeBlock[]; message: string }>(`${org()}/me/blocked`),
   saveMyBlocked: (blocked: TimeBlock[]) =>
     request<{ blocked: TimeBlock[]; message: string }>(`${org()}/me/blocked`, { method: "PUT", body: JSON.stringify({ blocked }) }),
+};
+
+/** Reschedule finder, room booking for events and notices (own object so it merges cleanly with `api`). */
+export const extraApi = {
+  reschedule: (sessionId: string, date: string) =>
+    request<RescheduleOut>(`${org()}/timetable/sessions/${sessionId}/reschedule?date=${date}&days=7`),
+  freeVenues: (date: string, start: string, end: string, minSeats = 0) =>
+    request<FreeVenue[]>(`${org()}/venue-events/free?${new URLSearchParams({ date, start, end, min_seats: String(minSeats) })}`),
+  bookVenue: (body: { venue_id: string; date: string; start: string; end: string; title: string; club: string }) =>
+    request<VenueEventResult>(`${org()}/venue-events`, post(body)),
+  venueEvents: () => request<VenueEventLists>(`${org()}/venue-events`),
+  approveVenueEvent: (id: string) => request<VenueEventResult>(`${org()}/venue-events/${id}/approve`, { method: "POST" }),
+  declineVenueEvent: (id: string, note: string) => request<VenueEventResult>(`${org()}/venue-events/${id}/decline`, post({ note })),
+  cancelVenueEvent: (id: string) => request<VenueEventResult>(`${org()}/venue-events/${id}/cancel`, { method: "POST" }),
+  notices: () => request<Notice[]>(`${org()}/notices`),
+  postNotice: (body: NoticeIn) => request<{ message: string; notice: Notice }>(`${org()}/notices`, post(body)),
+  deleteNotice: (id: string) => request<void>(`${org()}/notices/${id}`, { method: "DELETE" }),
 };
