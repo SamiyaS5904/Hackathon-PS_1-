@@ -91,16 +91,17 @@ async def _day(ctx: ToolContext, which: str) -> dict:
 
 
 async def _free_rooms(ctx: ToolContext) -> dict:
-    out = await _tool(ctx, "free_rooms", {})
-    rooms = out["free"]
+    # The whole list (the assistant's tool keeps only 25, to keep its answers short).
+    raw = await ctx.backend.free_rooms(ctx.today, ctx.now, 0)
+    rooms = [{"room": r["name"], "type": r["type"], "seats": r["capacity"], "dept": r["department"],
+              "free_until": r["free_until"] or "end of day"} for r in raw]
     if not rooms:
         return {"text": "No rooms are free right now."}
     # Where to sit: lecture rooms before labs, the person's own department's rooms first, then the ones free longest.
     c = await ctx.college()
     sec = next((s for s in c["sections"] if s["id"] == ctx.member.get("section_id")), None)
-    dept_id = sec["department_id"] if sec else ctx.member.get("department_id")
-    own = next((d["name"] for d in c["departments"] if d["id"] == dept_id), None)
-    rooms = sorted(rooms, key=lambda r: (r["type"] == "lab", r["belongs_to"] != own, r["free_until"] != "end of day",
+    own = sec["department_id"] if sec else ctx.member.get("department_id")
+    rooms = sorted(rooms, key=lambda r: (r["type"] == "lab", r["dept"] != own, r["free_until"] != "end of day",
                                          -_mins(r["free_until"]), -r["seats"]))
     shown = rooms[:5]
     text = f"{len(rooms)} room{'s are' if len(rooms) != 1 else ' is'} free right now. " + "; ".join(
