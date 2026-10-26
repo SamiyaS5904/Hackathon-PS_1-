@@ -1,12 +1,13 @@
 "use client";
 
 import clsx from "clsx";
-import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Move, Printer, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Move, Printer, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { PublishButton } from "@/components/timetable/PublishButton";
 import { DownloadMenu } from "@/components/timetable/DownloadMenu";
-import { HealthStrip } from "@/components/timetable/HealthStrip";
+import { FindAny } from "@/components/timetable/FindAny";
+import { TrustBar } from "@/components/timetable/TrustBar";
 import { OneDayPanel } from "@/components/timetable/OneDayPanel";
 import { ProposalDialog } from "@/components/timetable/ProposalDialog";
 import { RequestDialog } from "@/components/timetable/RequestDialog";
@@ -19,7 +20,7 @@ import { isStaff, useAuth } from "@/lib/auth";
 import { useChatPage } from "@/lib/chat-context";
 import { useTimetable } from "@/lib/timetable-context";
 import { useToast } from "@/lib/toast";
-import type { Occurrence, OverrideOut, Session, TimetableOut, ViewKind, WeekOut } from "@/lib/types";
+import type { Occurrence, OverrideOut, Session, ViewKind, WeekOut } from "@/lib/types";
 
 const isoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -223,8 +224,7 @@ export default function TimetablePage() {
               {" "}Editing is paused until then.
             </div>
           )}
-          {isStaff(role) && !data.stale && <PublishStatus data={data} />}
-          {role === "admin" && !data.stale && <HealthStrip data={data} compact />}
+          {role && <TrustBar data={data} role={role} />}
 
           <div className="no-print mb-3 flex flex-wrap items-center gap-3">
             {/* Teachers and students see only their own timetable: no switching. */}
@@ -265,6 +265,7 @@ export default function TimetablePage() {
               ))}
             </select>
             <span className="text-sm text-muted">{subtitle}</span>
+            <FindAny college={college} onPick={(v, id) => { setView(v); setPicked((p) => ({ ...p, [v]: id })); }} />
             </>)}
 
             <div className="ml-auto flex items-center gap-2">
@@ -449,23 +450,3 @@ function EmptyState() {
 }
 
 /** Draft or published: staff always know whether teachers and students can see what's on screen. */
-function PublishStatus({ data }: { data: TimetableOut }) {
-  const { published_at, published_by } = data.timetable;
-  if (published_at) {
-    const when = new Date(published_at * 1000).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
-    return (
-      <p className="no-print mb-3 flex items-center gap-2 text-xs text-muted" role="status">
-        <CheckCircle2 size={14} className="text-ok" aria-hidden /> Published {when} by {published_by}. Changes reach
-        teachers and students straight away.
-      </p>
-    );
-  }
-  return (
-    <div className="no-print mb-4 rounded-xl border border-accent/30 bg-accent-soft px-4 py-3 text-sm text-accent-text" role="status">
-      <b>Draft:</b>{" "}
-      {data.ever_published
-        ? "teachers and students still see the previously published timetable. Publish this one to replace it."
-        : "teachers and students can't see it yet. Review it, then Publish."}
-    </div>
-  );
-}
