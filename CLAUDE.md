@@ -233,12 +233,26 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - **Super Admin platform** (2026-10-25): platform owners (`SUPERADMIN_EMAILS`, plus a demo owner `owner@demo.timetabl.ai` while `DEMO_PLATFORM_OWNER=1`) see every college: stage (Setting up → Live), size, adoption (accounts, attendance, bookings), health flags ("signed up but no setup", "draft not published", "no activity"), plans; they set plan / read-only / paused (enforced on every college request) and a private note, never college data (they aren't members, so college endpoints stay 404); a platform assistant answers in English or Hinglish and prepares plan / status changes as cards
 - **Teacher booking** (2026-10-25): teachers set weekly office hours (seats, place; never on their own classes); students book doubt slots over the next 2 weeks (teacher free that day, seats left, no class for the student, no holiday); Coordinator (own department) / Admin find times when chosen teachers are all free and book meetings; notifications; a class later moved onto a booking is flagged with "Find another time"; the assistant finds slots and prepares bookings as cards
 
-**🔨 Building now (2026-10-25, in this order)**
-1. ~~Voice + language quality~~ ✅ done
-2. ~~Teacher booking~~ ✅ done
-3. ~~Auto-sectioning~~ ✅ done
-4. ~~Super Admin platform~~ ✅ done
-5. ~~Mid-semester regenerate with minimal change~~ ✅ done
+**✅ Done 2026-10-25:** voice + language quality · teacher booking · auto-sectioning · Super Admin platform · mid-semester regenerate with minimal change
+
+**🔨 Building now (2026-10-26, for the submission; two sessions in parallel)**
+Data: only the Demo Institute (Dr. Anita) stays in the database; the GNDEC demo college comes later from the user's data (then also on the Demo page). Fixed breaks are optional (a new college has none).
+
+*Session A: agentic assistant + teacher leave* (chatbot, leave/substitute backend, coordinator Home, chat panel)
+1. **Teacher leave → plan card.** Teacher asks for leave (app or assistant) → Coordinator approves (or enters it directly, e.g. by voice: "Dr. Rita Arora is away 3 days; free the 4th-year lectures, substitutes for 3rd year"). The system builds a plan per class: *substitute* (a teacher who can teach the same subject, free then, within daily limits, ranked) or *cancel*, chosen per year. Plan card on the **Coordinator Home**: ticks per class → Apply (validator → one-day changes, new kind "substitute" → audit + undo → notifications to the students and teachers involved).
+2. **Fast assistant, full quality:** Opus 5.5 kept (no low thinking); speed from prompt caching, compound tools that do several steps in one call, parallel tool calls, streaming the reply into speech sentence by sentence.
+3. **Voice:** OpenAI Whisper for listening and OpenAI TTS for a natural voice (`OPENAI_API_KEY` in `chatbot/.env`, browser voice as fallback). Pause = keep listening; "Stop" stops listening/speaking and leaves the text editable (never auto-sent); speaking over it interrupts it.
+4. **Two modes:** *Chat* (type or speak) and *Work with assistant* (hands-free talk mode): it talks, shows option cards to tap, and **drives the screen** (opens the timetable / teacher / section it talks about, highlights classes) while working.
+5. Suggestions while typing · undo by voice · **evening brief the day before** for Coordinators (tomorrow's leaves, uncovered classes, "fix them?").
+6. **Assistant cost card:** token use and $ per college (College Admin: own college; Super Admin: all).
+
+*Session B: app features* (own worktree; new endpoints in new router files)
+1. Test teacher–student slot booking end to end, fix what's broken, make *Bookings* easy to find for teachers and students.
+2. Teacher reschedule finder done properly: "when are I, my students and a room all free" → move (one day / request for good) → students notified.
+3. **Venue booking for events:** a teacher picks date + time, sees the list of venues free then, books with reason + club → Coordinator of the room's department approves (Admin for shared rooms) → the room is held for that date (classes, one-day moves and other events can't take it) → requester notified. Free rooms only, never bumps a class.
+4. **Mess split as a Try rule:** lunch gaps spread evenly across the mess window (e.g. half the students at 11:30, half at 12:30).
+5. 3–4 more demo teachers with real-looking names (demo still generates with 0 clashes).
+6. If time: **Coordinator / Admin notices** (text, audience: department teachers / students / a year / a section, expiry) on Home + bell.
 
 **🔭 Future (pitch roadmap, not building now)**
 Calendar invites (`.ics`) / Google Calendar sync · WhatsApp / SMS notifications · email notifications (Resend) · QR posters · attendance extras (QR / self check-in, alerts below the rule, parent view) · substitutes on leave · Now & Next TV board · Google login for students · OpenAI Whisper as a second voice option · NAAC/NBA workload report · plain-language rules via the assistant · timetable version compare · room maintenance / exam blocks · solve per shift / year for 50+ sections
