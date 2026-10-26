@@ -9,6 +9,7 @@ import { TodayView } from "@/components/timetable/TodayView";
 import { Badge, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { greetName } from "@/lib/names";
 import { useTimetable } from "@/lib/timetable-context";
 import type { WeekOut } from "@/lib/types";
 import { usePagePrompts } from "@/lib/chat-context";
@@ -43,7 +44,7 @@ export function PersonalHome() {
 
   const name = (id: string, list?: { id: string; name: string }[]) => list?.find((x) => x.id === id)?.name ?? "";
   const hour = new Date().getHours();
-  const hello = `${hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"}, ${user?.name.split(" ")[0] ?? ""}`;
+  const hello = `${hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"}, ${greetName(user?.name)}`;
 
   if (loading || !college || !member) {
     return (

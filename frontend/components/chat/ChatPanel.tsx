@@ -9,6 +9,7 @@ import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
 import { createRecognition, speak, stopSpeaking, streamChat, voiceErrorText } from "@/lib/chat";
 import { useChatPage } from "@/lib/chat-context";
+import { greetName } from "@/lib/names";
 import { useTimetableOptional } from "@/lib/timetable-context";
 import { useToast } from "@/lib/toast";
 import type { ChatCard, ChatEvent, Insight, Role, TimetableOut } from "@/lib/types";
@@ -266,7 +267,7 @@ export function ChatPanel() {
             {msgs.length === 0 && (
               <div className="space-y-4">
                 <p className="text-sm text-muted">
-                  Hi {user?.name.split(" ")[0]}. {platform ? "Ask about the colleges on the platform" : "Ask about your timetable"} in plain words
+                  Hi {greetName(user?.name)}. {platform ? "Ask about the colleges on the platform" : "Ask about your timetable"} in plain words
                   {voice ? ", or tap the mic and speak" : ""}. English or Hinglish both work: I answer in the language you use.
                 </p>
                 {insights && insights.length > 0 && (
