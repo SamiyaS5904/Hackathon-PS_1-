@@ -1,7 +1,7 @@
 import type {
   AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
-  TimetableOut, Venue, WeekOut, RescheduleOut, FreeVenue, VenueEventLists, VenueEventResult,
+  TimetableOut, Venue, WeekOut, RescheduleOut, FreeVenue, VenueEventLists, VenueEventResult, Notice, NoticeIn,
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
@@ -270,4 +270,7 @@ export const extraApi = {
   approveVenueEvent: (id: string) => request<VenueEventResult>(`${org()}/venue-events/${id}/approve`, { method: "POST" }),
   declineVenueEvent: (id: string, note: string) => request<VenueEventResult>(`${org()}/venue-events/${id}/decline`, post({ note })),
   cancelVenueEvent: (id: string) => request<VenueEventResult>(`${org()}/venue-events/${id}/cancel`, { method: "POST" }),
+  notices: () => request<Notice[]>(`${org()}/notices`),
+  postNotice: (body: NoticeIn) => request<{ message: string; notice: Notice }>(`${org()}/notices`, post(body)),
+  deleteNotice: (id: string) => request<void>(`${org()}/notices/${id}`, { method: "DELETE" }),
 };

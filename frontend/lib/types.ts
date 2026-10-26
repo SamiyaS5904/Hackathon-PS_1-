@@ -367,3 +367,16 @@ export interface VenueEvent {
 }
 export interface VenueEventLists { to_review: VenueEvent[]; mine: VenueEvent[]; upcoming: VenueEvent[] }
 export interface VenueEventResult { message: string; event: VenueEvent }
+
+// ---- Notices on Home ----
+
+export type NoticeKind = "college" | "dept_teachers" | "dept_students" | "year" | "section";
+export interface Notice {
+  id: string; title: string; body: string; kind: NoticeKind; department_id: string | null; year: number | null;
+  section_id: string | null; expires: string; for_whom: string; created_by: string; created_by_name: string;
+  created_at: number; can_delete: boolean;
+}
+export interface NoticeIn {
+  title: string; body: string; kind: NoticeKind; department_id?: string | null; year?: number | null;
+  section_id?: string | null; expires: string;
+}

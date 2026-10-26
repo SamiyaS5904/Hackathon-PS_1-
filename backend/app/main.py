@@ -1495,6 +1495,8 @@ def get_insights(ctx: Ctx = Depends(org_ctx)) -> list[Insight]:
 # Session B routers (own files; kept at the end so they merge cleanly)
 from app.routers.reschedule import router as reschedule_router  # noqa: E402
 from app.routers.venue_events import router as venue_events_router  # noqa: E402
+from app.routers.notices import router as notices_router  # noqa: E402
 
 app.include_router(reschedule_router)
 app.include_router(venue_events_router)
+app.include_router(notices_router)
