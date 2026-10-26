@@ -63,10 +63,13 @@ def validate(
         if s.day not in college.days:
             bad("bad_day", f"Session {s.id} is on {s.day}, which is not a working day.", s)
             continue
+        # On one real day (check_counts=False) a substitute may take the class: the teacher may differ from
+        # the weekly plan, and is checked below like anyone else (free, right shift, not blocked, daily limit).
+        planned = (lambda t: t) if check_counts else (lambda t: s.teacher_id)
         if grp is not None:
-            if (grp.teacher_id, grp.subject_id, Kind.lecture) != (s.teacher_id, s.subject_id, s.kind):
+            if (planned(grp.teacher_id), grp.subject_id, Kind.lecture) != (s.teacher_id, s.subject_id, s.kind):
                 bad("allotment_mismatch", f"Session {s.id} doesn't match elective group {grp.name}.", s)
-        elif (a.teacher_id, a.subject_id, sorted(a.section_ids), a.batch_id, a.kind) != (
+        elif (planned(a.teacher_id), a.subject_id, sorted(a.section_ids), a.batch_id, a.kind) != (
             s.teacher_id, s.subject_id, sorted(s.section_ids), s.batch_id, s.kind,
         ):
             bad("allotment_mismatch", f"Session {s.id} doesn't match its allotment {a.id}.", s)

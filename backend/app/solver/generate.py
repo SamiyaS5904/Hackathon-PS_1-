@@ -36,6 +36,8 @@ everything except the affected classes pinned. The result is always re-checked b
 
 from __future__ import annotations
 
+import os
+
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
@@ -324,7 +326,8 @@ def generate(
 def _solver(limit: float, workers: int, log: bool) -> cp_model.CpSolver:
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = max(limit, 1.0)
-    solver.parameters.num_search_workers = workers
+    # SOLVER_WORKERS caps the parallel workers (each needs memory): lower it on a small laptop or server.
+    solver.parameters.num_search_workers = max(1, min(workers, int(os.environ.get("SOLVER_WORKERS", "8"))))
     solver.parameters.log_search_progress = log
     # Allotment-level variables already remove most symmetry, and heavy presolve
     # (symmetry, probing) costs more time than it saves here: spend it on search.

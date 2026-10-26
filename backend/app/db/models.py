@@ -184,6 +184,19 @@ class BookingRow(Base):
     data: Mapped[dict] = mapped_column(JSON)
 
 
+class LeaveRow(Base):
+    """A teacher's leave (dates + reason), asked by the teacher or entered by the Coordinator / Admin.
+    The other fields live in ``data`` (see app/leave.py)."""
+
+    __tablename__ = "leaves"
+    id: Mapped[str] = mapped_column(String(32), primary_key=True, default=new_id)
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), index=True)
+    at: Mapped[float] = mapped_column(Float, default=time.time)
+    teacher_id: Mapped[str] = mapped_column(String(64))
+    status: Mapped[str] = mapped_column(String(20), default="pending")  # pending|approved|declined|withdrawn
+    data: Mapped[dict] = mapped_column(JSON)
+
+
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 # Postgres: requests rarely touch the database (memory first, background writer), so a liveness
 # ping per checkout is cheap; TCP keepalives stop idle Supabase connections from silently dying.

@@ -348,13 +348,15 @@ class Override(BaseModel):
 
     kind="cancel": the class doesn't happen on `date`.
     kind="move": on `date` the class happens on `to_date` at `start_period` in `venue_id` instead.
+    kind="substitute": on `date` the class happens as usual, taught by `teacher_id` (the usual teacher is away).
     """
 
     id: str
     session_id: str
     date: str  # YYYY-MM-DD, the original occurrence
-    kind: str  # "cancel" | "move"
+    kind: str  # "cancel" | "move" | "substitute"
     to_date: str | None = None
+    teacher_id: str | None = None  # kind="substitute": who takes the class that day
     start_period: int | None = None
     venue_id: str | None = None
     reason: str = ""

@@ -47,6 +47,7 @@ from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
 from app import attendance, change_requests, platform, sectioning
 from app.routers.bookings import router as bookings_router
 from app.routers.platform import router as platform_router
+from app.routers.leave import router as leave_router
 from app.routers.today import router as today_router
 from app.today import Problem, locate
 from app.change_requests import ChangeRequestOut
@@ -112,6 +113,7 @@ app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*
 app.include_router(bookings_router)
 app.include_router(platform_router)
 app.include_router(today_router)
+app.include_router(leave_router)
 
 
 @app.get("/api/health")
@@ -968,7 +970,9 @@ def get_week(start: str, ctx: Ctx = Depends(org_ctx)) -> WeekOut:
     occ = [o for d in days for o in occurrences(state.college, state.timetable, d.date)]
     if ctx.member.role not in ("admin", "coordinator"):
         visible = {s.id for s in visible_sessions(ctx.member, state.college, state.timetable)}
-        occ = [o for o in occ if o.session.id in visible]
+        mine = ctx.member.teacher_id if ctx.member.role == "teacher" else None
+        # A substitute sees the classes they cover; the usual teacher still sees theirs (marked as covered).
+        occ = [o for o in occ if o.session.id in visible or (mine and o.session.teacher_id == mine)]
     return WeekOut(days=days, occurrences=occ)
 
 

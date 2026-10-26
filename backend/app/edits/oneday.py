@@ -31,6 +31,7 @@ class Occurrence(BaseModel):
     # Stable id of this class on its original date: "<session id>@<YYYY-MM-DD>". A class moved to another
     # day keeps the id of the date it was moved from, so future attendance always hooks onto the same id.
     occurrence_id: str = ""
+    substitute_for: str | None = None  # the usual teacher's id when a substitute takes this class
 
 
 class DayInfo(BaseModel):
@@ -90,6 +91,14 @@ def occurrences(college: College, tt: Timetable, d: str) -> list[Occurrence]:
             elif o.kind == "cancel":
                 out.append(Occurrence(session=s, date=d, status="cancelled", override_id=o.id, occurrence_id=f"{s.id}@{d}",
                                       note=o.reason or "Cancelled for this day"))
+            elif o.kind == "substitute":
+                # Happens as usual with another teacher: it counts as a normal class for clashes and lists.
+                sub = college.teacher(o.teacher_id)
+                out.append(Occurrence(session=s.model_copy(update={"teacher_id": o.teacher_id}), date=d,
+                                      status="normal", override_id=o.id, occurrence_id=f"{s.id}@{d}",
+                                      substitute_for=s.teacher_id,
+                                      note=f"Substitute: {sub.name}"
+                                      + (f" (for {college.teacher(s.teacher_id).name})" if s.teacher_id else "")))
             else:
                 target = college.shift(s.shift_id).periods[o.start_period].start
                 out.append(Occurrence(session=s, date=d, status="moved_out", override_id=o.id, occurrence_id=f"{s.id}@{d}",
@@ -145,9 +154,10 @@ def day_options(college: College, tt: Timetable, session_id: str, from_date: str
 
 def add_override(
     college: College, tt: Timetable, session_id: str, d: str, kind: str, to_date: str | None,
-    start_period: int | None, reason: str, actor: str,
+    start_period: int | None, reason: str, actor: str, teacher_id: str | None = None,
 ) -> tuple[Timetable | None, str, str]:
-    """Returns (new timetable, message for the user, audit sentence) or (None, error, "")."""
+    """Returns (new timetable, message for the user, audit sentence) or (None, error, "").
+    kind="substitute" needs ``teacher_id``: the teacher who takes the class that day."""
     s = next((x for x in tt.sessions if x.id == session_id), None)
     if s is None:
         return None, "Class not found.", ""
@@ -168,6 +178,19 @@ def add_override(
         new = tt.model_copy(update={"overrides": [*tt.overrides, ov]})
         return (new, f"{subj} is cancelled on {label(d)} only. The weekly plan is unchanged.",
                 f"Cancelled {subj} ({secs}) on {label(d)}")
+
+    if kind == "substitute":
+        sub = next((t for t in college.teachers if t.id == teacher_id), None)
+        if sub is None or teacher_id == s.teacher_id:
+            return None, "Choose another teacher to take this class.", ""
+        ov = Override(id=uuid.uuid4().hex[:10], session_id=s.id, date=d, kind="substitute", teacher_id=sub.id,
+                      reason=reason, created_by=actor)
+        new = tt.model_copy(update={"overrides": [*tt.overrides, ov]})
+        # The substitute must be free then, allowed in that shift, not blocked and within their daily limit.
+        if validate(college, *_day(college, new, d), check_counts=False):
+            return None, f"{sub.name} isn't free for this class on {label(d)}.", ""
+        return (new, f"{sub.name} takes {subj} ({secs}) on {label(d)} {s.start}, this one time.",
+                f"{sub.name} substitutes: {subj} ({secs}) on {label(d)}")
 
     if s.elective_slot_id:
         return None, "Elective groups meet together, so one group can't be moved on its own. Cancel it instead.", ""
