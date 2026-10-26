@@ -203,7 +203,7 @@ STUDENT_LAST = ["Sharma", "Gill", "Verma", "Singh", "Kaur", "Gupta", "Arora", "M
                 "Dhillon", "Grewal", "Sidhu", "Kapoor", "Bedi", "Chawla", "Saini", "Thind", "Aulakh", "Jain",
                 "Goyal", "Rana", "Bhatia", "Malhi", "Pannu"]
 
-TITLES = ["Dr.", "Prof.", "Er."]
+TITLES = ["Dr.", "Prof."]
 
 
 def _teacher_names():
@@ -212,7 +212,7 @@ def _teacher_names():
     step = 37  # coprime with the number of pairs: walks through them in a scattered order
     for i in range(len(pairs)):
         first, last = pairs[(i * step) % len(pairs)]
-        yield f"{TITLES[i % 3]} {first} {last}"
+        yield f"{TITLES[i % 2]} {first} {last}"
 
 
 def build_gndec_college() -> College:
@@ -234,8 +234,9 @@ def build_gndec_college() -> College:
                 sections.append(sec)
                 for i in range(strength):
                     roll = f"{ADMITTED[year]}{ROLL_CODE[dept]}{serial:03d}"
-                    seed = int(roll)
-                    name = f"{STUDENT_FIRST[(seed * 7) % len(STUDENT_FIRST)]} {STUDENT_LAST[(seed * 3 + year) % len(STUDENT_LAST)]}"
+                    g = len(students)  # running number over the whole college: names vary between sections
+                    name = (f"{STUDENT_FIRST[(g * 7 + g // 50) % len(STUDENT_FIRST)]} "
+                            f"{STUDENT_LAST[(g * 11 + g // 25) % len(STUDENT_LAST)]}")
                     students.append(Student(id=f"st-{roll}", roll_no=roll, name=name, email=f"{roll}@{DOMAIN}",
                                             section_id=sid, batch_id=sec.batches[0 if i < half else 1].id))
                     serial += 1
@@ -393,7 +394,8 @@ def demo_logins(college: College) -> list[dict]:
     for sec in college.sections:
         st = next(x for x in college.students if x.section_id == sec.id)
         out.append({"role": "student", "name": st.name, "email": st.email, "section": sec.name})
-    st = next(x for x in college.students if x.id in jpal)
+    listed = {o["email"] for o in out}
+    st = next(x for x in college.students if x.id in jpal and x.email not in listed)
     out.append({"role": "student", "name": st.name, "email": st.email, "section": "JPAL student"})
     return out
 
