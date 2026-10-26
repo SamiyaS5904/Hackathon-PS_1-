@@ -7,6 +7,7 @@ import { Badge, Button, Card, ErrorCard, PageHeader, Skeleton } from "@/componen
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
+import { useToast } from "@/lib/toast";
 import type { ChangeRequest, Proposal } from "@/lib/types";
 
 const STATUS: Record<ChangeRequest["status"], { label: string; tone: "accent" | "ok" | "danger" | "neutral" }> = {
@@ -23,6 +24,7 @@ const when = (at: number) =>
 export default function RequestsPage() {
   const { role } = useAuth();
   const { setData } = useTimetable();
+  const showToast = useToast();
   const reviewer = isStaff(role);
   const [items, setItems] = useState<ChangeRequest[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -60,7 +62,10 @@ export default function RequestsPage() {
   const apply = () =>
     proposal &&
     run("apply", async () => {
-      setData(await api.apply(proposal.id));
+      const out = await api.apply(proposal.id);
+      setData(out);
+      showToast({ text: "Applied. The teacher and everyone affected are told.", undoEntryId: out.last_change?.id,
+        onUndone: (o) => { setData(o); load(); } });
       setProposal(null);
       await load();
     });

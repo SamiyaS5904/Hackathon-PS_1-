@@ -121,7 +121,8 @@ export const api = {
   apply: (id: string) => request<TimetableOut>(`${org()}/proposals/${id}/apply`, { method: "POST" }),
   discard: (id: string) => request<void>(`${org()}/proposals/${id}`, { method: "DELETE" }).catch(() => undefined),
   audit: () => request<AuditEntry[]>(`${org()}/audit`),
-  undo: () => request<TimetableOut>(`${org()}/audit/undo`, { method: "POST" }),
+  /** Undo the latest change; with ``entryId``, only if that exact change is still the latest. */
+  undo: (entryId?: string) => request<TimetableOut>(`${org()}/audit/undo`, post(entryId ? { entry_id: entryId } : {})),
   week: (start: string) => request<WeekOut>(`${org()}/timetable/week?start=${start}`),
   dayOptions: (sessionId: string, date: string, toDate: string) =>
     request<MoveOption[]>(`${org()}/timetable/sessions/${sessionId}/day-options?date=${date}&to_date=${toDate}`),

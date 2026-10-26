@@ -64,9 +64,11 @@ export interface QualityReport {
   venue_utilisation: Record<string, number>;
 }
 export interface Violation { type: string; message: string; session_ids: string[] }
+export interface LastChange { id: string; at: number; actor: string; action: string; can_undo: boolean }
 export interface TimetableOut {
   timetable: Timetable; quality: QualityReport | null; violations: Violation[]; stale: boolean;
   ever_published: boolean;
+  last_change?: LastChange | null; // staff only
 }
 export interface Job { id: string; status: "running" | "done" | "failed"; elapsed: number; error: string | null; message?: string }
 export interface Precheck { problems: string[]; warnings: string[] }

@@ -10,6 +10,7 @@ import { isStaff, useAuth } from "@/lib/auth";
 import { createRecognition, speak, stopSpeaking, streamChat, voiceErrorText } from "@/lib/chat";
 import { useChatPage } from "@/lib/chat-context";
 import { useTimetableOptional } from "@/lib/timetable-context";
+import { useToast } from "@/lib/toast";
 import type { ChatCard, ChatEvent, Insight, Role, TimetableOut } from "@/lib/types";
 
 interface Msg {
@@ -350,13 +351,16 @@ export function ChatPanel() {
 function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: TimetableOut | null) => void }) {
   const [state, setState] = useState<"ready" | "busy" | "applied" | "discarded" | "error">("ready");
   const [message, setMessage] = useState("");
+  const showToast = useToast();
 
   const apply = async () => {
     setState("busy");
     try {
       if (card.type === "proposal") {
-        onApplied(await api.apply(card.proposal.id));
-        setMessage("Applied. The timetable is updated and the change is in Activity (undo is there too).");
+        const out = await api.apply(card.proposal.id);
+        onApplied(out);
+        setMessage("Applied. The timetable is updated and everyone affected is told.");
+        showToast({ text: "Change applied.", undoEntryId: out.last_change?.id, onUndone: (o) => onApplied(o) });
       } else if (card.type === "platform") {
         const c = card.change;
         await api.updateCollege(c.org, { ...(c.plan ? { plan: c.plan } : {}), ...(c.status ? { status: c.status } : {}),
@@ -376,6 +380,7 @@ function CardView({ card, onApplied }: { card: ChatCard; onApplied: (out: Timeta
           start_period: a.start_period, reason: a.reason, via: "chatbot" });
         onApplied(out.timetable);
         setMessage(out.message);
+        showToast({ text: out.message, undoEntryId: out.timetable.last_change?.id, onUndone: (o) => onApplied(o) });
       }
       setState("applied");
     } catch (e) {

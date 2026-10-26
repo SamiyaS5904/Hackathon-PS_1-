@@ -3,12 +3,12 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useTimetable } from "@/lib/timetable-context";
+import { useToast } from "@/lib/toast";
 import type { MoveOption, Proposal, Session } from "@/lib/types";
 import type { EditState } from "./TimetableGrid";
 
 export interface Toast {
   text: string;
-  undo?: boolean;
   tone?: "ok" | "danger";
 }
 
@@ -26,7 +26,8 @@ export function useMoveEditor({ requestOnly = false }: { requestOnly?: boolean }
   const [busy, setBusy] = useState(false);
   const [proposal, setProposal] = useState<Proposal | null>(null);
   const [changedIds, setChangedIds] = useState<Set<string>>(new Set());
-  const [toast, setToast] = useState<Toast | null>(null);
+  const showToast = useToast();
+  const setToast = useCallback((t: Toast) => showToast(t), [showToast]);
   const [moveRequest, setMoveRequest] = useState<MoveRequest | null>(null);
 
   const cancel = useCallback(() => {
@@ -39,12 +40,6 @@ export function useMoveEditor({ requestOnly = false }: { requestOnly?: boolean }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [cancel, proposal]);
-
-  useEffect(() => {
-    if (!toast) return;
-    const t = setTimeout(() => setToast(null), toast.undo ? 8000 : 5000);
-    return () => clearTimeout(t);
-  }, [toast]);
 
   const pick = useCallback(
     async (s: Session) => {
@@ -59,7 +54,7 @@ export function useMoveEditor({ requestOnly = false }: { requestOnly?: boolean }
         cancel();
       }
     },
-    [moving, cancel],
+    [moving, cancel, setToast],
   );
 
   const drop = useCallback(
@@ -80,7 +75,7 @@ export function useMoveEditor({ requestOnly = false }: { requestOnly?: boolean }
         setBusy(false);
       }
     },
-    [moving, options, requestOnly],
+    [moving, options, requestOnly, setToast],
   );
 
   const apply = useCallback(async () => {
@@ -90,7 +85,10 @@ export function useMoveEditor({ requestOnly = false }: { requestOnly?: boolean }
       const out = await api.apply(proposal.id);
       setData(out);
       setChangedIds(new Set(proposal.changes.map((c) => c.session_id)));
-      setToast({ text: proposal.message, undo: true, tone: "ok" });
+      showToast({
+        text: proposal.message, undoEntryId: out.last_change?.id,
+        onUndone: (o) => { setData(o); setChangedIds(new Set()); },
+      });
       setProposal(null);
       cancel();
     } catch (e) {
@@ -99,7 +97,7 @@ export function useMoveEditor({ requestOnly = false }: { requestOnly?: boolean }
     } finally {
       setBusy(false);
     }
-  }, [proposal, setData, cancel]);
+  }, [proposal, setData, cancel, setToast, showToast]);
 
   const sendRequest = useCallback(
     async (reason: string) => {
@@ -119,7 +117,7 @@ export function useMoveEditor({ requestOnly = false }: { requestOnly?: boolean }
         setBusy(false);
       }
     },
-    [moveRequest, cancel],
+    [moveRequest, cancel, setToast],
   );
 
   const discard = useCallback(() => {
@@ -127,25 +125,12 @@ export function useMoveEditor({ requestOnly = false }: { requestOnly?: boolean }
     setProposal(null);
   }, [proposal]);
 
-  const undo = useCallback(async () => {
-    setBusy(true);
-    try {
-      setData(await api.undo());
-      setChangedIds(new Set());
-      setToast({ text: "Change undone. The timetable is back to how it was.", tone: "ok" });
-    } catch (e) {
-      setToast({ text: e instanceof Error ? e.message : "Nothing to undo", tone: "danger" });
-    } finally {
-      setBusy(false);
-    }
-  }, [setData]);
-
   const edit: EditState | undefined = data
     ? { movingId: moving?.id ?? null, options, busy, changedIds, onPick: pick, onDrop: drop }
     : undefined;
 
   return {
-    edit, moving, options, busy, proposal, apply, discard, cancel, undo, toast, setToast,
+    edit, moving, options, busy, proposal, apply, discard, cancel, setToast,
     moveRequest, sendRequest, closeRequest: () => setMoveRequest(null),
   };
 }

@@ -9,6 +9,7 @@ import { ChatPageProvider } from "@/lib/chat-context";
 import { NotificationsProvider } from "@/lib/notifications";
 import { TimetableProvider } from "@/lib/timetable-context";
 import { ThemeToggle } from "@/lib/theme";
+import { ToastProvider } from "@/lib/toast";
 import { AppShell } from "./AppShell";
 import { PlatformShell } from "./PlatformShell";
 
@@ -65,8 +66,10 @@ export function Gate({ children }: { children: React.ReactNode }) {
     <TimetableProvider key={member.org_id}>
       <NotificationsProvider>
         <ChatPageProvider>
-          <AppShell>{children}</AppShell>
-          <ChatPanel />
+          <ToastProvider>
+            <AppShell>{children}</AppShell>
+            <ChatPanel />
+          </ToastProvider>
         </ChatPageProvider>
       </NotificationsProvider>
     </TimetableProvider>

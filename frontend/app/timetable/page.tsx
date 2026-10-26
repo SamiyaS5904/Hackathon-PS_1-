@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Move, Printer, Undo2, X } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Loader2, Move, Printer, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { PublishButton } from "@/components/timetable/PublishButton";
@@ -18,6 +18,7 @@ import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
 import { useChatPage } from "@/lib/chat-context";
 import { useTimetable } from "@/lib/timetable-context";
+import { useToast } from "@/lib/toast";
 import type { Occurrence, OverrideOut, Session, TimetableOut, ViewKind, WeekOut } from "@/lib/types";
 
 const isoDate = (d: Date) =>
@@ -46,6 +47,7 @@ export default function TimetablePage() {
   });
   const editor = useMoveEditor({ requestOnly: isTeacher });
   const { setData } = useTimetable();
+  const showToast = useToast();
   // Students and teachers care about real dates (cancellations, one-day moves) first.
   // Students and teachers open on Today (now, next, done); staff on the weekly plan they manage.
   const [mode, setMode] = useState<"today" | "plan" | "week">(isStaff(role) ? "plan" : "today");
@@ -85,7 +87,7 @@ export default function TimetablePage() {
   const onOneDayDone = (out: OverrideOut) => {
     setData(out.timetable);
     setSelected(null);
-    editor.setToast({ text: out.message, undo: true, tone: "ok" });
+    showToast({ text: out.message, undoEntryId: out.timetable.last_change?.id, onUndone: setData });
   };
 
   const isCoordinator = role === "coordinator";
@@ -361,7 +363,7 @@ function EditBar({
   hint?: string;
 }) {
   const {
-    moving, options, busy, proposal, apply, discard, cancel, undo, toast, setToast, moveRequest, sendRequest, closeRequest,
+    moving, options, busy, proposal, apply, discard, cancel, moveRequest, sendRequest, closeRequest,
   } = editor;
   const subject = moving ? college.subjects.find((s) => s.id === moving.subject_id)?.name : null;
   const counts = options
@@ -402,25 +404,6 @@ function EditBar({
           onClose={closeRequest} />
       )}
 
-      {toast && (
-        <div
-          className={clsx(
-            "fixed bottom-5 left-1/2 z-50 flex -translate-x-1/2 items-center gap-3 rounded-lg px-4 py-3 text-sm shadow-lg",
-            toast.tone === "danger" ? "bg-danger text-white" : "bg-text text-bg",
-          )}
-          role="status"
-        >
-          {toast.text}
-          {toast.undo && (
-            <button onClick={() => { setToast(null); undo(); }} className="inline-flex items-center gap-1 font-semibold underline-offset-2 hover:underline">
-              <Undo2 size={14} aria-hidden /> Undo
-            </button>
-          )}
-          <button onClick={() => setToast(null)} aria-label="Dismiss" className="opacity-70 hover:opacity-100">
-            <X size={14} />
-          </button>
-        </div>
-      )}
     </>
   );
 }
