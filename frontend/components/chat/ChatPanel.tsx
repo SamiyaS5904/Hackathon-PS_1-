@@ -1,7 +1,7 @@
 "use client";
 
 import clsx from "clsx";
-import { ArrowRight, CheckCircle2, Headphones, Loader2, MessageSquare, Mic, PhoneOff, RotateCcw, Send, Sparkles, Square, Volume2, VolumeX, X, XCircle } from "lucide-react";
+import { ArrowRight, CheckCircle2, Headphones, Loader2, MessageSquare, Mic, PhoneOff, RotateCcw, Send, Sparkles, Square, Volume2, VolumeX, X, XCircle, Zap } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +24,7 @@ interface Msg {
   tools: { label: string; status: "start" | "done" | "error" }[];
   cards: ChatCard[];
   error?: string;
+  instant?: boolean; // answered straight from the timetable (no AI call)
 }
 
 /** Fallback questions per role (pages usually supply their own). Names come from this college's data. */
@@ -167,6 +168,7 @@ export function ChatPanel() {
     const update = (fn: (m: Msg) => Msg) => setMsgs((all) => [...all.slice(0, -1), fn(all[all.length - 1])]);
     await streamChat(q, convId, { path, view: page.view, entity: page.entity, mode: page.mode }, (e: ChatEvent) => {
       if (e.type === "start") setConvId(e.conversation_id);
+      else if (e.type === "instant") update((m) => ({ ...m, instant: true }));
       else if (e.type === "token") {
         if (readAloud) speaker?.push(e.text);
         update((m) => ({ ...m, text: m.text + e.text }));
@@ -469,6 +471,11 @@ export function ChatPanel() {
                       </li>
                     ))}
                   </ul>
+                )}
+                {m.instant && (
+                  <p className="flex items-center gap-1 text-[11px] text-muted" title="Common questions are answered straight from the timetable: no AI call, no wait, no cost.">
+                    <Zap size={11} className="text-accent-text" aria-hidden /> Instant answer
+                  </p>
                 )}
                 {m.text ? <Rich text={m.text} /> : !m.error && busy && i === msgs.length - 1 && m.tools.length === 0 && (
                   <p className="flex items-center gap-2 text-muted"><Loader2 size={14} className="animate-spin" /> Thinking…</p>

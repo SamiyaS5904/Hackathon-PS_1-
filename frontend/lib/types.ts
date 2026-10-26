@@ -229,6 +229,7 @@ export type ChatCard =
 export type ChatEvent =
   | { type: "start"; conversation_id: string }
   | { type: "token"; text: string }
+  | { type: "instant" } // answered straight from the timetable, without the AI model
   | { type: "tool"; name: string; label: string; status: "start" | "done" | "error" }
   | { type: "card"; card: ChatCard }
   | { type: "error"; message: string }

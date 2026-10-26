@@ -20,7 +20,7 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-from app import language, voice
+from app import language, quick, voice
 from app.agent import Conversation, run_turn
 from app.backend import Backend, BackendError
 from app.config import CORS_ORIGINS, MAX_HISTORY_MESSAGES, has_api_key
@@ -247,6 +247,20 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
     async def events():
         yield _sse({"type": "start", "conversation_id": conv_id})
         try:
+            # Common look-ups are answered straight from the timetable: instant, and no AI cost.
+            if req.lang != "hinglish" and req.org != PLATFORM:
+                quick_answer = await quick.answer(ctx, req.message)
+                if quick_answer is not None:
+                    yield _sse({"type": "instant"})
+                    yield _sse({"type": "token", "text": quick_answer["text"]})
+                    for card in ctx.cards:
+                        yield _sse({"type": "card", "card": card})
+                    # Kept in the conversation, so a follow-up ("and tomorrow?") has the context.
+                    conv.messages.append({"role": "user", "content": [
+                        {"type": "text", "text": f"[{_context_line(req, today, now)}]\n{req.message.strip()}"}]})
+                    conv.messages.append({"role": "assistant", "content": [{"type": "text", "text": quick_answer["text"]}]})
+                    yield _sse({"type": "done"})
+                    return
             if not has_api_key():
                 yield _sse({"type": "error", "message": "The assistant isn't set up yet: add ANTHROPIC_API_KEY to "
                                                         "chatbot/.env and restart the assistant service."})
