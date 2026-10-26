@@ -23,7 +23,9 @@ def _load_dotenv() -> None:
 
 _load_dotenv()
 
-BACKEND_URL = os.environ.get("BACKEND_URL", "http://localhost:8000").rstrip("/")
+# "localhost" on Windows tries IPv6 first and waits ~0.2 s per connection before falling back; the assistant
+# makes several backend calls per answer, so talk to the same machine by its IPv4 address directly.
+BACKEND_URL = os.environ.get("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/").replace("://localhost", "://127.0.0.1")
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", "http://localhost:3000").split(",") if o.strip()]
 
 MODEL = os.environ.get("CHAT_MODEL", "claude-opus-5-5")

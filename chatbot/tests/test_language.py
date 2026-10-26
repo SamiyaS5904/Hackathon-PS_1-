@@ -46,7 +46,17 @@ def test_instruction_asks_for_roman_script():
 def test_context_line_carries_the_reply_language_and_voice_hint():
     from app.main import ChatRequest, _context_line
 
-    hi = _context_line(ChatRequest(org="demo", message="kal mera lecture kab hai", voice=True), "2026-10-26", "09:00")
+    hi = _context_line(ChatRequest(org="demo", message="kal mera lecture kab hai", voice=True, lang="auto"), "2026-10-26", "09:00")
     assert "reply language: Hinglish" in hi and "Spoken message" in hi
     en = _context_line(ChatRequest(org="demo", message="When is my next lecture?"), "2026-10-26", "09:00")
     assert en.endswith("reply language: English.") and "Spoken" not in en
+
+
+
+def test_english_is_the_default_reply_language():
+    from app.main import ChatRequest, _context_line
+
+    line = _context_line(ChatRequest(org="demo", message="kal mera lecture kab hai"), "2026-10-26", "09:00")
+    assert line.endswith("reply language: English.")
+    hi = _context_line(ChatRequest(org="demo", message="when is my lecture", lang="hinglish"), "2026-10-26", "09:00")
+    assert "reply language: Hinglish" in hi

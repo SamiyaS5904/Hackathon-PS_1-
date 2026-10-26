@@ -1,7 +1,7 @@
 import { getSession } from "./api";
 import type { ChatEvent } from "./types";
 
-const CHATBOT = process.env.NEXT_PUBLIC_CHATBOT_URL ?? "http://localhost:8001";
+const CHATBOT = process.env.NEXT_PUBLIC_CHATBOT_URL ?? "http://127.0.0.1:8001";
 
 export interface PageInfo {
   path: string;
@@ -19,7 +19,7 @@ export async function streamChat(
   conversationId: string | null,
   page: PageInfo,
   onEvent: (e: ChatEvent) => void,
-  opts: { signal?: AbortSignal; voice?: boolean; org?: string } = {},
+  opts: { signal?: AbortSignal; voice?: boolean; org?: string; lang?: "english" | "hinglish" } = {},
 ): Promise<void> {
   const { token, org: current } = getSession();
   const org = opts.org ?? current;
@@ -31,7 +31,7 @@ export async function streamChat(
       signal: opts.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({
-        org, message, conversation_id: conversationId, page, voice: !!opts.voice,
+        org, message, conversation_id: conversationId, page, voice: !!opts.voice, lang: opts.lang ?? "english",
         today: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
         now: `${pad(now.getHours())}:${pad(now.getMinutes())}`,
       }),

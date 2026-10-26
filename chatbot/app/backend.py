@@ -17,18 +17,33 @@ class BackendError(Exception):
         self.message = message
 
 
+_shared: httpx.AsyncClient | None = None
+
+
+def _shared_client() -> httpx.AsyncClient:
+    """One client for every request: making a client loads the TLS certificates (~0.6 s on Windows), and a
+    shared client keeps its connections to the backend open."""
+    global _shared
+    if _shared is None:
+        _shared = httpx.AsyncClient(base_url=BACKEND_URL, timeout=30.0)
+    return _shared
+
+
 class Backend:
     def __init__(self, token: str, org: str, transport: httpx.AsyncBaseTransport | None = None):
         self.org = org
-        self._client = httpx.AsyncClient(base_url=BACKEND_URL, timeout=30.0, transport=transport,
-                                         headers={"Authorization": f"Bearer {token}"})
+        self._own = transport is not None  # tests pass a fake transport
+        self._client = (httpx.AsyncClient(base_url=BACKEND_URL, timeout=30.0, transport=transport) if self._own
+                        else _shared_client())
+        self._auth = {"Authorization": f"Bearer {token}"}
 
     async def close(self) -> None:
-        await self._client.aclose()
+        if self._own:
+            await self._client.aclose()
 
     async def _call(self, method: str, path: str, **kw: Any) -> Any:
         try:
-            r = await self._client.request(method, path, **kw)
+            r = await self._client.request(method, path, headers=self._auth, **kw)
         except httpx.HTTPError as exc:
             raise BackendError(0, "The timetable server isn't reachable right now.") from exc
         if r.status_code >= 400:

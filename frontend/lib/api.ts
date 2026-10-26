@@ -4,7 +4,7 @@ import type {
   TimetableOut, Venue, WeekOut, RescheduleOut, FreeVenue, VenueEventLists, VenueEventResult, Notice, NoticeIn,
 } from "./types";
 
-const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://127.0.0.1:8000"; // 127.0.0.1, not localhost: on Windows "localhost" costs ~0.2 s per connection
 const NETWORK = "Can't reach Timetabl.ai right now. Check the internet connection and try again.";
 
 /** Set by AuthProvider: the login token and the college currently open. */

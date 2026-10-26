@@ -92,6 +92,10 @@ export function ChatPanel() {
   const [cloud, setCloud] = useState(false); // natural cloud voice set up on the assistant service
   const [level, setLevel] = useState(0); // microphone level, for the talk-mode ring
   const [transcribing, setTranscribing] = useState(false);
+  // Replies in English by default; Hinglish (Roman script) is the second option.
+  const [lang, setLang] = useState<"english" | "hinglish">("english");
+  const langRef = useRef<"english" | "hinglish">("english");
+  const micBaseRef = useRef(""); // text already in the box when the mic started
   const micRef = useRef<Microphone | null>(null);
   const speakerRef = useRef<Speaker | null>(null);
   const modeRef = useRef<"chat" | "talk">("chat");
@@ -107,6 +111,9 @@ export function ChatPanel() {
   useEffect(() => {
     try {
       setSpeakReplies(localStorage.getItem("tt-speak-replies") !== "0");
+      const l = localStorage.getItem("tt-lang") === "hinglish" ? "hinglish" : "english";
+      setLang(l);
+      langRef.current = l;
     } catch {
       /* storage blocked: keep the default */
     }
@@ -181,7 +188,7 @@ export function ChatPanel() {
         update((m) => ({ ...m, cards: [...m.cards, e.card] }));
       }
       else if (e.type === "error") update((m) => ({ ...m, error: e.message }));
-    }, { voice: spoken, org: platform ? "platform" : undefined });
+    }, { voice: spoken, org: platform ? "platform" : undefined, lang: langRef.current });
     if (readAloud) speaker?.end();
     busyRef.current = false;
     setBusy(false);
@@ -239,17 +246,22 @@ export function ChatPanel() {
       closeMic();
       setTranscribing(false);
       if (text) {
-        setInput((v) => (v.trim() ? `${v.trim()} ` : "") + text);
+        setInput(micBaseRef.current + text);
         spokenDraftRef.current = true;
         setTimeout(() => inputRef.current?.focus(), 30);
-      } else setVoiceError("I didn't catch that. Tap the mic and speak, or type your question.");
+      } else {
+        setInput(micBaseRef.current.trim());
+        setVoiceError("I didn't catch that. Tap the mic and speak, or type your question.");
+      }
       return;
     }
     speakerRef.current?.stop();
     setVoiceError(null);
     const m = await openMic();
     if (!m) return;
-    m.beginUtterance({ autoEnd: false, onPreview: setHeard });
+    micBaseRef.current = input.trim() ? `${input.trim()} ` : "";
+    // Words appear in the box as they are spoken; Done replaces them with the more accurate final text.
+    m.beginUtterance({ autoEnd: false, onPreview: (t) => { setHeard(t); setInput(micBaseRef.current + t); } });
     setListening(true);
   };
 
@@ -323,6 +335,15 @@ export function ChatPanel() {
   };
 
   const stopTalking = () => speakerRef.current?.stop();
+  const chooseLang = (l: "english" | "hinglish") => {
+    setLang(l);
+    langRef.current = l;
+    try {
+      localStorage.setItem("tt-lang", l);
+    } catch {
+      /* storage blocked: the choice lasts for this visit */
+    }
+  };
   // Suggestions while typing: real names from this college, matched as you type (Tab takes the first).
 
   const reset = () => {
@@ -355,19 +376,6 @@ export function ChatPanel() {
                 {platform ? "Answers from the platform" : page.entity ? `Looking at ${page.entity}` : "Answers from your timetable"} · changes need your Apply
               </p>
             </div>
-            {voice && (
-              <div className="flex rounded-lg border border-border p-0.5 text-xs" role="group" aria-label="How to work with the assistant">
-                <button onClick={endTalk} aria-pressed={mode === "chat"} title="Type, or tap the mic"
-                  className={clsx("flex items-center gap-1 rounded-md px-2 py-1", mode === "chat" ? "bg-surface-2 font-medium" : "text-muted")}>
-                  <MessageSquare size={12} aria-hidden /> Chat
-                </button>
-                <button onClick={() => mode === "talk" ? undefined : void startTalk()} aria-pressed={mode === "talk"}
-                  title="Talk hands-free: it answers aloud and works while you talk"
-                  className={clsx("flex items-center gap-1 rounded-md px-2 py-1", mode === "talk" ? "bg-accent text-white dark:text-bg" : "text-muted")}>
-                  <Headphones size={12} aria-hidden /> Talk
-                </button>
-              </div>
-            )}
             {voice && mode === "chat" && (
               <button onClick={toggleSpeakReplies} aria-pressed={speakReplies}
                 aria-label={speakReplies ? "Don't read answers aloud" : "Read answers to spoken questions aloud"}
@@ -383,6 +391,36 @@ export function ChatPanel() {
             <button onClick={() => setOpen(false)} aria-label="Close assistant" className="rounded p-1.5 text-muted hover:bg-surface-2">
               <X size={18} />
             </button>
+          </div>
+
+          <div className="space-y-2 border-b border-border px-4 py-3">
+            {voice && (
+              <div className="grid grid-cols-2 gap-1 rounded-xl bg-surface-2 p-1" role="group" aria-label="How to work with the assistant">
+                <button onClick={endTalk} aria-pressed={mode === "chat"}
+                  className={clsx("flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition",
+                    mode === "chat" ? "bg-surface font-semibold shadow-sm" : "text-muted hover:text-text")}>
+                  <MessageSquare size={16} aria-hidden />
+                  <span className="text-left leading-tight">Chat<span className="block text-[10px] font-normal text-muted">type or tap the mic</span></span>
+                </button>
+                <button onClick={() => mode === "talk" ? undefined : void startTalk()} aria-pressed={mode === "talk"}
+                  className={clsx("flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm transition",
+                    mode === "talk" ? "bg-accent font-semibold text-white shadow-sm dark:text-bg" : "text-muted hover:text-text")}>
+                  <Headphones size={16} aria-hidden />
+                  <span className="text-left leading-tight">Talk<span className={clsx("block text-[10px] font-normal", mode === "talk" ? "opacity-80" : "text-muted")}>hands-free, it talks back</span></span>
+                </button>
+              </div>
+            )}
+            {!platform && (
+              <div className="flex items-center justify-end gap-1 text-[11px] text-muted" role="group" aria-label="Reply language">
+                <span>Replies in</span>
+                {(["english", "hinglish"] as const).map((l) => (
+                  <button key={l} onClick={() => chooseLang(l)} aria-pressed={lang === l}
+                    className={clsx("rounded-full px-2 py-0.5", lang === l ? "bg-accent-soft font-medium text-accent-text" : "hover:bg-surface-2")}>
+                    {l === "english" ? "English" : "Hinglish"}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4" aria-live="polite">
@@ -439,6 +477,11 @@ export function ChatPanel() {
                 {m.error && <p className="rounded-lg bg-danger-soft px-3 py-2 text-danger">{m.error}</p>}
               </div>
             ))}
+            {mode === "talk" && heard && (
+              <div className="ml-8 rounded-2xl rounded-br-sm border border-dashed border-accent/40 px-3.5 py-2 text-sm italic text-muted">
+                {heard}…
+              </div>
+            )}
             <div ref={endRef} />
           </div>
 
@@ -470,7 +513,7 @@ export function ChatPanel() {
                   <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-danger" />
                 </span>
                 <span className="min-w-0 flex-1 truncate">{transcribing ? <span className="text-muted">Writing down what you said…</span>
-                  : heard || <span className="text-muted">Listening… take your time, pauses are fine</span>}</span>
+                  : <span className="text-muted">Listening… your words appear below. Pauses are fine; tap Done when finished.</span>}</span>
                 {listening && <>
                   <button type="button" onClick={closeMic} className="shrink-0 text-xs text-muted hover:underline">Cancel</button>
                   <button type="button" onClick={toggleMic} className="shrink-0 text-xs font-medium text-danger hover:underline">Done</button>

@@ -10,7 +10,7 @@
 import { getSession } from "./api";
 import { createRecognition } from "./chat";
 
-const CHATBOT = process.env.NEXT_PUBLIC_CHATBOT_URL ?? "http://localhost:8001";
+const CHATBOT = process.env.NEXT_PUBLIC_CHATBOT_URL ?? "http://127.0.0.1:8001";
 
 let cloud: Promise<boolean> | null = null;
 /** Is cloud voice (better listening + natural voice) set up on the assistant service? */
@@ -54,7 +54,7 @@ export interface UtteranceOptions {
   onAutoEnd?: () => void; // autoEnd: they finished speaking
 }
 
-const SILENCE_MS = 1300; // pause that ends a spoken question in talk mode
+const SILENCE_MS = 1000; // pause that ends a spoken question in talk mode
 const START_MS = 180; // talking this long counts as speech (ignores clicks and coughs)
 
 export class Mic {

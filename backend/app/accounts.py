@@ -65,8 +65,9 @@ def find_user(email: str) -> UserRow | None:
 # ---- cache --------------------------------------------------------------------
 # Every request checks who is calling and their role in the college. With a remote database
 # each lookup is a network round trip, so users and their memberships are kept in memory.
-# Every write in this module clears the cache; the TTL covers writes from another process.
-_CACHE_TTL = 60.0
+# Every write in this module clears the cache; the TTL covers writes from another process (we run one), so it
+# can be long: a cache miss is a ~1 s round trip to the hosted database on every request after it expires.
+_CACHE_TTL = 900.0
 _cache_lock = threading.Lock()
 _cache: dict[str, tuple[float, UserRow | None, list[MembershipRow]]] = {}
 

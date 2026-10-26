@@ -34,6 +34,17 @@ class VoiceError(Exception):
         self.message = message
 
 
+_http: httpx.AsyncClient | None = None
+
+
+def _client() -> httpx.AsyncClient:
+    """Shared client (creating one costs ~0.6 s on Windows; reusing it also keeps the connection to OpenAI warm)."""
+    global _http
+    if _http is None:
+        _http = httpx.AsyncClient(timeout=40)
+    return _http
+
+
 def _key() -> str:
     return os.environ.get("OPENAI_API_KEY") or os.environ.get("OPENROUTER_API_KEY") or ""
 
@@ -75,8 +86,7 @@ async def transcribe(audio: bytes, content_type: str, names: list[str]) -> str:
     data = {"model": STT_MODEL, "prompt": _hint(names), "response_format": "json",
             **({"language": STT_LANGUAGE} if STT_LANGUAGE else {})}
     try:
-        async with httpx.AsyncClient(timeout=40) as client:
-            r = await client.post(f"{OPENAI_URL}/audio/transcriptions", headers=_headers(), files=files, data=data)
+        r = await _client().post(f"{OPENAI_URL}/audio/transcriptions", headers=_headers(), files=files, data=data)
     except httpx.HTTPError as exc:
         raise VoiceError(502, "Couldn't reach the voice service.") from exc
     if r.status_code in (401, 403):
@@ -92,16 +102,14 @@ async def speech(text: str) -> AsyncIterator[bytes]:
         raise VoiceError(503, "Cloud voice isn't set up.")
     body = {"model": TTS_MODEL, "voice": TTS_VOICE, "input": text[:MAX_TEXT], "instructions": TTS_STYLE,
             "response_format": "mp3"}
-    client = httpx.AsyncClient(timeout=40)
+    client = _client()
     try:
         req = client.build_request("POST", f"{OPENAI_URL}/audio/speech", headers=_headers(), json=body)
         r = await client.send(req, stream=True)
     except httpx.HTTPError as exc:
-        await client.aclose()
         raise VoiceError(502, "Couldn't reach the voice service.") from exc
     if r.status_code >= 400:
         await r.aclose()
-        await client.aclose()
         raise VoiceError(503 if r.status_code in (401, 403) else 502, "The voice service didn't answer.")
 
     async def chunks() -> AsyncIterator[bytes]:
@@ -110,6 +118,5 @@ async def speech(text: str) -> AsyncIterator[bytes]:
                 yield c
         finally:
             await r.aclose()
-            await client.aclose()
 
     return chunks()

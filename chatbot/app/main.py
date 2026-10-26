@@ -16,6 +16,8 @@ import anthropic
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
+from typing import Literal
+
 from pydantic import BaseModel
 
 from app import language, voice
@@ -64,6 +66,9 @@ class ChatRequest(BaseModel):
     today: str | None = None  # the user's local date (YYYY-MM-DD) and time (HH:MM)
     now: str | None = None
     voice: bool = False  # the message was spoken (speech-to-text) and the reply may be read aloud
+    # Reply language. "english" (default) always answers in English; "hinglish" answers in Roman-script Hinglish;
+    # "auto" mirrors each message (the earlier behaviour).
+    lang: Literal["english", "hinglish", "auto"] = "english"
 
 
 @app.get("/health")
@@ -80,11 +85,15 @@ def _context_line(req: ChatRequest, today: str, now: str) -> str:
     if req.page.entity:
         on_screen = f" On screen: {req.page.view or ''} {req.page.entity} ({req.page.mode or 'plan'} view)."
     spoken = (" Spoken message (speech-to-text): words may be misheard, so match names, sections and subjects to the "
-              "closest real ones; the reply is read aloud, so keep it short and avoid long lists.") if req.voice else ""
+              "closest real ones. The reply is read aloud: if you need tools, first write ONE short sentence saying what "
+              "you are doing (e.g. 'Let me check Dr. Kaur's classes.') in the same step as the tool calls, so the user "
+              "hears you at once; then answer in 1-3 short spoken sentences, no lists.") if req.voice else ""
+    lang = language.detect(req.message) if req.lang == "auto" else req.lang
     return (f"Context: today is {d.strftime('%a %Y-%m-%d')}, time {now}. This week: {week}. Next week: {nxt}."
-            f"{on_screen}{spoken} {language.instruction(language.detect(req.message))}.")
+            f"{on_screen}{spoken} {language.instruction(lang)}.")
 
 
+_me_cache: dict[str, tuple[float, dict]] = {}  # login token -> (when, who they are), for 60 s
 _checked: dict[tuple[str, str], float] = {}  # (token, org) -> when the login was last confirmed (voice calls)
 
 
@@ -204,11 +213,18 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
         raise HTTPException(422, "That message is too long (2000 characters max).")
     token = authorization.split(" ", 1)[1]
     backend = Backend(token, req.org)
-    try:
-        me = await backend.me()
-    except BackendError as exc:
-        await backend.close()
-        raise HTTPException(401 if exc.status == 401 else 502, exc.message) from exc
+    cached = _me_cache.get(token)
+    if cached and time.time() - cached[0] < 60:  # a conversation's follow-up messages skip the login round trip
+        me = cached[1]
+    else:
+        try:
+            me = await backend.me()
+        except BackendError as exc:
+            await backend.close()
+            raise HTTPException(401 if exc.status == 401 else 502, exc.message) from exc
+        if len(_me_cache) > 5000:
+            _me_cache.clear()
+        _me_cache[token] = (time.time(), me)
     if req.org == PLATFORM:  # the platform owner's assistant: every college, never college data
         member = {"role": "platform", "name": me["name"], "teacher_id": None} if me.get("platform_owner") else None
     else:
