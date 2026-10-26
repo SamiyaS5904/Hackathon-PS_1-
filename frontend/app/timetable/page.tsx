@@ -21,6 +21,7 @@ import { useChatPage } from "@/lib/chat-context";
 import { useTimetable } from "@/lib/timetable-context";
 import { useToast } from "@/lib/toast";
 import type { Occurrence, OverrideOut, Session, ViewKind, WeekOut } from "@/lib/types";
+import Link from "next/link";
 
 const isoDate = (d: Date) =>
   `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
@@ -219,6 +220,13 @@ export default function TimetablePage() {
               <li key={m}>{m}</li>
             ))}
           </ul>
+          {isStaff(role) && (
+            <div className="mt-4 flex flex-wrap gap-2">
+              <Link href="/departments"><Button variant="primary">Check department data</Button></Link>
+              <Link href="/rules"><Button>Review rules</Button></Link>
+              {role === "admin" && <Link href="/setup?step=timings"><Button>Check timings</Button></Link>}
+            </div>
+          )}
         </Card>
       ) : (
         <>
@@ -434,9 +442,12 @@ function EmptyState() {
         <h2 className="text-lg font-semibold">{isStaff(role) ? "No timetable yet" : "Not published yet"}</h2>
         <p className="mt-2 max-w-md text-sm text-muted">
           {isStaff(role)
-            ? "Your College Admin hasn't generated the timetable yet. Check back soon."
-            : "Your timetable appears here as soon as the College Admin publishes it. You'll get a notification."}
+            ? "Your College Admin hasn't generated the timetable yet. Meanwhile, make sure your department's data is complete."
+            : "Your timetable appears here as soon as the College Admin publishes it. You'll get a notification (the bell)."}
         </p>
+        <div className="mt-6">
+          <Link href={isStaff(role) ? "/departments" : "/"}><Button>{isStaff(role) ? "Check my department" : "Go to Home"}</Button></Link>
+        </div>
       </Card>
     );
   }

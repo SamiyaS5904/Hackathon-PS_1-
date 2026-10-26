@@ -10,6 +10,7 @@ import { useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
 import type { SectionAttendance, StudentAttendance, TeacherClass } from "@/lib/types";
 import { usePagePrompts } from "@/lib/chat-context";
+import Link from "next/link";
 
 /** Attendance, separate from the timetable: students see where they stand, teachers mark, staff follow up. */
 export default function AttendancePage() {
@@ -182,6 +183,7 @@ function StaffView() {
   const [error, setError] = useState<string | null>(null);
   const [rule, setRule] = useState<number | null>(null);
   const [savingRule, setSavingRule] = useState(false);
+  const [ruleSaved, setRuleSaved] = useState(false);
   const picked = sectionId || sections[0]?.id || "";
 
   useEffect(() => {
@@ -205,18 +207,32 @@ function StaffView() {
           <form className="ml-auto flex items-center gap-2 text-sm" onSubmit={async (e) => {
             e.preventDefault();
             setSavingRule(true);
-            try { await api.setAttendanceRule(rule); await reload(); } finally { setSavingRule(false); }
+            try {
+              await api.setAttendanceRule(rule);
+              await reload();
+              setError(null);
+              setRuleSaved(true);
+              setTimeout(() => setRuleSaved(false), 3000);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : "Couldn't save the rule");
+            } finally { setSavingRule(false); }
           }}>
             <label htmlFor="rule" className="text-muted">Students need</label>
             <input id="rule" type="number" min={1} max={100} value={rule} onChange={(e) => setRule(Number(e.target.value))}
               className="w-16 rounded-lg border border-border-strong bg-surface px-2 py-1.5 text-sm" />
             <span className="text-muted">%</span>
             <Button type="submit" disabled={savingRule}>{savingRule ? <Loader2 size={14} className="animate-spin" /> : "Save"}</Button>
+            {ruleSaved && <span className="text-xs text-ok">Saved</span>}
           </form>
         )}
       </div>
       {error && <ErrorCard message={error} />}
-      {!data && !error && <Skeleton className="h-64 w-full" />}
+      {sections.length === 0 ? (
+        <Card className="p-8 text-center text-sm text-muted">
+          No sections yet, so there is no attendance to show.
+          <span className="mt-3 block"><Link href="/departments"><Button>Add sections</Button></Link></span>
+        </Card>
+      ) : !data && !error && <Skeleton className="h-64 w-full" />}
       {data && (
         <Card className="overflow-x-auto">
           <table className="w-full text-sm">

@@ -30,7 +30,8 @@ export default function DepartmentPage() {
       const [d, r, pre] = await Promise.all([api.deptData(dept), api.readiness(), api.precheck()]);
       setData(d);
       setStatus(r.find((x) => x.department_id === dept) ?? null);
-      setProblems(pre.problems);
+      // Only what this department can fix here.
+      setProblems((pre.located ?? []).filter((p) => p.link === `/departments/${dept}`).map((p) => p.message));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load the department");
     }
@@ -74,7 +75,7 @@ export default function DepartmentPage() {
           <ClassesCard dept={dept} data={data} onSaved={refresh} />
           {problems.length > 0 && (
             <Card className="p-5">
-              <h2 className="flex items-center gap-2 text-sm font-semibold"><AlertTriangle size={16} className="text-warn" /> Still to fix before the timetable can be generated</h2>
+              <h2 className="flex items-center gap-2 text-sm font-semibold"><AlertTriangle size={16} className="text-warn" /> Still to fix in this department before the timetable can be generated</h2>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-muted">{problems.slice(0, 8).map((p) => <li key={p}>{p}</li>)}</ul>
             </Card>
           )}
@@ -174,7 +175,13 @@ function ExcelCard({ dept, onSaved }: { dept: string; onSaved: () => Promise<voi
           </p>
           {preview.errors.length > 0 ? (
             <div className="mt-3">
-              <p className="text-sm font-medium text-danger">{preview.errors.length} row(s) need fixing. Nothing was saved.</p>
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="text-sm font-medium text-danger">{preview.errors.length} row(s) need fixing. Nothing was saved.</p>
+                <Button onClick={() => run("download", () => api.downloadMarked(dept, file))} disabled={!!busy}>
+                  <Download size={16} aria-hidden /> Sheet with problems marked
+                </Button>
+              </div>
+              <p className="mt-1 text-xs text-muted">The download highlights each row below in red, with the reason in a note on the row.</p>
               <ul className="mt-2 max-h-60 space-y-1 overflow-auto text-sm">
                 {preview.errors.map((e, i) => (
                   <li key={i} className="flex gap-2">

@@ -84,3 +84,18 @@ def test_api_template_preview_and_commit():
         assert out["errors"] and not out["saved"]  # errors: nothing saved
         out = client.post("/api/orgs/demo/departments/cse/import?commit=true", headers=h, files=files).json()
         assert out["saved"] and out["errors"] == []
+
+
+def test_problem_rows_come_back_marked_in_the_sheet():
+    from app.io.excel import mark_errors
+
+    c = build_demo_college()
+    content = _edit(template(c, "cse"), "Classes", [["CS299", "CSE-2A", "Lecture", "", ""]])
+    r = parse(c, "cse", content)
+    bad = next(e for e in r.errors if e.sheet == "Classes")
+    wb = load_workbook(io.BytesIO(mark_errors(content, r.errors)))
+    ws = wb["Classes"]
+    assert ws.cell(row=bad.row, column=1).comment is not None and "CS299" in ws.cell(row=bad.row, column=1).comment.text
+    assert ws.cell(row=bad.row, column=2).fill.fgColor.rgb.endswith("FDE2E2")
+    assert wb.active.title == "Classes"  # opens where the problem is
+    assert mark_errors(b"hello", r.errors) is None

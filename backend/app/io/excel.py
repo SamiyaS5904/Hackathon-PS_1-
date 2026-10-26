@@ -420,3 +420,36 @@ def parse(college: College, dept: str, content: bytes) -> ImportResult:
     data = DeptData(sections=sections, teachers=teachers, subjects=subjects, venues=venues, allotments=allotments,
                     teacher_subjects=can, students=students)
     return ImportResult(errors=[], counts=counts, data=data)
+
+
+# ---------------------------------------------------------------------------
+# The uploaded sheet with its problems marked (so the fix is found in Excel, row by row)
+# ---------------------------------------------------------------------------
+
+def mark_errors(content: bytes, errors: list[RowError]) -> bytes | None:
+    """The uploaded workbook with every problem row filled light red and a note on its first cell.
+    None if the file can't be opened (then there is nothing to mark)."""
+    from openpyxl.comments import Comment
+
+    try:
+        wb = load_workbook(io.BytesIO(content))
+    except Exception:  # noqa: BLE001 - not a workbook: nothing to mark
+        return None
+    red = PatternFill("solid", fgColor="FDE2E2")
+    by_row: dict[tuple[str, int], list[str]] = {}
+    for e in errors:
+        if e.sheet in wb.sheetnames and e.row >= 2:
+            by_row.setdefault((e.sheet, e.row), []).append(e.message)
+    for (sheet, row), messages in by_row.items():
+        ws = wb[sheet]
+        width = max(1, ws.max_column)
+        for col in range(1, width + 1):
+            ws.cell(row=row, column=col).fill = red
+        first = ws.cell(row=row, column=1)
+        first.comment = Comment("\n".join(messages)[:2000], "Timetabl.ai")
+    if by_row:  # open the workbook on the first sheet with a problem
+        first_sheet = sorted(by_row)[0][0]
+        wb.active = wb.sheetnames.index(first_sheet)
+    buf = io.BytesIO()
+    wb.save(buf)
+    return buf.getvalue()

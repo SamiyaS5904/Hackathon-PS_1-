@@ -4,7 +4,6 @@ import clsx from "clsx";
 import { Check, ChevronLeft, ChevronRight, Loader2, Plus, Trash2 } from "lucide-react";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import { FormError } from "@/components/Field";
 import { planToShift, type ShiftPlan, ShiftEditor, shiftToPlan } from "@/components/setup/ShiftEditor";
 import { Button, Card, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -96,6 +95,12 @@ export default function SetupPage() {
     if (to === step) return;
     if (step === STEPS.length - 1 || (await save())) setStep(to);
   };
+  // Which step a save error belongs to, from what it talks about.
+  const errorStep = !error ? null
+    : /shift|period|mess window|lunch|break/i.test(error) ? 1
+      : /working day|lab must/i.test(error) ? 0
+        : /holiday|semester/i.test(error) ? 2
+          : /department|room/i.test(error) ? 3 : null;
   // A tick means the answers are saved, not just that the step was passed.
   const saved = (i: number) =>
     i <= 2 ? college.setup_saved !== false
@@ -135,6 +140,17 @@ export default function SetupPage() {
       </ol>
 
       <Card className="p-6">
+        {error && (
+          // Shown at the top of the step, with a jump to the step the problem belongs to.
+          <div role="alert" className="mb-4 flex flex-wrap items-center gap-3 rounded-lg bg-danger-soft px-3 py-2 text-sm text-danger">
+            <span className="min-w-0 flex-1">{error}</span>
+            {errorStep !== null && errorStep !== step && (
+              <button onClick={() => { setError(null); setStep(errorStep); }} className="font-medium underline">
+                Go to {STEPS[errorStep]}
+              </button>
+            )}
+          </div>
+        )}
         {step === 0 && (
           <div className="space-y-5">
             <div>
@@ -279,7 +295,6 @@ export default function SetupPage() {
           </div>
         )}
 
-        <FormError message={error} />
         {step < STEPS.length - 1 && (
           <div className="mt-6 flex justify-between border-t border-border pt-4">
             <Button onClick={() => setStep(move(-1))} disabled={step === 0 || busy}>

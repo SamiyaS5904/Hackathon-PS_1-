@@ -106,11 +106,16 @@ export function StaffHome() {
           </div>
         ) : problems.length > 0 ? (
           <>
-            <h2 className="mt-1 text-lg font-semibold">Fix {problems.length} data problem(s) before generating</h2>
+            <h2 className="mt-1 text-lg font-semibold">Fix {problems.length} thing{problems.length === 1 ? "" : "s"} before generating</h2>
+            <p className="mt-1 text-sm text-muted">Each one links to the page where it is fixed.</p>
             <ul className="mt-3 space-y-1.5 text-sm">
-              {problems.map((p) => (
-                <li key={p} className="flex gap-2 text-danger">
-                  <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden /> {p}
+              {(precheck?.located ?? problems.map((p) => ({ message: p, link: "/departments", where: "Departments" }))).map((p) => (
+                <li key={p.message} className="flex flex-wrap items-start gap-2">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0 text-danger" aria-hidden />
+                  <span className="min-w-0 flex-1 text-danger">{p.message}</span>
+                  <Link href={p.link} className="inline-flex shrink-0 items-center gap-1 text-xs font-medium text-accent-text hover:underline">
+                    Fix in {p.where} <ArrowRight size={12} aria-hidden />
+                  </Link>
                 </li>
               ))}
             </ul>
@@ -124,7 +129,10 @@ export function StaffHome() {
                 timetable matches; editing the old one is paused until then.
               </p>
             </div>
-            {role === "admin" ? <GenerateButton label="Regenerate timetable" /> : <span className="text-sm text-muted">The College Admin regenerates the timetable.</span>}
+            {role === "admin" ? <GenerateButton label="Regenerate timetable" /> : (
+              <span className="flex flex-wrap items-center gap-3 text-sm text-muted">The College Admin regenerates it.
+                <Link href="/changes"><Button>See what changed</Button></Link></span>
+            )}
           </div>
         ) : hasTimetable && data && !data.timetable.published_at ? (
           <div className="flex flex-wrap items-center justify-between gap-4">
@@ -138,7 +146,7 @@ export function StaffHome() {
             </div>
             <div className="flex flex-wrap items-center gap-2">
               <Link href="/timetable"><Button>Review timetable</Button></Link>
-              {role === "admin" ? <PublishButton /> : <span className="text-sm text-muted">The College Admin publishes it.</span>}
+              {role === "admin" ? <PublishButton /> : <span className="text-sm text-muted">The College Admin publishes it; you can review it now.</span>}
             </div>
           </div>
         ) : hasTimetable ? (
@@ -168,7 +176,8 @@ export function StaffHome() {
             {role === "admin" ? (
               <GenerateButton />
             ) : (
-              <span className="text-sm text-muted">The College Admin generates the timetable.</span>
+              <span className="flex flex-wrap items-center gap-3 text-sm text-muted">The College Admin generates the timetable.
+                <Link href="/departments"><Button>Check my department</Button></Link></span>
             )}
           </div>
         )}

@@ -16,7 +16,7 @@ export default function DataPage() {
     <div className="mx-auto max-w-6xl">
       <PageHeader
         title="College data"
-        subtitle="Read-only for now. The setup wizard and Excel import arrive in a later stage."
+        subtitle="Everything the college has entered, in one place. To change it, use College setup (days, shifts, rooms) or each department's Excel sheet."
       />
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 [&>*]:min-w-0">

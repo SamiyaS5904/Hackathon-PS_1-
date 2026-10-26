@@ -5,6 +5,7 @@ import type {
 } from "./types";
 
 const BASE = process.env.NEXT_PUBLIC_BACKEND_URL ?? "http://localhost:8000";
+const NETWORK = "Can't reach Timetabl.ai right now. Check the internet connection and try again.";
 
 /** Set by AuthProvider: the login token and the college currently open. */
 const session = { token: "", org: "", onUnauthorized: () => {} };
@@ -39,12 +40,13 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       cache: "no-store",
     });
   } catch {
-    throw new ApiError(0, "Can't reach the server. Is the backend running?");
+    throw new ApiError(0, NETWORK);
   }
   if (res.status === 401 && session.token) session.onUnauthorized();
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    const detail = typeof body.detail === "string" ? body.detail : `Request failed (${res.status})`;
+    const detail = typeof body.detail === "string" ? body.detail
+      : res.status >= 500 ? "Something went wrong on our side. Please try again in a moment." : "That didn't work. Please try again.";
     throw new ApiError(res.status, detail);
   }
   if (res.status === 204) return undefined as T;
@@ -162,7 +164,7 @@ export const api = {
         method: "POST", body: form, headers: { Authorization: `Bearer ${session.token}` },
       });
     } catch {
-      throw new ApiError(0, "Can't reach the server. Is the backend running?");
+      throw new ApiError(0, NETWORK);
     }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : "Upload failed");
@@ -180,7 +182,7 @@ export const api = {
         method: "POST", body: form, headers: { Authorization: `Bearer ${session.token}` },
       });
     } catch {
-      throw new ApiError(0, "Can't reach the server. Is the backend running?");
+      throw new ApiError(0, NETWORK);
     }
     const body = await res.json().catch(() => ({}));
     if (!res.ok) throw new ApiError(res.status, typeof body.detail === "string" ? body.detail : "Upload failed");
@@ -195,6 +197,21 @@ export const api = {
     const a = document.createElement("a");
     a.href = url;
     a.download = `year-list-${dept}.xlsx`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  },
+  /** The uploaded sheet back with every problem row highlighted and explained. */
+  downloadMarked: async (dept: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    const res = await fetch(`${BASE}${org()}/departments/${dept}/import/marked`, {
+      method: "POST", body: form, headers: { Authorization: `Bearer ${session.token}` },
+    }).catch(() => { throw new ApiError(0, NETWORK); });
+    if (!res.ok) throw new ApiError(res.status, "Couldn't prepare the marked sheet");
+    const url = URL.createObjectURL(await res.blob());
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${dept}-with-problems-marked.xlsx`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(url), 1000);
   },
@@ -217,7 +234,7 @@ export const api = {
     try {
       res = await fetch(`${BASE}${org()}/export?${q}`, { headers: { Authorization: `Bearer ${session.token}` } });
     } catch {
-      throw new ApiError(0, "Can't reach the server. Is the backend running?");
+      throw new ApiError(0, NETWORK);
     }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));

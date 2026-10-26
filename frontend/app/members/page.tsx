@@ -170,6 +170,12 @@ export default function MembersPage() {
                     </span>
                   </li>
                 ))}
+                {people.length <= 1 && (
+                  <li className="px-5 py-4 text-sm text-muted">
+                    Only you so far. Create an invite link on the left for each Department Coordinator and teacher: they
+                    join with the role and department already set.
+                  </li>
+                )}
               </ul>
             )}
           </Card>

@@ -40,6 +40,7 @@ from app.edits.oneday import (DayInfo, MakeupOption, Occurrence, add_override, d
                               occurrences, remove_override, week)
 from app.edits.oneday import _day as one_day
 from app.io.excel import RowError
+from app.io.excel import mark_errors
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
 from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
@@ -1263,6 +1264,21 @@ async def import_excel(dept: str, file: UploadFile, commit: bool = False, ctx: C
         return ImportOut(errors=[], counts=result.counts, problems=check(new), warnings=warnings(new))
     saved = store.update_college(ctx.state.id, new)
     return ImportOut(errors=[], counts=result.counts, problems=check(saved), warnings=warnings(saved), saved=True)
+
+
+@app.post("/api/orgs/{org}/departments/{dept}/import/marked")
+async def import_marked(dept: str, file: UploadFile, ctx: Ctx = Depends(org_ctx)) -> Response:
+    """The uploaded sheet back, with every problem row highlighted and explained in a note."""
+    _dept_access(ctx, dept)
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024:
+        raise HTTPException(413, "The file is larger than 5 MB.")
+    result = excel_parse(ctx.state.college, dept, content)
+    marked = mark_errors(content, result.errors)
+    if marked is None:
+        raise HTTPException(422, "This file isn't an Excel (.xlsx) file, so there is nothing to mark.")
+    return Response(content=marked, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    headers={"Content-Disposition": f'attachment; filename="{dept}-with-problems-marked.xlsx"'})
 
 
 @app.get("/api/orgs/{org}/departments/{dept}/year-list-template")

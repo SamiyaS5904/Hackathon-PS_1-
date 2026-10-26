@@ -8,6 +8,7 @@ import { Button, Skeleton } from "@/components/ui";
 import { auth } from "@/lib/api";
 import { ROLE_LABEL, useAuth } from "@/lib/auth";
 import type { InviteOut } from "@/lib/types";
+import Link from "next/link";
 
 export default function InvitePage() {
   const { token } = useParams<{ token: string }>();
@@ -44,6 +45,7 @@ export default function InvitePage() {
       <>
         <h1 className="text-lg font-semibold">Invite link not valid</h1>
         <p className="mt-2 text-sm text-muted">{loadError} Ask your College Admin for a new link.</p>
+        <Link href="/login" className="mt-4 inline-block text-sm text-accent-text hover:underline">Go to log in</Link>
       </>
     );
   }

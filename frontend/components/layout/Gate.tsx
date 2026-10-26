@@ -12,12 +12,13 @@ import { ThemeToggle } from "@/lib/theme";
 import { ToastProvider } from "@/lib/toast";
 import { AppShell } from "./AppShell";
 import { PlatformShell } from "./PlatformShell";
+import Link from "next/link";
 
 /** Public pages (login, signup, invite) render bare; everything else needs a login and a college. */
 export function Gate({ children }: { children: React.ReactNode }) {
   const path = usePathname();
   const router = useRouter();
-  const { ready, user, member } = useAuth();
+  const { ready, user, member, signOut } = useAuth();
   const isPublic = PUBLIC_PATHS.some((p) => path.startsWith(p));
   const onPlatform = path.startsWith("/platform");
   // A platform owner without a college lands on the platform page.
@@ -35,6 +36,7 @@ export function Gate({ children }: { children: React.ReactNode }) {
         <AuthLayout>
           <h1 className="text-lg font-semibold">Page not found</h1>
           <p className="mt-2 text-sm text-muted">This page is for the Timetabl.ai platform team.</p>
+          <Link href="/" className="mt-4 inline-block text-sm text-accent-text hover:underline">Go to Home</Link>
         </AuthLayout>
       );
     }
@@ -59,6 +61,10 @@ export function Gate({ children }: { children: React.ReactNode }) {
         <p className="mt-2 text-sm text-muted">
           Your account isn&apos;t part of any college. Ask your College Admin for an invite link, or create a new college.
         </p>
+        <div className="mt-4 flex flex-wrap gap-2">
+          <Link href="/signup" className="rounded-md bg-accent px-3.5 py-2 text-sm font-medium text-white dark:text-bg">Create a new college</Link>
+          <button onClick={signOut} className="rounded-md border border-border-strong px-3.5 py-2 text-sm">Log out</button>
+        </div>
       </AuthLayout>
     );
   }
