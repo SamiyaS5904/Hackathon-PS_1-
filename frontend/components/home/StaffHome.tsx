@@ -9,6 +9,7 @@ import { SetupChecklist } from "./SetupChecklist";
 import { AssistantCostCard } from "@/components/usage/AssistantCost";
 import { LeaveCard } from "./LeaveCard";
 import { TodayCard } from "./TodayCard";
+import { TomorrowCard } from "./TomorrowCard";
 import { PublishButton } from "@/components/timetable/PublishButton";
 import { Button, Card, ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
@@ -186,6 +187,7 @@ export function StaffHome() {
       </Card>}
 
       {hasTimetable && <TodayCard />}
+      {hasTimetable && <TomorrowCard />}
       {hasTimetable && <LeaveCard />}
 
       {role === "admin" && hasTimetable && data && !data.stale && <HealthStrip data={data} />}
