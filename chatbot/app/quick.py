@@ -95,8 +95,13 @@ async def _free_rooms(ctx: ToolContext) -> dict:
     rooms = out["free"]
     if not rooms:
         return {"text": "No rooms are free right now."}
-    # Longest free first, then biggest: the most useful rooms to grab.
-    rooms = sorted(rooms, key=lambda r: (r["free_until"] != "end of day", -_mins(r["free_until"]), -r["seats"]))
+    # Where to sit: lecture rooms before labs, the person's own department's rooms first, then the ones free longest.
+    c = await ctx.college()
+    sec = next((s for s in c["sections"] if s["id"] == ctx.member.get("section_id")), None)
+    dept_id = sec["department_id"] if sec else ctx.member.get("department_id")
+    own = next((d["name"] for d in c["departments"] if d["id"] == dept_id), None)
+    rooms = sorted(rooms, key=lambda r: (r["type"] == "lab", r["belongs_to"] != own, r["free_until"] != "end of day",
+                                         -_mins(r["free_until"]), -r["seats"]))
     shown = rooms[:5]
     text = f"{len(rooms)} room{'s are' if len(rooms) != 1 else ' is'} free right now. " + "; ".join(
         f"{r['room']} ({r['seats']} seats) "
@@ -176,7 +181,8 @@ async def answer(ctx: ToolContext, message: str) -> dict | None:
         if m:
             return await _day(ctx, m.group(m.lastindex))
         if re.fullmatch(r"((which|what|any) (rooms?|classrooms?|labs?|halls?) (are |is )?(free|empty|available)|"
-                        r"free (rooms?|classrooms?)|(is there )?(an? )?(free|empty) (room|classroom))"
+                        r"free (rooms?|classrooms?)|(is there )?(an? )?(free|empty) (room|classroom)|"
+                        r"where (can|should) (i|we) (sit|study|go))"
                         r"( right)?( now)?", q):
             return await _free_rooms(ctx)
         m = re.fullmatch(r"where('?s| is) (.{3,40}?)( right)?( now)?", q)

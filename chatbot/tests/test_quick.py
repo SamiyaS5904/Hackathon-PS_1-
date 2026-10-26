@@ -39,3 +39,9 @@ def test_anything_else_goes_to_the_model(backend):
               "Dr. Anita Sharma is away tomorrow, plan cover", "What's my next class and can I skip it?"]:
         out, _ = ask(backend, ADMIN if "plan" in q else STUDENT, q)
         assert out is None, q
+
+
+
+def test_where_can_i_sit_is_a_free_rooms_answer(backend):
+    out, _ = ask(backend, STUDENT, "Where can I sit now?")
+    assert out["text"].startswith("1 room is free right now")

@@ -7,6 +7,7 @@ teacher_id (teacher), section_id + batch_id (student).
 
 from __future__ import annotations
 
+import os
 import re
 import secrets
 import threading
@@ -260,9 +261,26 @@ def seed_demo() -> None:
         has_accounts = db.scalar(select(MembershipRow.id).where(MembershipRow.org_id == "demo").limit(1))
     if not has_accounts:
         seed_accounts("demo", store.org("demo").college, "demo.timetabl.ai")
+    seed_gndec()
     from app import platform  # late import: platform reads the store and attendance
 
     platform.seed_owner(hash_password(DEMO_PASSWORD))
+
+
+def seed_gndec() -> None:
+    """The second demo college, re-engineered from GNDEC's public timetables (made-up names). Once, with its
+    demo accounts; DEMO_GNDEC=0 turns it off."""
+    if os.environ.get("DEMO_GNDEC", "1") == "0":
+        return
+    from app.seed import gndec  # late import: only needed when the GNDEC demo is on
+
+    if store.org(gndec.ORG_ID) is None:
+        store.create_org("Guru Nanak Dev Engineering College (demo)", gndec.build_gndec_college(), is_demo=True,
+                         slug=gndec.ORG_ID)
+    with SessionLocal() as db:
+        has_accounts = db.scalar(select(MembershipRow.id).where(MembershipRow.org_id == gndec.ORG_ID).limit(1))
+    if not has_accounts:
+        seed_accounts(gndec.ORG_ID, store.org(gndec.ORG_ID).college, gndec.DOMAIN)
 
 
 def seed_accounts(org_id: str, college: College, domain: str) -> None:

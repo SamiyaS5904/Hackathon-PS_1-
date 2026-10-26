@@ -1,5 +1,5 @@
 import type {
-  AssistantUsage, AuditEntry, AuthOut, CoverAction, UsagePeriod, CoverChoice, Leave, LeaveApplied, LeavePlan, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AssistantUsage, AuditEntry, DemoCollege, AuthOut, CoverAction, UsagePeriod, CoverChoice, Leave, LeaveApplied, LeavePlan, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut, RescheduleOut, FreeVenue, VenueEventLists, VenueEventResult, Notice, NoticeIn,
 } from "./types";
@@ -58,6 +58,8 @@ const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.strin
 
 export const auth = {
   login: (email: string, password: string) => request<AuthOut>("/api/auth/login", post({ email, password })),
+  /** One-click logins of a demo college (public: demo accounts only). */
+  demoLogins: (org: string) => request<DemoCollege>(`/api/demo/${org}/logins`),
   signup: (body: { name: string; email: string; password: string; college_name: string }) =>
     request<AuthOut>("/api/auth/signup", post(body)),
   me: () => request<AuthOut>("/api/me"),

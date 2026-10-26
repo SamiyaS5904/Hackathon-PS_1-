@@ -48,6 +48,7 @@ from app import attendance, change_requests, platform, sectioning
 from app.routers.bookings import router as bookings_router
 from app.routers.platform import router as platform_router
 from app.routers.assistant_proxy import router as assistant_proxy_router
+from app.routers.demo import router as demo_router
 from app.routers.leave import router as leave_router
 from app.routers.usage import router as usage_router
 from app.routers.today import router as today_router
@@ -77,10 +78,10 @@ from app.store import store, writer
 from app.validator.check import Violation, validate
 
 
-def ensure_demo_timetable() -> None:
-    """The built-in demo college always shows a current, published timetable: when it has none (first
-    start, e.g. a new deployment) or its data changed, build and publish one in the background."""
-    demo = store.org("demo")
+def ensure_demo_timetable(org_id: str = "demo", time_limit: float = 45) -> None:
+    """A demo college always shows a current, published timetable: when it has none (first start, e.g. a new
+    deployment) or its data changed, build and publish one in the background."""
+    demo = store.org(org_id)
     if demo is None or not AUTO_DEMO_TIMETABLE:
         return
     tt = demo.timetable
@@ -88,15 +89,15 @@ def ensure_demo_timetable() -> None:
         return
 
     def run() -> None:
-        new = generate(demo.college, time_limit=45)
+        new = generate(demo.college, time_limit=time_limit)
         new.college_revision = demo.college.revision
         if not new.sessions:
             return
-        store.set_timetable("demo", new, action=f"Generated timetable ({len(new.sessions)} classes)",
+        store.set_timetable(org_id, new, action=f"Generated timetable ({len(new.sessions)} classes)",
                             source="generate", actor="System")
-        store.publish("demo", "System")
+        store.publish(org_id, "System")
 
-    threading.Thread(target=run, name="demo-timetable", daemon=True).start()
+    threading.Thread(target=run, name=f"{org_id}-timetable", daemon=True).start()
 
 
 @asynccontextmanager
@@ -104,6 +105,7 @@ async def lifespan(_: FastAPI):
     store.load()
     accounts.seed_demo()
     ensure_demo_timetable()
+    ensure_demo_timetable("gndec", time_limit=180)  # bigger college: more time for fewer gaps (once)
     notify_warm(store.org_ids())
     yield
     writer.flush()  # nothing queued is lost on shutdown
@@ -117,6 +119,7 @@ app.include_router(platform_router)
 app.include_router(today_router)
 app.include_router(leave_router)
 app.include_router(assistant_proxy_router)
+app.include_router(demo_router)
 app.include_router(usage_router)
 
 

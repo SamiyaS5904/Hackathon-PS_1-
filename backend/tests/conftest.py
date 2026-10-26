@@ -11,6 +11,7 @@ os.environ["DATABASE_URL"] = f"sqlite:///{(_tmp / 'test.db').as_posix()}"
 os.environ["APP_SECRET"] = "test-secret"
 os.environ.setdefault("DEMO_PASSWORD", "demo1234")
 os.environ["AUTO_DEMO_TIMETABLE"] = "0"  # tests generate when they need to
+os.environ["DEMO_GNDEC"] = "0"  # the big second demo college: only test_gndec_demo.py turns it on
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
