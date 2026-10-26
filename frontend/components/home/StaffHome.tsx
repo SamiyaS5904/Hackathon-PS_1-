@@ -13,6 +13,7 @@ import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
 import type { DepartmentReadiness } from "@/lib/types";
+import { usePagePrompts } from "@/lib/chat-context";
 
 /** Home for the College Admin and Department Coordinators: setup progress, the next step, and Today. */
 export function StaffHome() {
@@ -20,6 +21,8 @@ export function StaffHome() {
   const { role } = useAuth();
   const [sampleBusy, setSampleBusy] = useState(false);
   const [readiness, setReadiness] = useState<DepartmentReadiness[] | null>(null);
+  usePagePrompts(["Who is away today, and which classes need cover?",
+    "Which classes aren't happening today, and can they be made up?", "What changed in the timetable this week?"]);
 
   useEffect(() => {
     if (isStaff(role) && college) api.readiness().then(setReadiness).catch(() => setReadiness(null));

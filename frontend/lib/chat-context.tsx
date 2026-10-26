@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import type { PageInfo } from "./chat";
 
 /** What the user is looking at, so "move this class" or "what's free here" make sense to the assistant. */
@@ -42,6 +42,16 @@ export function ChatPageProvider({ children }: { children: React.ReactNode }) {
     [page, open, pending, draft],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** A page tells the assistant which questions fit it. Cleared when the page closes. */
+export function usePagePrompts(suggestions: string[]) {
+  const { setPage } = useChatPage();
+  const key = suggestions.join("|");
+  useEffect(() => {
+    setPage({ suggestions: key ? key.split("|") : [] });
+    return () => setPage({});
+  }, [key, setPage]);
 }
 
 export function useChatPage(): ChatPageState {

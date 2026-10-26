@@ -10,6 +10,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
 import type { DepartmentReadiness, DeptData, ImportOut, Suggestion } from "@/lib/types";
+import { usePagePrompts } from "@/lib/chat-context";
 
 export default function DepartmentPage() {
   const { dept } = useParams<{ dept: string }>();
@@ -18,6 +19,10 @@ export default function DepartmentPage() {
   const [data, setData] = useState<DeptData | null>(null);
   const [status, setStatus] = useState<DepartmentReadiness | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
+  const deptName = college?.departments.find((d) => d.id === dept)?.short ?? "this department";
+  const firstSection = college?.sections.find((s) => s.department_id === dept)?.name;
+  usePagePrompts([`What's missing in ${deptName} before it can be marked Ready?`, "Which teachers have the most periods?",
+    firstSection ? `Who is below 75% attendance in ${firstSection}?` : "Which classes still need a teacher?"]);
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {

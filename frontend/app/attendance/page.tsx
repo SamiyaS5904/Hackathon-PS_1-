@@ -9,10 +9,18 @@ import { api, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
 import type { SectionAttendance, StudentAttendance, TeacherClass } from "@/lib/types";
+import { usePagePrompts } from "@/lib/chat-context";
 
 /** Attendance, separate from the timetable: students see where they stand, teachers mark, staff follow up. */
 export default function AttendancePage() {
   const { role } = useAuth();
+  const { college } = useTimetable();
+  usePagePrompts(role === "student"
+    ? ["What's my attendance, and can I miss a class?", "Which subject is my attendance lowest in?", "When is my next class?"]
+    : role === "teacher"
+      ? ["Which classes haven't I marked attendance for?", "Who is often absent in my classes?", "What do I teach next?"]
+      : [`Who is below 75% attendance in ${college?.sections[0]?.name ?? "my sections"}?`, "Which sections have the lowest attendance?",
+        "Which classes still need attendance marked?"]);
   if (role === "student") return <StudentView />;
   if (role === "teacher") return <TeacherView />;
   return <StaffView />;

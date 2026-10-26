@@ -145,9 +145,14 @@ export default function TimetablePage() {
     return college.venues.find((v) => v.id === entityId)?.name ?? "";
   }, [college, view, entityId]);
   useEffect(() => {
-    setPage({ view, entity: entityName, mode });
+    const suggestions = isStaff(role) && entityName
+      ? [`When is ${entityName} free this week?`, `Could ${entityName}'s week have fewer gaps?`, "Which rooms are free right now?"]
+      : isTeacher
+        ? ["Find a makeup time for my cancelled lecture", "When am I free next week?", "Why is my lecture on this day?"]
+        : ["When is my next lab?", "When am I free next week?", "Why is my lab at this time?"];
+    setPage({ view, entity: entityName, mode, suggestions });
     return () => setPage({});
-  }, [view, entityName, mode, setPage]);
+  }, [view, entityName, mode, setPage, role, isTeacher]);
 
   const subtitle = useMemo(() => {
     if (!college || !entityId) return "";

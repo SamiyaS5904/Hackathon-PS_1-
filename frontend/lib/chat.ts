@@ -8,6 +8,7 @@ export interface PageInfo {
   view?: string;
   entity?: string;
   mode?: string;
+  suggestions?: string[]; // three questions that fit this page (shown in the panel, not sent)
 }
 
 const pad = (n: number) => String(n).padStart(2, "0");

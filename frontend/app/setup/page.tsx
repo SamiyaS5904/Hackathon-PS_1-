@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
 import type { Department, Holiday, Settings, Venue } from "@/lib/types";
+import { usePagePrompts } from "@/lib/chat-context";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const STEPS = ["Week & labs", "Timings", "Calendar", "Departments & rooms", "Sections → shifts", "Done"];
@@ -32,6 +33,8 @@ export default function SetupPage() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [problems, setProblems] = useState<string[]>([]);
+  usePagePrompts(["What's still missing before I can generate?", "Which departments aren't Ready yet?",
+    "How does the lunch window work?"]);
 
   useEffect(() => {
     api.settings().then((s) => {

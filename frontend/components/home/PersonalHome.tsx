@@ -11,6 +11,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useTimetable } from "@/lib/timetable-context";
 import type { WeekOut } from "@/lib/types";
+import { usePagePrompts } from "@/lib/chat-context";
 
 const pad = (n: number) => String(n).padStart(2, "0");
 const iso = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -21,6 +22,9 @@ export function PersonalHome() {
   const { member, user } = useAuth();
   const [week, setWeek] = useState<WeekOut | null>(null);
   const today = iso(new Date());
+  usePagePrompts(member?.role === "teacher"
+    ? ["What do I teach next, and where?", "Which classes haven't I marked attendance for?", "When am I free tomorrow?"]
+    : ["What's my next class, and where?", "Are any of my classes cancelled this week?", "What's my attendance, and can I miss a class?"]);
 
   useEffect(() => {
     if (!data?.timetable.sessions.length) return;

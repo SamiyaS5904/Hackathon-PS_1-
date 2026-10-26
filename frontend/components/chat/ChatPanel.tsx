@@ -21,18 +21,25 @@ interface Msg {
   error?: string;
 }
 
-const SUGGESTIONS: Record<Role | "platform", string[]> = {
-  platform: ["Which colleges need attention, and why?", "Who is stuck in onboarding?",
-    "How many colleges are live, and on which plans?", "Which colleges had no activity this week?"],
-  student: ["What do I have tomorrow?", "What's my attendance, and can I miss a class?",
-    "Book a doubt slot with my maths teacher this week", "Which rooms are free right now?"],
-  teacher: ["What do I teach tomorrow?", "Which classes haven't I marked attendance for?",
-    "I cancelled Monday's lecture: find a makeup time", "Where is Dr. Anita Sharma right now?"],
-  coordinator: ["Who is below 75% attendance in CSE-2A?", "Which classes in my department still need attention?",
-    "Move CSE-2A's Data Structures to Thursday morning", "When are all my department's teachers free for a meeting this week?"],
-  admin: ["Explain the quality score and what to improve", "Who is below 75% attendance in CSE-3A?",
-    "Which departments aren't Ready yet?", "Which rooms are almost unused?"],
-};
+/** Fallback questions per role (pages usually supply their own). Names come from this college's data. */
+function defaultSuggestions(who: Role | "platform", section: string, teacher: string): string[] {
+  switch (who) {
+    case "platform":
+      return ["Which colleges need attention, and why?", "Who is stuck in onboarding?", "Which colleges had no activity this week?"];
+    case "student":
+      return ["What do I have tomorrow?", "What's my attendance, and can I miss a class?", "Which rooms are free right now?"];
+    case "teacher":
+      return ["What do I teach tomorrow?", "Which classes haven't I marked attendance for?",
+        teacher ? `Where is ${teacher} right now?` : "Which rooms are free right now?"];
+    case "coordinator":
+      return ["Who is away today, and which classes need cover?",
+        section ? `Who is below 75% attendance in ${section}?` : "Which classes in my department still need attention?",
+        "When are all my department's teachers free for a meeting this week?"];
+    default:
+      return ["Who is away today, and which classes need cover?", "Explain the quality score and what to improve",
+        "Which rooms are almost unused?"];
+  }
+}
 
 /** Tiny formatter: **bold**, "- " bullets and line breaks. The model's text is never rendered as HTML. */
 function Rich({ text }: { text: string }) {
@@ -56,7 +63,9 @@ function Rich({ text }: { text: string }) {
 export function ChatPanel() {
   const path = usePathname();
   const { role, user } = useAuth();
-  const setData = useTimetableOptional()?.setData;
+  const tt = useTimetableOptional();
+  const setData = tt?.setData;
+  const college = tt?.college ?? null;
   // The platform owner's assistant (on the platform page, outside any college).
   const platform = !role && !!user?.platform_owner;
   const who = platform ? "platform" : role;
@@ -122,7 +131,7 @@ export function ChatPanel() {
     setMsgs((m) => [...m, { role: "user", text: q, tools: [], cards: [] },
       { role: "assistant", text: "", tools: [], cards: [] }]);
     const update = (fn: (m: Msg) => Msg) => setMsgs((all) => [...all.slice(0, -1), fn(all[all.length - 1])]);
-    await streamChat(q, convId, { path, ...page }, (e: ChatEvent) => {
+    await streamChat(q, convId, { path, view: page.view, entity: page.entity, mode: page.mode }, (e: ChatEvent) => {
       if (e.type === "start") setConvId(e.conversation_id);
       else if (e.type === "token") {
         answer += e.text;
@@ -213,6 +222,8 @@ export function ChatPanel() {
   };
 
   if (!who) return null;
+  const suggestions = (page.suggestions?.length ? page.suggestions
+    : defaultSuggestions(who, college?.sections[0]?.name ?? "", college?.teachers[0]?.name ?? "")).slice(0, 3);
 
   return (
     <>
@@ -273,7 +284,7 @@ export function ChatPanel() {
                 )}
                 <div className="space-y-2">
                   <p className="text-xs font-medium uppercase tracking-wide text-muted">Try asking</p>
-                  {SUGGESTIONS[who].map((s) => (
+                  {suggestions.map((s) => (
                     <button key={s} onClick={() => send(s)}
                       className="flex w-full items-center justify-between gap-2 rounded-lg border border-border px-3 py-2 text-left text-sm hover:bg-surface-2">
                       {s} <ArrowRight size={14} className="shrink-0 text-muted" />

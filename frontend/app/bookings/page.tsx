@@ -9,6 +9,7 @@ import { ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
 import type { Booking, OfficeHour } from "@/lib/types";
+import { usePagePrompts } from "@/lib/chat-context";
 
 const SUBTITLE = {
   teacher: "Set weekly office hours: students book doubt slots in them. Meetings your Coordinator books show here too. Nothing ever clashes with your classes.",
@@ -20,6 +21,12 @@ const SUBTITLE = {
 export default function BookingsPage() {
   const { role } = useAuth();
   const viewer = role === "teacher" ? "teacher" : role === "student" ? "student" : "staff";
+  usePagePrompts(viewer === "student"
+    ? ["Book a doubt slot with my maths teacher this week", "Which teachers have office hours tomorrow?", "What have I booked?"]
+    : viewer === "teacher"
+      ? ["Who has booked my office hours this week?", "Do I have any meetings this week?", "When am I free tomorrow?"]
+      : ["When are my department's teachers all free for a meeting this week?", "What meetings have I booked?",
+        "Find a 1-period meeting time with two teachers tomorrow"]);
   const [items, setItems] = useState<Booking[] | null>(null);
   const [hours, setHours] = useState<OfficeHour[] | null>(null);
   const [error, setError] = useState<string | null>(null);
