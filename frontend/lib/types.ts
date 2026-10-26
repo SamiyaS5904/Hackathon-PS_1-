@@ -173,7 +173,7 @@ export interface ImportOut {
   errors: RowError[]; counts: Record<string, number>; problems: string[]; warnings: string[]; saved: boolean;
 }
 export interface Rule {
-  id: string; name: string; kind: "no_classes" | "max_per_day"; mode: "must" | "try"; weight: number;
+  id: string; name: string; kind: "no_classes" | "max_per_day" | "spread_lunch"; mode: "must" | "try"; weight: number;
   enabled: boolean; department_id: string | null; years: number[]; days: string[];
   after: string | null; before: string | null; max_periods: number | null;
 }

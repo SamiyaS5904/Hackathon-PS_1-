@@ -130,6 +130,27 @@ def score(college: College, sessions: list[Session], lunches: list[Lunch] | None
                     penalty=round(min(10, (rooms_avg - 1) * 3), 1),
                     detail=f"each section uses {rooms_avg:.1f} lecture rooms on average"),
     ]
+    # Mess split (only when the "spread lunch" rule is on): students at the busiest lunch period vs an even split.
+    spread = [r for r in college.rules if r.enabled and r.kind == "spread_lunch"]
+    if spread and lunch_at:
+        worst, worst_even = 0, 0.0
+        for sh in college.shifts:
+            n_cands = len(sh.lunch_candidates())
+            if n_cands < 2:
+                continue
+            for d in days:
+                at: dict[int, int] = defaultdict(int)
+                for sec in college.sections:
+                    p = lunch_at.get((sec.id, d))
+                    if sec.shift_id == sh.id and p is not None and any(r.applies_to(sec) for r in spread):
+                        at[p] += sec.strength
+                if at and max(at.values()) - sum(at.values()) / n_cands > worst - worst_even:
+                    worst, worst_even = max(at.values()), sum(at.values()) / n_cands
+        excess = (worst - worst_even) / worst_even if worst_even else 0.0
+        items.append(QualityItem(key="mess_split", label="Mess split", value=round(excess, 2),
+                                 penalty=round(min(5, excess * 5), 1),
+                                 detail=f"busiest lunch period has {worst} students; an even split is "
+                                        f"{worst_even:.0f}"))
     total_penalty = sum(i.penalty for i in items)
     return QualityReport(
         score=max(0, round(100 - total_penalty)),

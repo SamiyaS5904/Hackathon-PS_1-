@@ -1341,8 +1341,10 @@ def _rule_errors(college: College, rules: list[Rule]) -> list[str]:
     errs = []
     depts = {d.id for d in college.departments}
     for r in rules:
-        if r.kind not in ("no_classes", "max_per_day"):
+        if r.kind not in ("no_classes", "max_per_day", "spread_lunch"):
             errs.append(f"Rule '{r.name}': unknown kind.")
+        if r.kind == "spread_lunch" and r.mode != "try":
+            errs.append(f"Rule '{r.name}': spreading lunch is a preference, so it is always a Try rule.")
         if r.mode not in ("must", "try") or not 1 <= r.weight <= 10:
             errs.append(f"Rule '{r.name}': mode must be must/try and weight 1-10.")
         if r.department_id and r.department_id not in depts:

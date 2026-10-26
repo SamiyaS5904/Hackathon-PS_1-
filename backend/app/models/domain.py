@@ -217,6 +217,7 @@ class TeacherSubject(BaseModel):
 class Rule(BaseModel):
     """A rule card. kind="no_classes": no classes on ``days`` (all if empty) between ``after`` and ``before``
     (either may be empty = start/end of day). kind="max_per_day": at most ``max_periods`` periods a day.
+    kind="spread_lunch" (always "try"): spread lunches evenly over the mess window, by section strength.
 
     Applies to the sections of ``department_id`` (all departments if None) and ``years`` (all if empty).
     mode="must" is never broken; mode="try" is a preference with ``weight`` (1-10).
@@ -224,7 +225,7 @@ class Rule(BaseModel):
 
     id: str
     name: str
-    kind: str  # "no_classes" | "max_per_day"
+    kind: str  # "no_classes" | "max_per_day" | "spread_lunch"
     mode: str = "must"  # "must" | "try"
     weight: int = 5
     enabled: bool = True
