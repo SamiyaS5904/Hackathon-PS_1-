@@ -72,7 +72,7 @@ export function ActivityPanel({ embedded = false, limit }: { embedded?: boolean;
       ) : (
         <ol className="relative space-y-3 border-l border-border pl-5">
           {(limit ? entries.slice(0, limit) : entries).map((e) => {
-            const src = SOURCE[e.source] ?? { label: e.source, tone: "neutral" as const };
+            const src = SOURCE[e.source] ?? { label: "Change", tone: "neutral" as const };
             return (
               <li key={e.id} className="relative">
                 <span className="absolute -left-[26px] top-4 h-2.5 w-2.5 rounded-full border-2 border-surface bg-accent" />

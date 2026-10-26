@@ -32,7 +32,7 @@ def current_user(authorization: str | None = Header(default=None)) -> UserRow:
     user_id = decode_token(authorization.split(" ", 1)[1])
     user = get_user(user_id) if user_id else None
     if user is None:
-        raise HTTPException(401, "Your session has expired. Please log in again.")
+        raise HTTPException(401, "You've been logged out for safety. Please log in again.")
     return user
 
 

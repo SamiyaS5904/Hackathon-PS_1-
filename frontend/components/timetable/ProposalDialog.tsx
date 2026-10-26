@@ -58,11 +58,11 @@ export function ProposalDialog({
           ))}
         </ul>
         <div className="flex items-center justify-between gap-3 border-t border-border px-5 py-4">
-          <span className="text-xs text-muted">
-            Quality {proposal.quality_before} → <b className="text-text">{proposal.quality_after}</b>
-            {delta !== null && delta !== 0 && (
-              <span className={delta > 0 ? "text-ok" : "text-warn"}> ({delta > 0 ? "+" : ""}{delta})</span>
-            )}
+          <span className={delta && delta > 0 ? "text-xs text-ok" : delta && delta < 0 ? "text-xs text-warn" : "text-xs text-muted"}
+            title={proposal.quality_before !== null ? `Quality ${proposal.quality_before} → ${proposal.quality_after}` : undefined}>
+            {delta === null || delta === 0 ? "Overall quality stays the same."
+              : delta > 0 ? (delta >= 3 ? "The week gets noticeably better." : "The week gets slightly better.")
+                : delta <= -3 ? "The week gets noticeably worse (more gaps or heavier days)." : "The week gets slightly worse."}
           </span>
           <div className="flex gap-2">
             <Button onClick={onDiscard} disabled={busy}>

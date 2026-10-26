@@ -53,7 +53,7 @@ export function CollegeCard({ c, onChange }: { c: CollegeSummary; onChange: (c: 
             {c.status !== "active" && <Badge tone="danger">{STATUS_LABEL[c.status]}</Badge>}
           </div>
           <p className="mt-0.5 text-xs text-muted">
-            {c.id} · joined {ago(c.created_at)} · last activity {ago(c.last_activity)}
+            Joined {ago(c.created_at)} · last activity {ago(c.last_activity)}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">

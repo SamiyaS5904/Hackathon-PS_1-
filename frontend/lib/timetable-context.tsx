@@ -91,7 +91,7 @@ export function TimetableProvider({ children }: { children: React.ReactNode }) {
           }
         } catch (e) {
           if (timer.current) clearInterval(timer.current);
-          setError(e instanceof Error ? e.message : "Lost contact with the server");
+          setError(e instanceof Error ? e.message : "Lost contact with Timetabl.ai. Check the internet connection and refresh.");
           setJob(null);
         }
       }, 1000);

@@ -37,13 +37,13 @@ export async function streamChat(
       }),
     });
   } catch {
-    onEvent({ type: "error", message: "Can't reach the assistant. Is the assistant service running?" });
+    onEvent({ type: "error", message: "The assistant can't be reached right now. Try again in a moment; everything else keeps working." });
     onEvent({ type: "done" });
     return;
   }
   if (!res.ok || !res.body) {
     const body = await res.json().catch(() => ({}));
-    onEvent({ type: "error", message: typeof body.detail === "string" ? body.detail : `Assistant error (${res.status})` });
+    onEvent({ type: "error", message: typeof body.detail === "string" ? body.detail : "The assistant had a problem answering. Please try again." });
     onEvent({ type: "done" });
     return;
   }

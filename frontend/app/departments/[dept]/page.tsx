@@ -12,6 +12,11 @@ import { useTimetable } from "@/lib/timetable-context";
 import type { DepartmentReadiness, DeptData, ImportOut, Suggestion } from "@/lib/types";
 import { usePagePrompts } from "@/lib/chat-context";
 
+const COUNT_LABEL: Record<string, string> = {
+  sections: "sections", teachers: "teachers", subjects: "subjects", can_teach: "'can teach' entries",
+  classes: "classes", students: "students", rooms: "rooms",
+};
+
 export default function DepartmentPage() {
   const { dept } = useParams<{ dept: string }>();
   const { role, member } = useAuth();
@@ -171,7 +176,7 @@ function ExcelCard({ dept, onSaved }: { dept: string; onSaved: () => Promise<voi
         <div className="mt-4 rounded-lg border border-border p-4">
           <p className="text-sm font-medium">{file.name}</p>
           <p className="mt-1 text-xs text-muted">
-            {Object.entries(preview.counts).map(([k, v]) => `${v} ${k.replace("_", " ")}`).join(" · ")}
+            {Object.entries(preview.counts).map(([k, v]) => `${v} ${COUNT_LABEL[k] ?? k.replaceAll("_", " ")}`).join(" · ")}
           </p>
           {preview.errors.length > 0 ? (
             <div className="mt-3">

@@ -75,7 +75,7 @@ export default function DemoPage() {
           {icon(coordinator, UserCog)}
           <span className="flex-1 space-y-2">
             <span className="block font-medium">Department Coordinator</span>
-            <span className="block text-xs text-muted">Own department&apos;s data, allotment, Ready, approvals</span>
+            <span className="block text-xs text-muted">Own department&apos;s data, who teaches what, Ready, approvals</span>
             <span className="flex gap-2">
               <select className={select} value={dept} onChange={(e) => setDept(e.target.value)} aria-label="Department">
                 {DEPARTMENTS.map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}

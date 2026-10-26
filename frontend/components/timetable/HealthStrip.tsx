@@ -2,6 +2,7 @@
 
 import { CheckCircle2, AlertTriangle, Gauge, Clock } from "lucide-react";
 import type { TimetableOut } from "@/lib/types";
+import { qualityInWords } from "./TrustBar";
 
 /** Timetable health. `compact` = one line at every width (the timetable page, where the grid is the hero). */
 export function HealthStrip({ data, compact = false }: { data: TimetableOut; compact?: boolean }) {
@@ -14,7 +15,7 @@ export function HealthStrip({ data, compact = false }: { data: TimetableOut; com
     <p className={`mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm ${compact ? "" : "sm:hidden"}`} role="status">
       <span className="flex items-center gap-1">
         {clashes === 0 ? <CheckCircle2 size={15} className="text-ok" aria-hidden /> : <AlertTriangle size={15} className="text-danger" aria-hidden />}
-        <b>{clashes === 0 ? "0 clashes" : `${clashes} problems`}</b>
+        <b>{clashes === 0 ? "0 clashes" : `${clashes} clash${clashes === 1 ? "" : "es"}`}</b>
       </span>
       <span className="flex items-center gap-1"><Gauge size={15} className={tone} aria-hidden /> Quality <b>{score}/100</b></span>
       <span className="text-muted">{data.timetable.sessions.length} classes</span>
@@ -24,10 +25,11 @@ export function HealthStrip({ data, compact = false }: { data: TimetableOut; com
       <Stat
         icon={clashes === 0 ? <CheckCircle2 size={18} className="text-ok" /> : <AlertTriangle size={18} className="text-danger" />}
         label="Clashes"
-        value={clashes === 0 ? "0 clashes" : `${clashes} problems`}
+        value={clashes === 0 ? "0 clashes" : `${clashes} clash${clashes === 1 ? "" : "es"}`}
         hint="Checked by an independent validator"
       />
-      <Stat icon={<Gauge size={18} className={tone} />} label="Quality" value={`${score}/100`} hint="Gaps, load, room fit" />
+      <Stat icon={<Gauge size={18} className={tone} />} label="Quality" value={data.quality ? qualityInWords(data.quality).split(":")[0] : "–"}
+        hint={data.quality ? `${qualityInWords(data.quality).split(": ")[1] ?? ""} (${score}/100)` : ""} />
       <Stat
         icon={<CheckCircle2 size={18} className="text-muted" />}
         label="Classes placed"
@@ -36,9 +38,9 @@ export function HealthStrip({ data, compact = false }: { data: TimetableOut; com
       />
       <Stat
         icon={<Clock size={18} className="text-muted" />}
-        label="Solved in"
+        label="Built in"
         value={`${data.timetable.solve_seconds.toFixed(0)}s`}
-        hint={data.timetable.status === "optimal" ? "Proven best" : "Best found in time"}
+        hint={data.timetable.status === "optimal" ? "The best possible arrangement" : "The best arrangement found in that time"}
       />
     </div>}
     </>
