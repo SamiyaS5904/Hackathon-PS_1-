@@ -23,20 +23,21 @@ def world():
     return c, generate(c, time_limit=10)
 
 
-def _free(c, tt, teacher_id: str, student: Student):
-    """A (day, period index) where the teacher and the student both have no class."""
+def _free(c, tt, teacher_id: str, *students: Student):
+    """A (day, period index) where the teacher and every given student have no class."""
     shift = c.shifts[0]
     for day in c.days:
         for i, p in enumerate(shift.periods):
             busy = [s for s in tt.sessions if s.day == day and bookings._overlaps(s.start, s.end, p.start, p.end)
-                    and (s.teacher_id == teacher_id or s in bookings.student_classes(c, tt.sessions, student))]
+                    and (s.teacher_id == teacher_id
+                         or any(s in bookings.student_classes(c, tt.sessions, st) for st in students))]
             if not busy:
                 return day, i
     raise AssertionError("no common free period")
 
 
 def _hour(org, c, tt, seats=2):
-    day, i = _free(c, tt, "t1", c.students[0])
+    day, i = _free(c, tt, "t1", *c.students)  # every student can book it (they are in different lab batches)
     p = c.shifts[0].periods[i]
     h = OfficeHour(teacher_id="t1", day=day, start=p.start, end=p.end, seats=seats, place="Staff room")
     assert bookings.add_office_hour(c, tt, org, h) is None
