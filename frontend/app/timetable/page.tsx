@@ -2,7 +2,7 @@
 
 import clsx from "clsx";
 import { ChevronLeft, ChevronRight, Loader2, Move, Printer, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { PublishButton } from "@/components/timetable/PublishButton";
 import { DownloadMenu } from "@/components/timetable/DownloadMenu";
@@ -108,6 +108,18 @@ export default function TimetablePage() {
     setSelected(null);
     showToast({ text: out.message, undoEntryId: out.timetable.last_change?.id, onUndone: setData });
   };
+
+  // ?pick=<class id> (e.g. from a teacher's Home): start the move flow on that class straight away.
+  const pickedFromLink = useRef(false);
+  useEffect(() => {
+    if (pickedFromLink.current || !data || mode !== "plan" || !canDrag) return;
+    const id = new URLSearchParams(window.location.search).get("pick");
+    const s = id ? data.timetable.sessions.find((x) => x.id === id) : undefined;
+    if (s) {
+      pickedFromLink.current = true;
+      editor.edit?.onPick(s);
+    }
+  }, [data, mode, canDrag, editor.edit]);
 
   const isCoordinator = role === "coordinator";
   const options = useMemo(() => {

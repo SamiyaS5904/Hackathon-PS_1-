@@ -184,7 +184,8 @@ def setup_status(st: OrgState) -> SetupStatus:
                   and not no_teacher and not not_ready,
                   missing=(f"No classes yet in: {', '.join(without_classes)}." if without_classes
                            else f"{no_teacher} class(es) still need a teacher." if no_teacher
-                           else f"Not marked Ready: {', '.join(not_ready)}." if not_ready else ""),
+                           else f"Not marked Ready: {', '.join(not_ready)}." if not_ready
+                           else "" if c.allotments else "Add departments first, then upload each one's Excel sheet."),
                   link=dept_link(lambda d: next((x.short for x in depts if x.id == d), "") in
                                  set(without_classes) | set(not_ready))),
         SetupStep(key="generate", title="Generate", done=current,

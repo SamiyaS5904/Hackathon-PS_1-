@@ -72,7 +72,8 @@ export function PersonalHome() {
 
       <section className="mt-8">
         <div className="mb-2 flex items-baseline justify-between">
-          <h2 className="text-sm font-semibold">This week</h2>
+          <h2 className="text-sm font-semibold">This week
+            {member.role === "teacher" && <span className="ml-2 text-xs font-normal text-muted">Click a lecture to ask to move it for good</span>}</h2>
           <Link href="/timetable?mode=week" className="inline-flex items-center gap-1 text-xs text-accent-text hover:underline">
             Full timetable <ArrowRight size={12} aria-hidden />
           </Link>
@@ -91,7 +92,10 @@ export function PersonalHome() {
                         <li key={o.occurrence_id + o.status} className={clsx("flex flex-wrap items-center gap-2 text-sm",
                           (o.status === "cancelled" || o.status === "moved_out") && "text-muted line-through")}>
                           <span className="w-12 shrink-0 font-mono text-xs text-muted">{o.session.start}</span>
-                          <span className="font-medium">{name(o.session.subject_id, college.subjects)}</span>
+                          {member.role === "teacher" && o.status === "normal" ? (
+                            <Link href={`/timetable?mode=plan&pick=${o.session.id}`} title="Ask to move this lecture for good"
+                              className="font-medium text-accent-text hover:underline">{name(o.session.subject_id, college.subjects)}</Link>
+                          ) : <span className="font-medium">{name(o.session.subject_id, college.subjects)}</span>}
                           <span className="text-xs text-muted">
                             {name(o.session.venue_id, college.venues)}
                             {member.role === "teacher"
