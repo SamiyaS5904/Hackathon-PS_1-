@@ -24,6 +24,12 @@ Click **Try the demo**.
 
 Any student works by hand (`ece2a.12@demo.timetabl.ai`: section + roll 01-60). Switch user with the log-out icon.
 
+**Second college: GNDEC (demo).** On the Demo page, open the **GNDEC** tab. It is re-engineered from GNDEC's public
+timetables with made-up names: CSE, IT, Mechanical, Civil and Applied Sciences, years 1-4, 28 sections, 1,662
+students. It has one-click Admin, Coordinator, teacher and student logins, including a **JPAL student**: only about 30
+final-year CSE students attend the JPAL lab, and the others have a project review at that hour. Try as that student:
+"Where can I sit now?", "What do I have tomorrow?", "When is my JPAL lab this week?".
+
 Everywhere:
 - **sun / moon** = light / dark
 - **bell** = notifications

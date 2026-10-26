@@ -237,6 +237,15 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 
 **✅ Done 2026-10-27 (both sessions, merged into main):** teacher leave → cover plan (substitutes ranked, per year cancel / cover, Apply → validated one-day changes, undo, notifications; Coordinator Home + assistant card; teacher "Ask for leave") · assistant: parallel tools, leave / undo / show-on-screen tools, drives the screen, suggestions while typing · voice: Whisper (gpt-4o-transcribe) + natural TTS with `OPENAI_API_KEY` (or OpenRouter), browser voice fallback, Chat / Talk modes, interrupt by speaking · tomorrow's brief · assistant cost card (Admin + platform) · Session B: bookings in the main menu, reschedule finder, venue booking for events, mess split Try rule, 4 more demo teachers (seed only; live DB not reseeded), notices. Still to check by hand: microphone + cloud voice with a real key.
 
+**✅ Done 2026-10-27 (later):**
+- **Assistant:** model router (Sonnet 5.5 agentic, Haiku 5.5 look-ups, Opus 5.5 retry), instant answers without AI,
+  English-first replies, roughly 2x faster.
+- **Home page:** public `/welcome` with features and indicative pricing.
+- **Deployment set-up:** Hugging Face Space for backend + assistant, Vercel, Supabase (`docs/DEPLOY.md`).
+- **GNDEC (demo):** a second demo college (`backend/app/seed/gndec.py`), seeded at start-up (`DEMO_GNDEC`), with
+  its own Demo page tab. It has 28 sections, 570 classes, 0 clashes and quality 79, plus a JPAL lab for selected
+  final-year CSE students.
+
 **Plan as built (2026-10-26)**
 Data: only the Demo Institute (Dr. Anita) stays in the database; the GNDEC demo college comes later from the user's data (then also on the Demo page). Fixed breaks are optional (a new college has none).
 

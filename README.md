@@ -49,6 +49,18 @@ checking ten timetables by hand.
 - **Voice:** OpenAI speech-to-text and natural text-to-speech (browser voice as fallback). It answers aloud
   sentence by sentence, you can interrupt it, and replies are in English by default with Hinglish as an option.
 
+## Two demo colleges
+
+| | Demo Institute of Technology | GNDEC (demo) |
+|---|---|---|
+| What | Built-in sample | Re-engineered from GNDEC's public timetables, rooms and labs (every name made up) |
+| Size | 4 departments, 12 sections, 2 shifts, 44 teachers, 15 rooms | CSE, IT, Mechanical, Civil + Applied Sciences, years 1-4: 28 sections, 1,662 students, 96 teachers, 51 rooms and labs |
+| Timetable | 238 classes, 0 clashes, quality 83-86 | 570 classes, 0 clashes, quality 79 (9 periods 08:30-17:30, a lunch gap for every section, the mess split across two lunch hours) |
+| Special | combined classes, pooled open elective | the **JPAL lab** for about 30 selected final-year CSE students (the rest have a project review then), a final-year elective with 3 groups |
+
+The GNDEC data is also available as one Excel file per department plus a blank template:
+[`docs/demo-data/GNDEC/`](docs/demo-data/GNDEC/). That folder also has assistant test questions per role.
+
 ## Results on the demo college
 
 12 sections · 44 teachers · 15 rooms · 2 overlapping shifts · combined classes · lab batches · a pooled open elective.
@@ -100,6 +112,7 @@ Open http://localhost:3000, then **Try the demo**. Every demo account's password
 | Teacher | `anita.sharma@demo.timetabl.ai` (any teacher: `firstname.lastname@demo.timetabl.ai`) |
 | Student | `cse3a.01@demo.timetabl.ai` (any section, roll 01-60) |
 | Platform owner | `owner@demo.timetabl.ai` |
+| GNDEC (demo) | `admin@gndec.demo`, `cse.coordinator@gndec.demo`; teachers and students are listed on the Demo page (*GNDEC* tab) |
 
 Tests:
 
