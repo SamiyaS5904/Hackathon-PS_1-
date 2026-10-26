@@ -85,9 +85,10 @@ def test_the_rooms_department_coordinator_or_the_admin_decides():
 
 def test_an_approved_event_holds_its_room_against_one_day_changes():
     c, tt = _world("ev-hold")
-    s, d = _class_slot(c, tt)
+    # A lecture in r1 that can move to another free period the same day (depends on the generated layout).
+    s, d, away = next((x, DATES[x.day], o) for x in tt.sessions if x.kind == "lecture" and x.venue_id == "r1"
+                      for o in day_options(c, tt, x.id, DATES[x.day], DATES[x.day]) if o.status == "free")
     # Move the class away for one day: its room is free at that time, and an event takes it.
-    away = next(o for o in day_options(c, tt, s.id, d, d) if o.status == "free")
     tt2, msg, _ = add_override(c, tt, s.id, d, "move", d, away.start_period, "", "t")
     assert tt2 is not None, msg
     ev, _ = venue_events.request(c, tt2, c.id, ADMIN, "r1", d, s.start, s.end, "Guest talk", "", TODAY, NOW)
