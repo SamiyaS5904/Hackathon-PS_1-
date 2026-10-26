@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AuditEntry, AuthOut, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut,
 } from "./types";
@@ -130,6 +130,11 @@ export const api = {
     session_id: string; date: string; kind: "cancel" | "move"; to_date?: string; start_period?: number; reason?: string; via?: "app" | "chatbot";
   }) => request<OverrideOut>(`${org()}/overrides`, post(body)),
   removeOverride: (id: string) => request<OverrideOut>(`${org()}/overrides/${id}`, { method: "DELETE" }),
+  /** Several one-day changes as one step: all or nothing, one log entry, one notification. */
+  batchOverrides: (body: { title: string; changes: { session_id: string; date: string; kind: "cancel" | "move"; reason?: string }[] }) =>
+    request<OverrideOut>(`${org()}/overrides/batch`, post(body)),
+  today: (date?: string) => request<TodayReport>(`${org()}/today${date ? `?date=${date}` : ""}`),
+  setupStatus: () => request<SetupStatus>(`${org()}/setup-status`),
   members: () => request<Member[]>(`${org()}/members`),
   invites: () => request<InviteOut[]>(`${org()}/invites`),
   invite: (body: { email: string; role: string; department_id?: string | null; teacher_id?: string | null }) =>

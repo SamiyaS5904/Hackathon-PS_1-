@@ -71,7 +71,7 @@ export interface TimetableOut {
   last_change?: LastChange | null; // staff only
 }
 export interface Job { id: string; status: "running" | "done" | "failed"; elapsed: number; error: string | null; message?: string }
-export interface Precheck { problems: string[]; warnings: string[] }
+export interface Precheck { problems: string[]; warnings: string[]; located?: LocatedProblem[] }
 
 export type ViewKind = "section" | "teacher" | "venue";
 
@@ -327,3 +327,21 @@ export interface PlatformOverview {
   plans: Record<string, number>;
   items: CollegeSummary[];
 }
+
+// ---- Staff home (Today) and setup checklist ----
+
+export interface ClassLine {
+  session_id: string; occurrence_id: string; subject: string; sections: string; teacher_id: string; teacher: string;
+  start: string; end: string; room: string; note: string;
+}
+export interface TodayReport {
+  date: string; label: string; working: boolean; holiday: string | null; classes_today: number;
+  away: { teacher_id: string; name: string; classes: number }[];
+  cancelled: ClassLine[]; moved: ClassLine[];
+  recent: { id: string; at: number; actor: string; action: string; source: string; undone: boolean }[];
+  status: { state: "none" | "draft" | "published" | "out_of_date"; published_at: number | null; published_by: string };
+  pending_requests: number;
+}
+export interface SetupStep { key: string; title: string; done: boolean; missing: string; link: string }
+export interface SetupStatus { done: boolean; steps: SetupStep[] }
+export interface LocatedProblem { message: string; link: string; where: string }

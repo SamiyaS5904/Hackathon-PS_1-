@@ -60,7 +60,7 @@ export function ChatPanel() {
   // The platform owner's assistant (on the platform page, outside any college).
   const platform = !role && !!user?.platform_owner;
   const who = platform ? "platform" : role;
-  const { page, open, setOpen, pending, clearPending } = useChatPage();
+  const { page, open, setOpen, pending, clearPending, draft, clearDraft } = useChatPage();
   const [msgs, setMsgs] = useState<Msg[]>([]);
   const [input, setInput] = useState("");
   const [busy, setBusy] = useState(false);
@@ -143,6 +143,15 @@ export function ChatPanel() {
     // Spoken question -> spoken answer (the text stays on screen too).
     if (spoken && speakReplies && speak(answer, () => setSpeaking(false))) setSpeaking(true);
   }, [busy, convId, path, page, speakReplies, platform]);
+
+  // A message typed in from elsewhere (e.g. Home's "Handle with assistant"): the user checks it and sends.
+  useEffect(() => {
+    if (draft && open) {
+      setInput(draft);
+      clearDraft();
+      setTimeout(() => inputRef.current?.focus(), 60);
+    }
+  }, [draft, open, clearDraft]);
 
   // Questions sent from elsewhere (e.g. an insight's "Ask" button).
   useEffect(() => {

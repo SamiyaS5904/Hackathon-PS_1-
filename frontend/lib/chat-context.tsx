@@ -12,6 +12,10 @@ interface ChatPageState {
   ask: (q: string) => void;
   pending: string | null;
   clearPending: () => void;
+  // Open the assistant with a message typed in for the user to check and send.
+  draft: string | null;
+  prefill: (text: string) => void;
+  clearDraft: () => void;
 }
 
 const Ctx = createContext<ChatPageState | null>(null);
@@ -20,16 +24,22 @@ export function ChatPageProvider({ children }: { children: React.ReactNode }) {
   const [page, setPage] = useState<Omit<PageInfo, "path">>({});
   const [open, setOpen] = useState(false);
   const [pending, setPending] = useState<string | null>(null);
+  const [draft, setDraft] = useState<string | null>(null);
   const value = useMemo(
     () => ({
-      page, setPage, open, setOpen, pending,
+      page, setPage, open, setOpen, pending, draft,
+      prefill: (text: string) => {
+        setDraft(text);
+        setOpen(true);
+      },
+      clearDraft: () => setDraft(null),
       ask: (q: string) => {
         setPending(q);
         setOpen(true);
       },
       clearPending: () => setPending(null),
     }),
-    [page, open, pending],
+    [page, open, pending, draft],
   );
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
