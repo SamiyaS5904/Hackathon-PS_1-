@@ -515,7 +515,7 @@ function LeavePlanCard({ card }: { card: Extract<ChatCard, { type: "leave_plan" 
     <div className="rounded-xl border border-accent/30 bg-accent-soft/40 p-3">
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-accent-text">Cover plan · {l.teacher_name} · not applied yet</p>
       <LeavePlanView teacherId={l.teacher_id} from={l.start_date} to={l.end_date} reason={l.reason}
-        initialActions={actions} via="chatbot" />
+        initialActions={actions} via="chatbot" compact />
     </div>
   );
 }

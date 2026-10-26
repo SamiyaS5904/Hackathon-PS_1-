@@ -15,7 +15,7 @@ const key = (i: PlanItem) => `${i.session_id}@${i.date}`;
 
 /** The cover plan for a teacher's leave: per year "find substitutes" or "cancel", per class the substitute
  *  (ranked, each already checked to be free) or cancel / leave as it is. Nothing changes until Apply. */
-export function LeavePlanView({ teacherId, from, to, reason, leaveId, initialActions, via = "app", onApplied }: {
+export function LeavePlanView({ teacherId, from, to, reason, leaveId, initialActions, via = "app", compact = false, onApplied }: {
   teacherId: string;
   from: string;
   to: string;
@@ -23,6 +23,7 @@ export function LeavePlanView({ teacherId, from, to, reason, leaveId, initialAct
   leaveId?: string;
   initialActions?: Record<number, CoverAction>;
   via?: "app" | "chatbot";
+  compact?: boolean; // narrow place (the chat panel): one column
   onApplied?: (out: LeaveApplied) => void;
 }) {
   // Works inside the chat panel too, which can be open on pages without the timetable.
@@ -122,7 +123,7 @@ export function LeavePlanView({ teacherId, from, to, reason, leaveId, initialAct
               const p = pick[k];
               const opt = i.options.find((o) => o.teacher_id === p);
               return (
-                <li key={k} className="grid gap-2 px-3 py-2 text-sm sm:grid-cols-[1fr_14rem] sm:items-center">
+                <li key={k} className={`grid gap-2 px-3 py-2 text-sm ${compact ? "" : "sm:grid-cols-[1fr_14rem] sm:items-center"}`}>
                   <span className="min-w-0">
                     <span className="font-medium">{i.subject}</span> <span className="text-muted">{i.sections}</span>
                     <span className="block text-xs text-muted">{i.start}-{i.end} · {i.venue}
