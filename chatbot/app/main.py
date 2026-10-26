@@ -85,11 +85,18 @@ def _context_line(req: ChatRequest, today: str, now: str) -> str:
             f"{on_screen}{spoken} {language.instruction(language.detect(req.message))}.")
 
 
+_checked: dict[tuple[str, str], float] = {}  # (token, org) -> when the login was last confirmed (voice calls)
+
+
 async def _member(authorization: str | None, org: str) -> Backend:
-    """The caller's backend client, after checking they are logged in and belong to ``org``."""
+    """The caller's backend client, after checking they are logged in and belong to ``org``.
+    A confirmed login is trusted for 60 s, so reading an answer aloud sentence by sentence stays quick."""
     if not authorization or not authorization.lower().startswith("bearer "):
         raise HTTPException(401, "Please log in.")
-    backend = Backend(authorization.split(" ", 1)[1], org)
+    token = authorization.split(" ", 1)[1]
+    backend = Backend(token, org)
+    if time.time() - _checked.get((token, org), 0) < 60:
+        return backend
     try:
         me = await backend.me()
     except BackendError as exc:
@@ -98,6 +105,9 @@ async def _member(authorization: str | None, org: str) -> Backend:
     if org != PLATFORM and not any(m["org_id"] == org for m in me["memberships"]):
         await backend.close()
         raise HTTPException(404, "College not found.")
+    if len(_checked) > 5000:
+        _checked.clear()
+    _checked[(token, org)] = time.time()
     return backend
 
 
@@ -142,6 +152,39 @@ async def speak(req: SpeakRequest, authorization: str | None = Header(default=No
         raise HTTPException(422, "Nothing to read.")
     try:
         audio = await voice.speech(req.text.strip())
+    except voice.VoiceError as exc:
+        raise HTTPException(exc.status, exc.message) from exc
+    return StreamingResponse(audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
+
+
+# Text waiting to be spoken: POST /speak/start keeps it under a random id for a minute, and the browser's audio
+# player fetches GET /speak/{id} and plays it while it is still arriving (no login token in the link).
+_to_speak: dict[str, tuple[float, str]] = {}
+
+
+@app.post("/speak/start")
+async def speak_start(req: SpeakRequest, authorization: str | None = Header(default=None)) -> dict:
+    backend = await _member(authorization, req.org)
+    await backend.close()
+    if not voice.available():
+        raise HTTPException(503, "Cloud voice isn't set up.")
+    if not req.text.strip():
+        raise HTTPException(422, "Nothing to read.")
+    now = time.time()
+    for k in [k for k, (at, _) in _to_speak.items() if now - at > 60]:
+        _to_speak.pop(k, None)
+    sid = uuid.uuid4().hex
+    _to_speak[sid] = (now, req.text.strip()[: voice.MAX_TEXT])
+    return {"id": sid}
+
+
+@app.get("/speak/{sid}")
+async def speak_stream(sid: str) -> StreamingResponse:
+    item = _to_speak.pop(sid, None)  # one use
+    if item is None or time.time() - item[0] > 60:
+        raise HTTPException(404, "Nothing to read.")
+    try:
+        audio = await voice.speech(item[1])
     except voice.VoiceError as exc:
         raise HTTPException(exc.status, exc.message) from exc
     return StreamingResponse(audio, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})

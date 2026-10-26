@@ -254,7 +254,10 @@ export class Mic {
 // Speaking
 // ---------------------------------------------------------------------------
 
-type Clip = { text: string; audio: Promise<string | null> }; // object URL, or null = use the browser's voice
+// A sentence and its cloud audio player (null = the browser's voice). The player is created as soon as the
+// sentence is known, so its audio is already arriving while the sentence before it plays.
+type Clip = { text: string; audio: Promise<HTMLAudioElement | null> };
+const CLOUD_WAIT_MS = 5000; // cloud voice slower than this to start -> that sentence uses the browser's voice
 
 /** Reads an answer aloud while it streams in: complete sentences are spoken in order, the next one is fetched
  *  while the current one plays. ``stop()`` silences it at once. */
@@ -266,6 +269,7 @@ export class Speaker {
   private current: HTMLAudioElement | null = null;
   private generation = 0;
   private aborts: AbortController[] = [];
+  private players: HTMLAudioElement[] = [];
 
   constructor(private readonly useCloud: boolean, private readonly onState: (speaking: boolean) => void) {}
 
@@ -313,16 +317,26 @@ export class Speaker {
     if (!this.playing) void this.playNext(this.generation);
   }
 
-  private fetchAudio(text: string): Promise<string | null> {
+  private fetchAudio(text: string): Promise<HTMLAudioElement | null> {
     if (!this.useCloud) return Promise.resolve(null);
     const ac = new AbortController();
     this.aborts.push(ac);
     const { token, org } = getSession();
-    return fetch(`${CHATBOT}/speak`, {
+    // Step 1 (with the login): hand over the text. Step 2: the player streams the audio by a one-time id and
+    // starts playing while it is still arriving.
+    return fetch(`${CHATBOT}/speak/start`, {
       method: "POST", signal: ac.signal,
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       body: JSON.stringify({ org: org || "platform", text }),
-    }).then(async (r) => (r.ok ? URL.createObjectURL(await r.blob()) : null)).catch(() => null);
+    }).then(async (r) => {
+      if (!r.ok) return null;
+      const { id } = (await r.json()) as { id: string };
+      const a = new Audio(`${CHATBOT}/speak/${id}`);
+      a.preload = "auto";
+      a.load();
+      this.players.push(a);
+      return a;
+    }).catch(() => null);
   }
 
   private async playNext(gen: number) {
@@ -334,20 +348,34 @@ export class Speaker {
     }
     this.playing = true;
     this.onState(true);
-    const url = await clip.audio;
+    const player = await clip.audio;
     if (gen !== this.generation) return;
-    await (url ? this.playUrl(url) : this.playBrowser(clip.text));
-    if (url) URL.revokeObjectURL(url);
+    await (player ? this.playCloud(player, clip.text) : this.playBrowser(clip.text));
     if (gen !== this.generation) return;
     void this.playNext(gen);
   }
 
-  private playUrl(url: string): Promise<void> {
+  private playCloud(a: HTMLAudioElement, text: string): Promise<void> {
     return new Promise((resolve) => {
-      const a = new Audio(url);
       this.current = a;
-      a.onended = a.onerror = () => resolve();
-      a.play().catch(() => resolve());
+      let started = false;
+      let settled = false;
+      const finish = (useBrowser: boolean) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(slow);
+        if (useBrowser) {
+          a.pause();
+          a.removeAttribute("src");
+          this.current = null;
+          void this.playBrowser(text).then(resolve);
+        } else resolve();
+      };
+      const slow = setTimeout(() => !started && finish(true), CLOUD_WAIT_MS);
+      a.onplaying = () => { started = true; clearTimeout(slow); };
+      a.onended = () => finish(false);
+      a.onerror = () => finish(!started);
+      a.play().catch(() => finish(!started));
     });
   }
 
@@ -373,6 +401,8 @@ export class Speaker {
     this.buffer = "";
     this.aborts.forEach((a) => a.abort());
     this.aborts = [];
+    this.players.forEach((a) => { a.pause(); a.removeAttribute("src"); });
+    this.players = [];
     this.current?.pause();
     this.current = null;
     if (typeof window !== "undefined" && "speechSynthesis" in window) window.speechSynthesis.cancel();

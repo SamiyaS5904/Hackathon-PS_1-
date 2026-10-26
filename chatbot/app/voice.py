@@ -18,6 +18,9 @@ OPENAI_URL = "https://openrouter.ai/api/v1" if _ROUTER else "https://api.openai.
 STT_MODEL = os.environ.get("VOICE_STT_MODEL", "openai/gpt-4o-transcribe" if _ROUTER else "gpt-4o-transcribe")
 TTS_MODEL = os.environ.get("VOICE_TTS_MODEL", "openai/gpt-4o-mini-tts-2025-12-15" if _ROUTER else "gpt-4o-mini-tts")
 TTS_VOICE = os.environ.get("VOICE_TTS_VOICE", "coral")
+# "en" keeps Hinglish in Roman script ("kal mera lecture kab hai"); without it Hindi-heavy speech comes back in
+# Devanagari. Set VOICE_STT_LANGUAGE= (empty) to let the model decide.
+STT_LANGUAGE = os.environ.get("VOICE_STT_LANGUAGE", "en")
 TTS_STYLE = ("Warm, clear and quick, like a helpful college office colleague. Indian English accent; say Hindi words "
              "in Roman-script Hinglish naturally. Read times like '10:30' as 'ten thirty'.")
 MAX_AUDIO = 10 * 1024 * 1024  # ~10 minutes of compressed speech
@@ -69,7 +72,8 @@ async def transcribe(audio: bytes, content_type: str, names: list[str]) -> str:
     if len(audio) > MAX_AUDIO:
         raise VoiceError(413, "That recording is too long. Keep it under a few minutes.")
     files = {"file": (f"speech.{_ext(content_type)}", audio, content_type.split(";")[0] or "audio/webm")}
-    data = {"model": STT_MODEL, "prompt": _hint(names), "response_format": "json"}
+    data = {"model": STT_MODEL, "prompt": _hint(names), "response_format": "json",
+            **({"language": STT_LANGUAGE} if STT_LANGUAGE else {})}
     try:
         async with httpx.AsyncClient(timeout=40) as client:
             r = await client.post(f"{OPENAI_URL}/audio/transcriptions", headers=_headers(), files=files, data=data)
