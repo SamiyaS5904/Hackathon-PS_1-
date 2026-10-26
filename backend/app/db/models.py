@@ -197,6 +197,15 @@ class LeaveRow(Base):
     data: Mapped[dict] = mapped_column(JSON)
 
 
+
+class AssistantUsageRow(Base):
+    """The assistant's token use per college per day (for the cost card)."""
+
+    __tablename__ = "assistant_usage"
+    org_id: Mapped[str] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    day: Mapped[str] = mapped_column(String(10), primary_key=True)  # YYYY-MM-DD
+    data: Mapped[dict] = mapped_column(JSON)  # requests, input, output, cache_write, cache_read tokens
+
 _connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 # Postgres: requests rarely touch the database (memory first, background writer), so a liveness
 # ping per checkout is cheap; TCP keepalives stop idle Supabase connections from silently dying.

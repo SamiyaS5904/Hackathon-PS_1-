@@ -159,6 +159,11 @@ async def run_turn(client: anthropic.AsyncAnthropic, conv: Conversation, ctx: To
             return
 
         conv.messages.append({"role": "assistant", "content": message.content})  # append-only history
+        u = getattr(message, "usage", None)
+        for key, n in (() if u is None else (("input", u.input_tokens), ("output", u.output_tokens),
+                       ("cache_write", getattr(u, "cache_creation_input_tokens", 0) or 0),
+                       ("cache_read", getattr(u, "cache_read_input_tokens", 0) or 0))):
+            ctx.usage[key] = ctx.usage.get(key, 0) + (n or 0)
 
         if message.stop_reason == "refusal":
             yield {"type": "token", "text": "\n\nI can't help with that request."}

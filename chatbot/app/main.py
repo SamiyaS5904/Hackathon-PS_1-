@@ -201,6 +201,11 @@ async def chat(req: ChatRequest, authorization: str | None = Header(default=None
             yield _sse({"type": "error", "message": exc.message})
             yield _sse({"type": "done"})
         finally:
+            if ctx.usage and req.org != PLATFORM:  # the College Admin's cost card
+                try:
+                    await backend.record_usage(ctx.usage)
+                except Exception:  # noqa: BLE001 - the answer matters more than the bookkeeping
+                    pass
             await backend.close()
 
     return StreamingResponse(events(), media_type="text/event-stream",

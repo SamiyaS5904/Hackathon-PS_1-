@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { HealthStrip } from "@/components/timetable/HealthStrip";
 import { SetupChecklist } from "./SetupChecklist";
+import { AssistantCostCard } from "@/components/usage/AssistantCost";
 import { LeaveCard } from "./LeaveCard";
 import { TodayCard } from "./TodayCard";
 import { PublishButton } from "@/components/timetable/PublishButton";
@@ -211,6 +212,8 @@ export function StaffHome() {
       )}
 
       {role === "coordinator" && readiness?.[0] && <MyDepartmentCard d={readiness[0]} />}
+
+      {role === "admin" && <AssistantCostCard />}
 
       {role === "admin" && warnings.length > 0 && (
         <Card className="mt-4 p-5">

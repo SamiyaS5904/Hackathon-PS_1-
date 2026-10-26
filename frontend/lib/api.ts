@@ -1,5 +1,5 @@
 import type {
-  AuditEntry, AuthOut, CoverAction, CoverChoice, Leave, LeaveApplied, LeavePlan, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
+  AssistantUsage, AuditEntry, AuthOut, CoverAction, UsagePeriod, CoverChoice, Leave, LeaveApplied, LeavePlan, Booking, BookingSlot, BookResult, ChangeRequest, CollegeSummary, SetupStatus, TodayReport, OfficeHour, PlatformOverview, SectioningOptions, SectioningOut, TeacherHours, ClassAttendance, Feed, MakeupOption, SectionAttendance, StudentAttendance, TeacherClass, College, Insight, DepartmentReadiness, DeptData, Department, ImportOut, InviteOut, Job, Member,
   MoveOption, OrgInfo, OverrideOut, Precheck, Proposal, Rule, SetupSaved, Settings, SuggestResult, TimeBlock,
   TimetableOut, Venue, WeekOut, RescheduleOut, FreeVenue, VenueEventLists, VenueEventResult, Notice, NoticeIn,
 } from "./types";
@@ -94,6 +94,7 @@ export const api = {
   notifications: () => request<Feed>(`${org()}/notifications`),
   // Platform owner (Super Admin): not tied to one college
   platformOverview: () => request<PlatformOverview>("/api/platform/overview"),
+  platformAssistantUsage: () => request<Record<string, UsagePeriod>>("/api/platform/assistant-usage"),
   updateCollege: (id: string, body: { plan?: string; status?: string; note?: string }) =>
     request<CollegeSummary>(`/api/platform/colleges/${id}`, { method: "PATCH", body: JSON.stringify(body) }),
   // Teacher booking
@@ -135,6 +136,7 @@ export const api = {
   /** Several one-day changes as one step: all or nothing, one log entry, one notification. */
   batchOverrides: (body: { title: string; changes: { session_id: string; date: string; kind: "cancel" | "move"; reason?: string }[] }) =>
     request<OverrideOut>(`${org()}/overrides/batch`, post(body)),
+  assistantUsage: () => request<AssistantUsage>(`${org()}/assistant/usage`),
   /** Teacher leave: teachers ask; Coordinator / Admin approve, preview a cover plan, apply it. */
   leaves: () => request<Leave[]>(`${org()}/leaves`),
   askLeave: (body: { teacher_id?: string; start_date: string; end_date: string; reason: string }) =>

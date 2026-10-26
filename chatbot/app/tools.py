@@ -394,6 +394,7 @@ class ToolContext:
     _timetable: asyncio.Future | None = None
     _weeks: dict[str, dict] = field(default_factory=dict)
     cards: list[dict] = field(default_factory=list)  # proposals / one-day actions for the UI
+    usage: dict[str, int] = field(default_factory=dict)  # tokens this answer used (for the cost card)
 
     @property
     def role(self) -> str:

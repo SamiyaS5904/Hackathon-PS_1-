@@ -117,6 +117,11 @@ export interface LeavePlan {
   items: PlanItem[]; covered: number; cancelled: number; summary: string; problems: string[];
 }
 export interface CoverChoice { session_id: string; date: string; action: CoverAction; teacher_id: string | null }
+export interface UsagePeriod { requests: number; tokens: number; usd: number; inr: number }
+export interface AssistantUsage {
+  today: UsagePeriod; week: UsagePeriod; month: UsagePeriod; per_answer_inr: number;
+  by_day: { day: string; requests: number; usd: number }[]; prices: Record<string, number>;
+}
 export interface LeaveApplied { message: string; leave: Leave; entry_id: string | null }
 
 export interface MakeupOption { date: string; label: string; start_period: number; start: string; end: string; venue_id: string | null; venue: string }

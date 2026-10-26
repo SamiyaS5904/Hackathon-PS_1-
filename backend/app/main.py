@@ -48,6 +48,7 @@ from app import attendance, change_requests, platform, sectioning
 from app.routers.bookings import router as bookings_router
 from app.routers.platform import router as platform_router
 from app.routers.leave import router as leave_router
+from app.routers.usage import router as usage_router
 from app.routers.today import router as today_router
 from app.today import Problem, locate
 from app.change_requests import ChangeRequestOut
@@ -114,6 +115,7 @@ app.include_router(bookings_router)
 app.include_router(platform_router)
 app.include_router(today_router)
 app.include_router(leave_router)
+app.include_router(usage_router)
 
 
 @app.get("/api/health")

@@ -119,6 +119,9 @@ class Backend:
                                 json={"teacher_id": teacher_id, "start_date": start, "end_date": end,
                                       "actions": {str(k): v for k, v in actions.items()}})
 
+    async def record_usage(self, usage: dict[str, int]) -> None:
+        await self._call("POST", self._o("/assistant/usage"), json=usage)
+
     # ---- proposals (never applied here: the user applies them in the app) ----
     async def propose(self, session_id: str, day: str, start_period: int) -> dict:
         return await self._call("POST", self._o("/proposals"),

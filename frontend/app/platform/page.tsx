@@ -4,6 +4,7 @@ import clsx from "clsx";
 import { Search } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { CollegeCard } from "@/components/platform/CollegeCard";
+import { PlatformAssistantCost } from "@/components/usage/AssistantCost";
 import { ErrorCard, PageHeader, Skeleton } from "@/components/ui";
 import { api } from "@/lib/api";
 import type { CollegeSummary, PlatformOverview } from "@/lib/types";
@@ -70,6 +71,7 @@ export default function PlatformPage() {
           <p className="mt-3 text-xs text-muted">
             Plans: {Object.entries(data.plans).map(([p, n]) => `${n} ${p}`).join(" · ") || "none yet"}
           </p>
+          <PlatformAssistantCost names={Object.fromEntries(data.items.map((c) => [c.id, c.name]))} />
 
           <div className="mt-6 flex flex-wrap items-center gap-2">
             <div className="flex rounded-lg border border-border bg-surface p-0.5" role="tablist" aria-label="Filter colleges">
