@@ -67,7 +67,7 @@ Everywhere:
 | Department data, Excel upload with errors marked, teacher suggestions, Ready | **More** → *Departments* |
 | Attendance per section, the college's minimum | **More** → *Attendance* |
 | Meetings when chosen teachers are all free | **More** → *Meetings* |
-| Room requests for events (approve shared rooms) | **More** → *Room bookings* |
+| Room requests for events (approve shared rooms) | **More** → *Room booking* |
 | Rules (Must / Try, incl. mess split), people and invites, college data | **More** |
 | Notices to a department, a year or a section | **Home** → *Notices* → *New notice* |
 | Excel / PDF exports | **Timetable** → *Download* |
@@ -81,7 +81,7 @@ Everywhere:
 | Own department's data, Excel, suggestions, Ready | **My department** |
 | Move / change own department's classes | **Timetable** |
 | Teachers' requests, changes, Undo | **Changes** |
-| Approve room requests for own department's rooms | **More** → *Room bookings* |
+| Approve room requests for own department's rooms | **More** → *Room booking* |
 | Notices to own teachers / students / a year / a section | **Home** → *Notices* |
 
 ### Teacher (sees only their own lectures)
@@ -93,7 +93,7 @@ Everywhere:
 | Take attendance | **Home** (Today) or **More** → *Attendance* |
 | Reschedule: when you, your students and a room are all free → move for one day or ask for good | **Timetable** → click a lecture |
 | Office hours and who booked them | **Bookings** |
-| Book a room for a club event (free rooms only) | **More** → *Room bookings* |
+| Book a room for a club event (free rooms only) | **More** → *Room booking* |
 
 ### Student (sees only their own classes)
 
