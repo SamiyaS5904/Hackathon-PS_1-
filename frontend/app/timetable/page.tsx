@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { GenerateButton, GenerationProgress } from "@/components/timetable/GenerateButton";
 import { PublishButton } from "@/components/timetable/PublishButton";
 import { DownloadMenu } from "@/components/timetable/DownloadMenu";
+import { DayList, useIsPhone } from "@/components/timetable/DayList";
 import { FindAny } from "@/components/timetable/FindAny";
 import { TrustBar } from "@/components/timetable/TrustBar";
 import { OneDayPanel } from "@/components/timetable/OneDayPanel";
@@ -52,7 +53,9 @@ export default function TimetablePage() {
   const showToast = useToast();
   // Students and teachers care about real dates (cancellations, one-day moves) first.
   // Students and teachers open on Today (now, next, done); staff on the weekly plan they manage.
-  const [mode, setMode] = useState<"today" | "plan" | "week">(isStaff(role) ? "plan" : "today");
+  // Home already shows today, so teachers and students open on This week here.
+  const [mode, setMode] = useState<"today" | "plan" | "week">(isStaff(role) ? "plan" : "week");
+  const isPhone = useIsPhone();
   // Staff move classes directly; teachers pick their own lecture and a slot to ask their Coordinator.
   const canDrag = isStaff(role) || (isTeacher && !!member?.teacher_id);
   const [weekStart, setWeekStart] = useState(() => isoDate(new Date()));
@@ -63,6 +66,8 @@ export default function TimetablePage() {
     const q = new URLSearchParams(window.location.search);
     const m = q.get("mode");
     if (m === "today" || m === "plan" || m === "week") setMode(m === "today" && isStaff(role) ? "week" : m);
+    // Staff on a phone: day-by-day cards of this week instead of the wide weekly grid.
+    else if (isStaff(role) && window.matchMedia("(max-width: 640px)").matches) setMode("week");
     const v = q.get("view");
     if (v === "section" || v === "teacher" || v === "venue") {
       setView(v);
@@ -320,7 +325,13 @@ export default function TimetablePage() {
           {mode === "today" && member ? (
             <TodayView college={college} member={member} lunches={data.timetable.lunches} />
           ) : mode === "week" ? (
-            weekView ? (
+            weekView && isPhone && week ? (
+              <DayList college={college} week={week} view={view} entityId={entityId}
+                onSelect={isStudent ? undefined : (occ) => {
+                  if (isStaff(role) || occ.session.teacher_id === member?.teacher_id) setSelected(occ);
+                  else editor.setToast({ text: "You can only change your own lectures.", tone: "danger" });
+                }} />
+            ) : weekView ? (
               <TimetableGrid college={college} timetable={weekView.timetable} view={view} entityId={entityId}
                 dayLabels={weekView.dayLabels} meta={weekView.meta}
                 onSelect={isStudent ? undefined : (s) => {
@@ -417,7 +428,7 @@ function EditBar({
             </button>
           </div>
         ) : (
-          <p className="hidden px-1 py-3 text-xs text-muted sm:block">
+          <p className="px-1 py-2 text-xs text-muted sm:py-3">
             {hint ?? <>Tip: drag any class to a new slot, or click it and then click a slot. Green = free, amber = other classes
             will move to make room, red = not allowed. You always see the result before it&apos;s applied.</>}
           </p>
