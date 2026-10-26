@@ -88,16 +88,16 @@ def check(college: College) -> list[str]:
                         "department workspace, or pick a teacher for each.")
     for a in college.allotments:
         if a.subject_id not in ids["subject"]:
-            problems.append(f"Allotment {a.id} refers to an unknown subject.")
+            problems.append("A class refers to a subject that no longer exists. Upload the department's Excel sheet again.")
             continue
         if a.teacher_id is None:
             continue
         if a.teacher_id not in ids["teacher"]:
-            problems.append(f"Allotment {a.id} refers to an unknown teacher.")
+            problems.append("A class refers to a teacher who no longer exists. Upload the department's Excel sheet again.")
             continue
         missing = [sid for sid in a.section_ids if sid not in ids["section"]]
         if missing:
-            problems.append(f"Allotment {a.id} refers to unknown section(s) {', '.join(missing)}.")
+            problems.append(f"A class refers to section(s) that no longer exist ({', '.join(missing)}). Upload the department's Excel sheet again.")
             continue
 
         subj = college.subject(a.subject_id)

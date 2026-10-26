@@ -380,5 +380,5 @@ def empty_college(name: str) -> College:
     return College(
         id="new", name=name, days=["Mon", "Tue", "Wed", "Thu", "Fri"], lab_periods=2,
         shifts=[Shift(id="day", name="Day", periods=periods, lunch=LunchRule(window_start="11:30", window_end="14:00"))],
-        departments=[], venues=[], sections=[], teachers=[], subjects=[], allotments=[],
+        departments=[], venues=[], sections=[], teachers=[], subjects=[], allotments=[], setup_saved=False,
     )

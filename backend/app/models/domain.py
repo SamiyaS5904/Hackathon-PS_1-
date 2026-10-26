@@ -280,6 +280,8 @@ class College(BaseModel):
     department_status: dict[str, DepartmentStatus] = Field(default_factory=dict)
     # Attendance rule: students need at least this share of held classes, overall and per subject.
     attendance_min_percent: int = 75
+    # Setup checklist: None = an older college (treated as set up once it has departments).
+    setup_saved: bool | None = None
     revision: int = 0  # bumped on every data change; a timetable remembers the revision it was built from
 
     # ---- lookups -------------------------------------------------------

@@ -38,6 +38,7 @@ from app.edits import regenerate
 from app.edits.moves import Change, MoveOption, diff, move_options, repair_move
 from app.edits.oneday import (DayInfo, MakeupOption, Occurrence, add_override, day_options, label, makeup_options,
                               occurrences, remove_override, week)
+from app.edits.oneday import _day as one_day
 from app.io.excel import RowError
 from app.io.excel import parse as excel_parse
 from app.io.excel import template as excel_template
@@ -45,6 +46,8 @@ from app.io.export import build_grid, entity_name, to_pdf, to_xlsx
 from app import attendance, change_requests, platform, sectioning
 from app.routers.bookings import router as bookings_router
 from app.routers.platform import router as platform_router
+from app.routers.today import router as today_router
+from app.today import Problem, locate
 from app.change_requests import ChangeRequestOut
 from app.notify import Audience, FeedOut, feed, mark_seen, notify_change, send
 from app.notify import warm as notify_warm
@@ -107,6 +110,7 @@ app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*
                    expose_headers=["Content-Disposition"])  # file names for downloads
 app.include_router(bookings_router)
 app.include_router(platform_router)
+app.include_router(today_router)
 
 
 @app.get("/api/health")
@@ -248,17 +252,27 @@ class JobOut(BaseModel):
     message: str = ""
 
 
+class LastChange(BaseModel):
+    id: str  # audit entry id: Undo targets exactly this change
+    at: float
+    actor: str
+    action: str
+    can_undo: bool
+
+
 class TimetableOut(BaseModel):
     timetable: Timetable
     quality: QualityReport | None
     violations: list[Violation]
     stale: bool = False  # college data changed since this timetable was generated
     ever_published: bool = False  # teachers and students can see a timetable
+    last_change: LastChange | None = None  # staff only: who changed the timetable last, and when
 
 
 class PrecheckOut(BaseModel):
     problems: list[str]
     warnings: list[str]
+    located: list[Problem] = []  # the same problems, each with the page where it can be fixed
 
 
 class OrgOut(BaseModel):
@@ -299,7 +313,8 @@ def load_sample(ctx: Ctx = Depends(org_ctx)) -> College:
 @app.get("/api/orgs/{org}/precheck", response_model=PrecheckOut)
 def precheck(ctx: Ctx = Depends(org_ctx)) -> PrecheckOut:
     college = ctx.state.college
-    return PrecheckOut(problems=check(college), warnings=warnings(college))
+    problems = check(college)
+    return PrecheckOut(problems=problems, warnings=warnings(college), located=[locate(college, p) for p in problems])
 
 
 @app.post("/api/orgs/{org}/timetable/generate", response_model=JobOut, status_code=202)
@@ -364,10 +379,17 @@ def _timetable_out(ctx: Ctx) -> TimetableOut:
     else:
         quality = score(college, tt.sessions, tt.lunches) if tt.sessions else None
         violations = validate(college, tt.sessions, tt.lunches) if tt.sessions else []
+    last = None
     if ctx.member.role not in ("admin", "coordinator"):
         tt = tt.model_copy(update={"sessions": visible_sessions(ctx.member, college, tt)})
+    else:
+        entry = next((e for e in reversed(store.org(ctx.state.id).audit) if e.source != "publish"), None)
+        undoable = store.last_undoable(ctx.state.id)
+        if entry is not None:
+            last = LastChange(id=entry.id, at=entry.at, actor=entry.actor, action=entry.action,
+                              can_undo=undoable is not None and undoable.id == entry.id)
     return TimetableOut(timetable=tt, quality=quality, violations=violations, stale=stale,
-                        ever_published=ctx.state.published is not None)
+                        ever_published=ctx.state.published is not None, last_change=last)
 
 
 @app.get("/api/orgs/{org}/timetable", response_model=TimetableOut)
@@ -890,11 +912,18 @@ def notifications_seen(ctx: Ctx = Depends(org_ctx)) -> Response:
     return Response(status_code=204)
 
 
+class UndoRequest(BaseModel):
+    entry_id: str | None = None  # undo exactly this change (refused if something changed after it)
+
+
 @app.post("/api/orgs/{org}/audit/undo", response_model=TimetableOut)
-def undo(ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
+def undo(body: UndoRequest | None = None, ctx: Ctx = Depends(org_ctx)) -> TimetableOut:
     entry = store.last_undoable(ctx.state.id)
     if entry is None:
         raise HTTPException(409, "Nothing to undo.")
+    if body and body.entry_id and body.entry_id != entry.id:
+        raise HTTPException(409, "Someone changed the timetable after this, so it can't be undone from here. "
+                                 "Open Changes to undo step by step.")
     allow(can_undo(ctx.member, entry.actor))
     before = ctx.state.timetable
     store.undo_last(ctx.state.id, actor=ctx.user.name)
@@ -974,6 +1003,44 @@ def create_override(body: OverrideRequest, ctx: Ctx = Depends(org_ctx)) -> Overr
     return OverrideOut(message=message, timetable=_timetable_out(ctx))
 
 
+class BatchOverrideRequest(BaseModel):
+    changes: list[OverrideRequest]
+    title: str = ""  # one line for the activity log, e.g. "Dr. Kaur away on Thu 30 Oct"
+    via: Literal["app", "chatbot"] = "app"
+
+
+@app.post("/api/orgs/{org}/overrides/batch", response_model=OverrideOut, status_code=201)
+def create_overrides(body: BatchOverrideRequest, ctx: Ctx = Depends(org_ctx)) -> OverrideOut:
+    """Several one-day changes as one step: all of them or none, one activity entry, one notification."""
+    state = _current(ctx, for_edit=True)
+    if not 1 <= len(body.changes) <= 60:
+        raise HTTPException(422, "Send between 1 and 60 changes at a time.")
+    tt, messages, actions = state.timetable, [], []
+    for ch in body.changes:
+        s = _session(state, ch.session_id)
+        allow(can_edit_one_day(ctx.member, state.college, s))
+        new, message, action = add_override(state.college, tt, ch.session_id, ch.date, ch.kind, ch.to_date,
+                                            ch.start_period, ch.reason, actor=ctx.user.name)
+        if new is None:
+            raise HTTPException(422, f"{state.college.subject(s.subject_id).name} on {label(ch.date)}: {message} "
+                                     "Nothing was changed.")
+        tt = new
+        messages.append(message)
+        actions.append(action)
+    # Golden rule #1 on every real date this touches: nothing may clash and every section keeps its lunch.
+    for d in sorted({ch.to_date or ch.date for ch in body.changes}):
+        if validate(state.college, *one_day(state.college, tt, d), check_counts=False):
+            raise HTTPException(422, f"These changes would create a clash on {label(d)}. Nothing was changed.")
+    source = "chatbot" if body.via == "chatbot" else "teacher" if ctx.member.role == "teacher" else "one-day"
+    action = body.title.strip()[:200] or (actions[0] if len(actions) == 1 else f"{len(actions)} one-day changes")
+    before = state.timetable
+    store.set_timetable(state.id, tt, action=action, source=source, actor=ctx.user.name)
+    notify_change(state.id, state.college, before, tt, action, " ".join(messages)[:900], ctx.user.id)
+    n = len(messages)
+    return OverrideOut(message=messages[0] if n == 1 else f"{n} changes saved. Everyone affected is told.",
+                       timetable=_timetable_out(ctx))
+
+
 @app.delete("/api/orgs/{org}/overrides/{override_id}", response_model=OverrideOut)
 def delete_override(override_id: str, ctx: Ctx = Depends(org_ctx)) -> OverrideOut:
     state = _current(ctx, for_edit=True)
@@ -1033,8 +1100,8 @@ class DepartmentReadiness(BaseModel):
     students: int
 
 
-def _saved(state, college: College) -> SetupSaved:
-    saved = store.update_college(state.id, college)
+def _saved(state, college: College, bump: bool = True) -> SetupSaved:
+    saved = store.update_college(state.id, college, bump=bump)
     return SetupSaved(college=saved, problems=check(saved), warnings=warnings(saved))
 
 
@@ -1057,7 +1124,7 @@ def put_settings(body: Settings, ctx: Ctx = Depends(org_ctx)) -> SetupSaved:
     new, errs = apply_settings(ctx.state.college, body)
     if new is None:
         raise HTTPException(422, " ".join(errs))
-    return _saved(ctx.state, new)
+    return _saved(ctx.state, new.model_copy(update={"setup_saved": True}))
 
 
 @app.put("/api/orgs/{org}/departments", response_model=SetupSaved)
@@ -1135,7 +1202,8 @@ def mark_ready(dept: str, body: ReadyRequest, ctx: Ctx = Depends(org_ctx)) -> Se
             raise HTTPException(422, "Add this department's classes (who teaches which subject to which section) first.")
         if missing:
             raise HTTPException(422, f"{len(missing)} class(es) still have no teacher.")
-    return _saved(ctx.state, set_ready(college, dept, body.ready, ctx.user.name))
+    # Ready is a status, not timetable data: the current timetable stays up to date.
+    return _saved(ctx.state, set_ready(college, dept, body.ready, ctx.user.name), bump=False)
 
 
 @app.get("/api/orgs/{org}/readiness", response_model=list[DepartmentReadiness])
