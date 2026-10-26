@@ -324,9 +324,9 @@ def build_gndec_college() -> College:
     dept_elective = ElectiveSlot(id="cse-d4-elective", name="Department Elective (D4 CSE)",
                                  section_ids=[s.id for s in d4], lectures_per_week=3, groups=groups)
 
-    # JPAL: about 30 selected final-year CSE students (every 6th roll number); everyone else has a major-project
-    # review with their own section's guide at that hour.
-    jpal_ids = [st.id for k, st in enumerate(d4_students) if k % 6 == 0]
+    # JPAL: about 30 selected final-year CSE students (every 6th roll number, from the 4th); everyone else has a
+    # major-project review with their own section's guide at that hour.
+    jpal_ids = [st.id for k, st in enumerate(d4_students) if k % 6 == 3]
     subjects.append(Subject(id="cs420", code="CS420", name="JPAL", department_id="cse", year=4, lectures_per_week=0))
     subjects.append(Subject(id="cs421", code="CS421", name="Major Project Review", department_id="cse", year=4,
                             lectures_per_week=0))

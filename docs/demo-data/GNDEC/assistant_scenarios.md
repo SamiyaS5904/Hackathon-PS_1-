@@ -22,7 +22,7 @@ at the same hour. Holiday: Tue 24 Nov 2026 (Guru Nanak Dev Ji Gurpurab).
 | College Admin | admin@gndec.demo | everything |
 | Coordinator | cse.coordinator@gndec.demo (also it., me., ce., as.) | own department |
 | Teacher | varun.chopra@gndec.demo (CSE, Data Structures, D2CS) · harleen.grewal@gndec.demo (AS, first-year maths) | own lectures |
-| Student | 2515001@gndec.demo (D2CS-A) · 2315001@gndec.demo (D4CS-A) · 2315007@gndec.demo (D4CS-A, **JPAL**) · 2611001@gndec.demo (D1CE-A) | own section / groups |
+| Student | 2515001@gndec.demo (D2CS-A) · 2315001@gndec.demo (D4CS-A, not in JPAL) · 2315004@gndec.demo (D4CS-A, **JPAL**) · 2611001@gndec.demo (D1CE-A) | own section / groups |
 
 ## Student (read-only)
 
@@ -115,6 +115,29 @@ at the same hour. Holiday: Tue 24 Nov 2026 (Guru Nanak Dev Ji Gurpurab).
    in the chat panel (type it, then once by voice).
 3. Mark each row pass / fail against "A good answer contains", and note the time to the first word.
 
-## Results (local run)
+## Results (local run, 2026-10-27)
 
-See the bottom of this file once a run is recorded.
+Local copy (SQLite, backend on port 8100), GNDEC generated with `time_limit=180` and 2 solver workers:
+**570 classes, 0 clashes, quality 79** (gaps penalty 1.1: 10 idle periods across 56 lab groups a week; no day
+with a single class). Questions were asked through the assistant's own tools and instant answers (same
+permissions as the chat, no AI model, so no cost), as of Wed 28 Oct 10:45. The model-written answers
+(leave wording, Hinglish, proposals) still need a run in the chat panel with an API key.
+
+| Role | Question | Result | Time |
+|---|---|---|---|
+| Student D2CS-A | Where can I sit now? | Pass: "25 rooms are free right now", seats and until when. *Improve:* labs (JPAL Lab, Drawing Hall, SOM Lab) are listed before lecture rooms; for "where can I sit" lecture rooms of the own department should come first. | 0.16 s |
+| Student D2CS-A | What's my next class? | Pass: current class (OOP, S-215, until 11:30) and the next one with teacher and room. | 0.02 s |
+| Student D2CS-A | What do I have tomorrow? | Pass: 4 classes with times, rooms, teachers. | <0.01 s |
+| Student D2CS-A | Gaps tomorrow? | Pass: free 08:30-10:30 and 12:30-13:30, lunch 11:30-12:30 shown as lunch. | 0.08 s |
+| Student D2CS-A | Show D3CS-B's timetable | Pass: refused (students see only their own). | - |
+| Student D2CS-A | College on 24 Nov? | Pass: no classes, "Guru Nanak Dev Ji Gurpurab". | 0.01 s |
+| Student D4CS-A (JPAL) | When is my JPAL lab? | Pass: Mon 10:30-11:30, JPAL Lab, the JPAL teacher. | - |
+| Student D4CS-A (not JPAL) | When is my JPAL lab? | Pass (data): their week shows Major Project Review at that hour, not JPAL. | - |
+| Teacher (CSE) | What do I teach tomorrow? | Pass: own 2 classes only (D2CS-A lecture, D2CS-B B2 lab). | 0.03 s |
+| Teacher (CSE) | When am I free on Thursday? | Pass: 08:30-10:30, 11:30-13:30, 15:30-17:30. | 0.07 s |
+| Teacher (CSE) | Rooms for 60 at 14:30 | Pass: only rooms with 60+ seats, with owner department. | 0.01 s |
+| CSE Coordinator | Teacher on leave Mon-Tue: plan cover | Pass: 4 classes, all 4 covered by the second Data Structures teacher (same subject), within daily limits; nothing changes until Apply. | 0.46 s |
+| CSE Coordinator | Show D2CS-C timetable | Pass: opens it. | <0.01 s |
+| ME Coordinator | Show D2CS-A timetable (CSE) | Opens it: Coordinators can view every department's timetable today (they edit only their own). Matches the app; check against the roles table if view should be limited. | 0.11 s |
+| College Admin | Clash-free? Quality? | Pass: score 79 with each penalty explained. | 0.13 s |
+| College Admin | Which departments are ready? | Pass: all 5 Ready, with sections / teachers / classes / students. | 0.01 s |
