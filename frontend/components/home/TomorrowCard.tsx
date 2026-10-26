@@ -22,15 +22,19 @@ export function TomorrowCard() {
   const [leaves, setLeaves] = useState<Leave[]>([]);
   const [planning, setPlanning] = useState<Leave | null>(null);
 
+  // Counted from the college's own "today" (the server's date), not this device's clock and time zone.
+  const [today, setToday] = useState<string | null>(null);
+  useEffect(() => { api.today().then((r) => setToday(r.date)).catch(() => setToday(iso(new Date()))); }, []);
   const next = useMemo(() => {
-    const d = new Date();
+    if (!today) return null;
+    const d = new Date(`${today}T12:00`);
     for (let i = 1; i < 10; i++) {
       const x = new Date(d);
       x.setDate(d.getDate() + i);
       if (college?.days.includes(WEEKDAYS[x.getDay()])) return iso(x);
     }
     return null;
-  }, [college]);
+  }, [college, today]);
 
   const load = () => {
     if (!next) return;
