@@ -235,7 +235,9 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 
 **✅ Done 2026-10-25:** voice + language quality · teacher booking · auto-sectioning · Super Admin platform · mid-semester regenerate with minimal change
 
-**🔨 Building now (2026-10-26, for the submission; two sessions in parallel)**
+**✅ Done 2026-10-27 (both sessions, merged into main):** teacher leave → cover plan (substitutes ranked, per year cancel / cover, Apply → validated one-day changes, undo, notifications; Coordinator Home + assistant card; teacher "Ask for leave") · assistant: parallel tools, leave / undo / show-on-screen tools, drives the screen, suggestions while typing · voice: Whisper (gpt-4o-transcribe) + natural TTS with `OPENAI_API_KEY` (or OpenRouter), browser voice fallback, Chat / Talk modes, interrupt by speaking · tomorrow's brief · assistant cost card (Admin + platform) · Session B: bookings in the main menu, reschedule finder, venue booking for events, mess split Try rule, 4 more demo teachers (seed only; live DB not reseeded), notices. Still to check by hand: microphone + cloud voice with a real key.
+
+**Plan as built (2026-10-26)**
 Data: only the Demo Institute (Dr. Anita) stays in the database; the GNDEC demo college comes later from the user's data (then also on the Demo page). Fixed breaks are optional (a new college has none).
 
 *Session A: agentic assistant + teacher leave* (chatbot, leave/substitute backend, coordinator Home, chat panel)
