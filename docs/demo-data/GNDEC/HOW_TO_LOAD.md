@@ -42,7 +42,7 @@ that doesn't stop Generate). Then *Generate* → check 0 clashes → *Publish*.
 DBMS / OS / PL / HW / WD / HPC labs), first-year maths for D1CS-A + D1CS-B together in a lecture theatre, and
 2+ teachers who can teach almost every subject (so leave cover finds a substitute).
 
-Student logins: their email (`<roll no>@gndec.demo`, e.g. `2515001@gndec.demo`), first password = roll number.
+Student logins: their email (`<roll no>@gndec.test`, e.g. `2515001@gndec.test`; a different domain from the built-in GNDEC demo, so the two never share accounts), first password = roll number.
 Teachers and Coordinators: invite them from *People & invites*.
 
 Not in the files (they need a student list per group): the final-year CSE **JPAL hour** and the **department

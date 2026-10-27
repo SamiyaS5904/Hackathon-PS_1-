@@ -54,6 +54,8 @@ from app.models.domain import (
 
 ORG_ID = "gndec"
 DOMAIN = "gndec.demo"
+# The upload files use another domain, so a college built from them never shares accounts with this demo college.
+FILES_DOMAIN = "gndec.test"
 DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"]
 
 DAY = Shift(
@@ -469,6 +471,8 @@ def department_files(college: College | None = None) -> dict[str, bytes]:
     """One upload file per department, filled with this college's data (Applied Sciences first)."""
 
     college = college or build_gndec_college()
+    college = college.model_copy(update={"students": [
+        s.model_copy(update={"email": s.email.replace(f"@{DOMAIN}", f"@{FILES_DOMAIN}")}) for s in college.students]})
     out = {}
     for i, dept in enumerate(["as", "cse", "it", "me", "ce"], start=1):
         d = next(x for x in college.departments if x.id == dept)
