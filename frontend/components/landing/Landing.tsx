@@ -1,23 +1,26 @@
-import {
-  ArrowRight, CheckCircle2, Mic, MousePointerClick, ShieldCheck, Undo2, Wand2,
-} from "lucide-react";
+import { ArrowRight, CheckCircle2, FileSpreadsheet, Mic, ShieldCheck, Undo2 } from "lucide-react";
+import { Instrument_Serif } from "next/font/google";
 import Link from "next/link";
-import type { CSSProperties, ReactNode } from "react";
+import type { ReactNode } from "react";
 import { ThemeToggle } from "@/lib/theme";
-import { ChatDemo, CountUp, Reveal } from "./motion";
+import { ChatDemo, HeroApp, Reveal } from "./motion";
+
+const serif = Instrument_Serif({ weight: "400", style: "italic", subsets: ["latin"], variable: "--font-serif", display: "swap" });
 
 const btn = "inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium transition";
 const primary = `${btn} bg-accent text-white shadow-sm hover:-translate-y-px hover:shadow-md dark:text-bg`;
 const secondary = `${btn} border border-border-strong bg-surface hover:bg-surface-2`;
 
-/** The public home page: one idea per screen, little text, calm motion. */
+/** One accented phrase per heading, in an editorial serif. */
+const Em = ({ children }: { children: ReactNode }) => <span className="tt-serif text-[1.08em] text-accent-text">{children}</span>;
+
+/** The public home page: one idea per screen, little text, the product itself as the picture. */
 export function Landing() {
   return (
-    <div className="min-h-screen overflow-x-hidden bg-bg text-text">
+    <div className={`${serif.variable} min-h-screen overflow-x-hidden bg-bg text-text`}>
       <Nav />
       <Hero />
-      <Stats />
-      <Pillars />
+      <Bento />
       <AssistantShowcase />
       <Everything />
       <Steps />
@@ -60,88 +63,33 @@ function Nav() {
 function Hero() {
   return (
     <section className="relative">
-      <div className="tt-grid-bg pointer-events-none absolute inset-0 -z-0" aria-hidden />
-      <div className="tt-glow pointer-events-none absolute left-1/2 top-[-12rem] -z-0 h-[32rem] w-[56rem] -translate-x-1/2 rounded-full bg-accent/20 blur-3xl" aria-hidden />
-      <div className="relative mx-auto max-w-6xl px-4 pb-16 pt-16 text-center md:pt-24">
-        <p className="tt-fade-up mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-surface/80 px-3 py-1 text-xs text-muted backdrop-blur">
-          <span className="relative flex h-2 w-2">
-            <span className="tt-ping absolute inline-flex h-full w-full rounded-full bg-ok" />
-            <span className="relative inline-flex h-2 w-2 rounded-full bg-ok" />
-          </span>
-          Now with AI cover plans for teacher leave
-        </p>
-        <h1 className="tt-fade-up mx-auto mt-6 max-w-4xl text-5xl font-semibold leading-[1.05] tracking-tight md:text-7xl" style={{ animationDelay: "80ms" }}>
-          Timetables that{" "}
-          <span className="bg-gradient-to-r from-accent to-ok bg-clip-text text-transparent">never clash.</span>
+      <div className="tt-grid-bg pointer-events-none absolute inset-0" aria-hidden />
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-[38rem] bg-[radial-gradient(60%_50%_at_50%_0%,rgb(var(--accent)/0.10),transparent)]" aria-hidden />
+      <div className="relative mx-auto max-w-6xl px-4 pb-20 pt-16 text-center md:pt-24">
+        <a href="#assistant" className="tt-fade-up group mx-auto inline-flex items-center gap-2 rounded-full border border-border bg-surface/80 py-1 pl-1 pr-3 text-xs text-muted backdrop-blur transition hover:border-border-strong">
+          <span className="rounded-full bg-accent-soft px-2 py-0.5 font-medium text-accent-text">New</span>
+          Cover plans for teacher leave
+          <ArrowRight size={12} className="transition group-hover:translate-x-0.5" aria-hidden />
+        </a>
+        <h1 className="tt-fade-up mx-auto mt-7 max-w-4xl text-[2.9rem] font-semibold leading-[1.02] tracking-[-0.035em] md:text-[5.2rem]" style={{ animationDelay: "80ms" }}>
+          Timetables that <span className="whitespace-nowrap"><Em>never clash.</Em></span>
         </h1>
-        <p className="tt-fade-up mx-auto mt-5 max-w-xl text-lg text-muted md:text-xl" style={{ animationDelay: "160ms" }}>
+        <p className="tt-fade-up mx-auto mt-6 max-w-lg text-lg text-muted md:text-xl" style={{ animationDelay: "160ms" }}>
           Made in minutes. Kept right all semester.
         </p>
-        <div className="tt-fade-up mt-8 flex flex-wrap justify-center gap-3" style={{ animationDelay: "240ms" }}>
+        <div className="tt-fade-up mt-9 flex flex-wrap justify-center gap-3" style={{ animationDelay: "240ms" }}>
           <Link href="/demo" className={primary}>Try the demo college <ArrowRight size={16} aria-hidden /></Link>
           <Link href="/signup" className={secondary}>Create your college</Link>
         </div>
         <p className="tt-fade-up mt-4 text-xs text-muted" style={{ animationDelay: "300ms" }}>
           No sign-up. One click to log in as an admin, teacher or student.
         </p>
-        <div className="tt-fade-up mx-auto mt-14 max-w-3xl" style={{ animationDelay: "380ms" }}>
-          <HeroGrid />
+        <div className="tt-fade-up mx-auto mt-16 max-w-4xl" style={{ animationDelay: "380ms" }}>
+          <HeroApp />
         </div>
-      </div>
-    </section>
-  );
-}
-
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-const GRID: (string | null)[][] = [
-  ["DBMS", "OS", "Maths", "DBMS", "CN"],
-  ["OS", "Lab", "CN", "Maths", "OS"],
-  ["Lunch", "Lab", "Lunch", "Lunch", "DBMS"],
-  ["CN", "Lunch", "OS", "Lab", "Lunch"],
-  ["Maths", "DBMS", null, "Lab", "Maths"],
-];
-const HUE: Record<string, number> = { DBMS: 228, OS: 160, CN: 32, Maths: 280, Lab: 200 };
-
-function HeroGrid() {
-  return (
-    <div className="tt-float relative rounded-2xl border border-border bg-surface/90 p-4 text-left shadow-2xl backdrop-blur md:p-5">
-      <div className="mb-3 flex items-center gap-2 text-xs">
-        <span className="font-semibold">CSE · 3rd year · Section A</span>
-        <span className="tt-pop ml-auto inline-flex items-center gap-1.5 rounded-full bg-ok-soft px-2.5 py-0.5 font-medium text-ok" style={{ animationDelay: "1.9s" }}>
-          <ShieldCheck size={13} aria-hidden /> 0 clashes
-        </span>
-      </div>
-      <div className="relative grid grid-cols-5 gap-1.5 text-center text-[11px] md:text-xs">
-        {DAYS.map((d) => <div key={d} className="pb-1 font-medium text-muted">{d}</div>)}
-        {GRID.flatMap((row, r) => row.map((cell, c) => (
-          <div key={`${r}-${c}`} style={{ animationDelay: `${500 + (r * 5 + c) * 45}ms`, ...(cell && cell !== "Lunch" ? { "--h": HUE[cell] } : {}) } as CSSProperties}
-            className={`tt-pop flex h-9 items-center justify-center rounded-md font-medium md:h-11 ${
-              cell === "Lunch" ? "border border-dashed border-border-strong text-muted" : cell ? "subj border" : ""}`}>
-            {cell ?? ""}
-          </div>
-        )))}
-        <div className="tt-scan pointer-events-none absolute inset-x-0 h-8 -translate-y-1/2 bg-gradient-to-b from-transparent via-ok/25 to-transparent" aria-hidden />
-      </div>
-    </div>
-  );
-}
-
-function Stats() {
-  const items: [ReactNode, string][] = [
-    [<CountUp key="c" to={570} />, "classes placed for a 1,662-student college"],
-    ["0", "clashes, checked on every change"],
-    ["1 click", "to cover a teacher's leave"],
-    ["~1 s", "answers to everyday questions"],
-  ];
-  return (
-    <section className="border-y border-border/70 bg-surface/50">
-      <div className="mx-auto grid max-w-6xl grid-cols-2 gap-6 px-4 py-10 md:grid-cols-4">
-        {items.map(([v, l], i) => (
-          <Reveal key={l} delay={i * 90} className="text-center">
-            <p className="text-3xl font-semibold tracking-tight md:text-4xl">{v}</p>
-            <p className="mt-1 text-xs text-muted md:text-sm">{l}</p>
-          </Reveal>
-        ))}
+        <p className="tt-fade-up mt-8 text-xs text-muted" style={{ animationDelay: "500ms" }}>
+          Tested on two colleges · Demo Institute of Technology · GNDEC (demo) · 570 classes, 0 clashes
+        </p>
       </div>
     </section>
   );
@@ -151,33 +99,122 @@ function Heading({ eyebrow, title, sub }: { eyebrow: string; title: ReactNode; s
   return (
     <Reveal className="mx-auto max-w-2xl text-center">
       <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-text">{eyebrow}</p>
-      <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-5xl">{title}</h2>
+      <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] md:text-5xl">{title}</h2>
       {sub && <p className="mt-4 text-muted md:text-lg">{sub}</p>}
     </Reveal>
   );
 }
 
-function Pillars() {
-  const items: [typeof Wand2, string, string][] = [
-    [Wand2, "One click. Whole college.", "Every section, teacher and room, scheduled together."],
-    [ShieldCheck, "Zero clashes. Proven.", "An independent check on every timetable and every change."],
-    [MousePointerClick, "Change without chaos.", "Drag a class, cover a leave, undo anything."],
-  ];
+function Tile({ title, children, className = "", delay = 0 }: { title: ReactNode; children: ReactNode; className?: string; delay?: number }) {
+  return (
+    <Reveal delay={delay} className={className}>
+      <div className="flex h-full flex-col overflow-hidden rounded-2xl border border-border bg-surface p-6 transition duration-300 hover:border-border-strong hover:shadow-lg">
+        <h3 className="text-xl font-semibold tracking-tight">{title}</h3>
+        <div className="mt-5 flex-1">{children}</div>
+      </div>
+    </Reveal>
+  );
+}
+
+/** A line that appears when its tile scrolls into view. */
+const Row = ({ children, i, className = "" }: { children: ReactNode; i: number; className?: string }) => (
+  <li className={`tt-stagger ${className}`} style={{ animationDelay: `${220 + i * 150}ms` }}>{children}</li>
+);
+
+const Tick = ({ children, i }: { children: ReactNode; i: number }) => (
+  <Row i={i} className="flex items-center gap-2"><CheckCircle2 size={15} className="shrink-0 text-ok" aria-hidden /> {children}</Row>
+);
+
+const COVER = [["Mon 9:00", "DBMS · 3A", "Dr. Mehta"], ["Mon 11:00", "DBMS · 3B", "Dr. Arora"], ["Tue 10:00", "Lab · 3A", "Ms. Bedi"], ["Tue 2:00", "DBMS · 2A", "Cancelled"]];
+const VIEWS = [
+  ["Student · CSE-3A", "DBMS", "G-12 · until 10:30", "OS · Software Lab-2 · 10:30"],
+  ["Teacher · Dr. Kaur", "Data Structures", "G-14 · until 11:30", "Free, then CSE-2B at 12:30"],
+];
+const RULES = [["No first-year class after 4 pm", "Must"], ["At most 4 lectures a day per teacher", "Try"], ["Lunch split across two hours", "Try"]];
+
+function Bento() {
   return (
     <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-24">
-      <Heading eyebrow="Product" title="The hardest part of a semester, solved." />
-      <div className="mt-14 grid gap-5 md:grid-cols-3">
-        {items.map(([Icon, t, d], i) => (
-          <Reveal key={t} delay={i * 110}>
-            <div className="group h-full rounded-2xl border border-border bg-surface p-7 transition duration-300 hover:-translate-y-1 hover:border-accent/40 hover:shadow-xl">
-              <span className="grid h-11 w-11 place-items-center rounded-xl bg-accent-soft text-accent-text transition group-hover:scale-110">
-                <Icon size={20} aria-hidden />
-              </span>
-              <h3 className="mt-5 text-xl font-semibold tracking-tight">{t}</h3>
-              <p className="mt-2 text-muted">{d}</p>
-            </div>
-          </Reveal>
-        ))}
+      <Heading eyebrow="Product" title={<>The hardest part of a semester, <Em>solved.</Em></>} />
+      <div className="mt-14 grid gap-4 md:grid-cols-3">
+        <Tile className="md:col-span-2" title={<>One click. <Em>The whole college.</Em></>}>
+          <ul className="space-y-2.5 text-sm text-muted">
+            <Tick i={0}>Reads 28 sections, 96 teachers and 51 rooms</Tick>
+            <Tick i={1}>Places labs as blocks and electives side by side</Tick>
+            <Tick i={2}>Gives every section a lunch gap, every day</Tick>
+          </ul>
+          <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-surface-2"><div className="tt-bar h-full rounded-full bg-accent" /></div>
+          <p className="tt-stagger mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm" style={{ animationDelay: "2600ms" }}>
+            <span className="font-semibold">570 classes</span><span className="text-ok">0 clashes</span><span className="text-muted">quality 79/100</span>
+          </p>
+        </Tile>
+        <Tile delay={100} title={<>Checked <Em>twice.</Em></>}>
+          <ul className="space-y-2.5 text-sm">
+            <Tick i={0}>No teacher in two places</Tick>
+            <Tick i={1}>No room booked twice</Tick>
+            <Tick i={2}>Every room big enough</Tick>
+            <Tick i={3}>Labs kept in one block</Tick>
+          </ul>
+          <p className="mt-5 text-xs text-muted">A separate validator checks every timetable and every change.</p>
+        </Tile>
+
+        <Tile title={<>Teacher away? <Em>Covered.</Em></>}>
+          <ul className="space-y-2 text-xs">
+            {COVER.map(([w, c, s], i) => (
+              <Row key={w} i={i} className="flex items-center gap-2 rounded-lg border border-border px-2.5 py-2">
+                <span className="w-16 font-mono text-[10px] text-muted">{w}</span>
+                <span className="flex-1">{c}</span>
+                <span className={s === "Cancelled" ? "text-muted line-through" : "font-medium text-accent-text"}>{s}</span>
+              </Row>
+            ))}
+          </ul>
+        </Tile>
+        <Tile className="md:col-span-2" delay={100} title={<>Everyone sees <Em>their own</Em> day.</>}>
+          <ul className="grid gap-3 sm:grid-cols-2">
+            {VIEWS.map(([who, now, where, next], i) => (
+              <Row key={who} i={i} className="rounded-xl border border-border bg-surface-2/50 p-4">
+                <p className="text-[11px] font-medium uppercase tracking-wide text-muted">{who}</p>
+                <p className="mt-3 flex items-center gap-2 text-xs text-ok"><span className="h-1.5 w-1.5 rounded-full bg-ok" /> Now</p>
+                <p className="mt-1 text-lg font-semibold">{now}</p>
+                <p className="text-sm text-muted">{where}</p>
+                <p className="mt-3 border-t border-border pt-3 text-xs text-muted">Next: {next}</p>
+              </Row>
+            ))}
+          </ul>
+        </Tile>
+
+        <Tile title={<>Undo <Em>anything.</Em></>}>
+          <ul className="space-y-2 text-xs">
+            {["Moved CN to Wed 1:00", "Cover plan for Dr. Kaur", "Cancelled Lab on 28 Oct"].map((c, i) => (
+              <Row key={c} i={i} className="flex items-center gap-2">
+                <span className="flex-1 truncate">{c}</span>
+                <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 text-muted"><Undo2 size={11} aria-hidden /> Undo</span>
+              </Row>
+            ))}
+          </ul>
+        </Tile>
+        <Tile delay={80} title={<>Excel in. <Em>PDF out.</Em></>}>
+          <ul className="flex flex-wrap items-center gap-3 text-xs">
+            <Row i={0} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2">
+              <FileSpreadsheet size={16} className="text-ok" aria-hidden /> cse.xlsx
+            </Row>
+            <Row i={1} className="text-muted"><ArrowRight size={14} aria-hidden /></Row>
+            <Row i={2} className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-2">
+              <ShieldCheck size={16} className="text-accent-text" aria-hidden /> Notice-board PDF
+            </Row>
+          </ul>
+          <p className="mt-5 text-xs text-muted">One sheet per department, with row-level errors.</p>
+        </Tile>
+        <Tile delay={160} title={<>Your rules, <Em>your way.</Em></>}>
+          <ul className="space-y-2 text-xs">
+            {RULES.map(([r, k], i) => (
+              <Row key={r} i={i} className="flex items-center gap-2">
+                <span className="flex-1">{r}</span>
+                <span className={`rounded-full px-2 py-0.5 font-medium ${k === "Must" ? "bg-accent-soft text-accent-text" : "bg-surface-2 text-muted"}`}>{k}</span>
+              </Row>
+            ))}
+          </ul>
+        </Tile>
       </div>
     </section>
   );
@@ -190,12 +227,11 @@ function AssistantShowcase() {
     [Undo2, "Changes nothing until you click Apply"],
   ];
   return (
-    <section id="assistant" className="relative scroll-mt-20 overflow-hidden border-y border-border/70 bg-surface/40">
-      <div className="tt-glow pointer-events-none absolute -right-40 top-10 h-96 w-96 rounded-full bg-accent/15 blur-3xl" aria-hidden />
-      <div className="relative mx-auto grid max-w-6xl items-center gap-12 px-4 py-24 md:grid-cols-2">
+    <section id="assistant" className="relative scroll-mt-20 border-y border-border/70 bg-surface/40">
+      <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-24 md:grid-cols-2">
         <Reveal>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-text">AI assistant</p>
-          <h2 className="mt-3 text-3xl font-semibold tracking-tight md:text-5xl">Say it. It plans it. You approve.</h2>
+          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] md:text-5xl">Say it. It plans it. <Em>You approve.</Em></h2>
           <ul className="mt-8 space-y-4">
             {points.map(([Icon, t]) => (
               <li key={t} className="flex items-center gap-3 text-lg">
@@ -222,7 +258,7 @@ const EVERYTHING = [
 function Everything() {
   return (
     <section className="py-20">
-      <Heading eyebrow="And everything around it" title="Built for how colleges actually run." />
+      <Heading eyebrow="And everything around it" title={<>Built for how colleges <Em>actually</Em> run.</>} />
       <div className="tt-mask-x mt-12 overflow-hidden">
         <div className="tt-marquee flex w-max gap-3">
           {[...EVERYTHING, ...EVERYTHING].map((t, i) => (
@@ -242,7 +278,7 @@ function Steps() {
   ];
   return (
     <section className="mx-auto max-w-5xl px-4 py-20">
-      <Heading eyebrow="How it works" title="From sign-up to published in an afternoon." />
+      <Heading eyebrow="How it works" title={<>From sign-up to published <Em>in an afternoon.</Em></>} />
       <div className="relative mt-14 grid gap-10 md:grid-cols-3">
         <div className="absolute left-[16%] right-[16%] top-5 hidden h-px bg-gradient-to-r from-transparent via-border-strong to-transparent md:block" aria-hidden />
         {steps.map(([t, d], i) => (
@@ -268,7 +304,7 @@ function Pricing() {
   ];
   return (
     <section id="pricing" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20">
-      <Heading eyebrow="Pricing" title="Simple, per student." sub="Indicative prices." />
+      <Heading eyebrow="Pricing" title={<>Simple, <Em>per student.</Em></>} sub="Indicative prices." />
       <div className="mt-14 grid gap-5 md:grid-cols-3">
         {plans.map((p, i) => (
           <Reveal key={p.name} delay={i * 110}>
@@ -295,10 +331,10 @@ function Pricing() {
 function FinalCta() {
   return (
     <section className="px-4 pb-24">
-      <Reveal className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-accent/30 bg-accent-soft/40 px-6 py-16 text-center">
-        <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-60" aria-hidden />
+      <Reveal className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-border bg-surface px-6 py-16 text-center">
+        <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-70" aria-hidden />
         <div className="relative">
-          <h2 className="text-3xl font-semibold tracking-tight md:text-5xl">See it on a real college.</h2>
+          <h2 className="text-3xl font-semibold tracking-[-0.03em] md:text-5xl">See it on a <Em>real</Em> college.</h2>
           <p className="mt-4 text-muted md:text-lg">For admins, coordinators, teachers and students.</p>
           <Link href="/demo" className={`${primary} mt-8 px-6 py-3 text-base`}>Open the demo <ArrowRight size={18} aria-hidden /></Link>
         </div>

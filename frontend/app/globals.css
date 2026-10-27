@@ -152,3 +152,18 @@ body {
   .tt-scan { display: none; }
   .tt-reveal { opacity: 1; transform: none; transition: none; }
 }
+
+/* Landing: animations that start when their section scrolls into view (inside a .tt-reveal). */
+@keyframes tt-fill { from { width: 0; } to { width: 100%; } }
+@keyframes tt-wave { 0%, 100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+.tt-reveal .tt-stagger { opacity: 0; }
+.tt-reveal.is-in .tt-stagger { animation: tt-fade-up 0.5s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+.tt-reveal .tt-bar { width: 0; }
+.tt-reveal.is-in .tt-bar { animation: tt-fill 2.4s cubic-bezier(0.3, 0.6, 0.2, 1) 0.3s both; }
+.tt-wave > span { animation: tt-wave 1s ease-in-out infinite; transform-origin: center; }
+.tt-serif { font-family: var(--font-serif), ui-serif, Georgia, serif; font-style: italic; font-weight: 400; letter-spacing: -0.01em; }
+@media (prefers-reduced-motion: reduce) {
+  .tt-reveal .tt-stagger, .tt-reveal.is-in .tt-stagger { opacity: 1; animation: none; }
+  .tt-reveal .tt-bar, .tt-reveal.is-in .tt-bar { width: 100%; animation: none; }
+  .tt-wave > span { animation: none; }
+}
