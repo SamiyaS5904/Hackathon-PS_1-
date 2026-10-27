@@ -9,7 +9,7 @@ import { Button } from "@/components/ui";
 import { api } from "@/lib/api";
 import { isStaff, useAuth } from "@/lib/auth";
 import { createRecognition, streamChat } from "@/lib/chat";
-import { Mic as Microphone, Speaker, cloudVoice, isStopWord, micErrorText } from "@/lib/voice";
+import { Mic as Microphone, Speaker, cloudVoice, isEcho, isStopWord, micErrorText } from "@/lib/voice";
 import { useChatPage } from "@/lib/chat-context";
 import { greetName } from "@/lib/names";
 import { useTimetableOptional } from "@/lib/timetable-context";
@@ -103,6 +103,9 @@ export function ChatPanel() {
   const busyRef = useRef(false);
   const speakRepliesRef = useRef(true);
   const pendingRef = useRef<string | null>(null); // said while an answer was still coming (talk mode)
+  const answerRef = useRef(""); // the latest answer's text: what the loudspeaker may echo back into the mic
+  const spokeUntilRef = useRef(0); // when the answer last stopped playing
+  const echoRiskRef = useRef(false); // this utterance began while (or just after) the answer was playing
   const spokenDraftRef = useRef(false); // the text in the box came from the mic
   const sendRef = useRef<(text: string, spoken?: boolean) => Promise<void>>(async () => {});
   const phrases = useMemo(() => (who ? phrasebook(who, college) : []), [who, college]);
@@ -123,6 +126,7 @@ export function ChatPanel() {
       if (!live) return;
       setCloud(c);
       speakerRef.current = new Speaker(c, (on) => {
+        if (!on) spokeUntilRef.current = Date.now();
         setSpeaking(on);
         micRef.current?.setStrict(on);
       });
@@ -160,6 +164,7 @@ export function ChatPanel() {
     // Spoken question -> the answer is read aloud sentence by sentence while it streams (always in talk mode).
     const speaker = speakerRef.current;
     const readAloud = spoken && (modeRef.current === "talk" || speakRepliesRef.current);
+    answerRef.current = "";
     if (readAloud) speaker?.reset();
     else speaker?.stop();
     setBusy(true);
@@ -170,6 +175,7 @@ export function ChatPanel() {
       if (e.type === "start") setConvId(e.conversation_id);
       else if (e.type === "instant") update((m) => ({ ...m, instant: true }));
       else if (e.type === "token") {
+        answerRef.current += e.text;
         if (readAloud) speaker?.push(e.text);
         update((m) => ({ ...m, text: m.text + e.text }));
       }
@@ -283,15 +289,19 @@ export function ChatPanel() {
     const m = micRef.current;
     if (!m || modeRef.current !== "talk") return;
     setHeard("");
+    echoRiskRef.current = false;
     m.beginUtterance({
       autoEnd: true,
       onPreview: setHeard,
-      onSpeech: () => speakerRef.current?.stop(),
+      onSpeech: () => {
+        echoRiskRef.current = !!speakerRef.current?.active || Date.now() - spokeUntilRef.current < 1500;
+        speakerRef.current?.stop();
+      },
       onAutoEnd: async () => {
         const text = (await m.finishUtterance()).trim();
         if (modeRef.current !== "talk") return;
         listenTalkRef.current();
-        if (!text) return;
+        if (!text || (echoRiskRef.current && isEcho(text, answerRef.current))) return; // its own voice, picked up by the mic
         if (isStopWord(text)) {
           speakerRef.current?.stop();
           return;

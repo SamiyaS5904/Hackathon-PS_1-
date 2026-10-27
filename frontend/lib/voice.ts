@@ -24,6 +24,16 @@ export function isStopWord(text: string): boolean {
   return /^(stop|stop it|ok stop|ruko|ruk jao|bas|bas karo|chup|enough|wait|cancel|band karo)[\s.!]*$/i.test(text.trim());
 }
 
+/** The microphone picked up the assistant's own answer from the loudspeaker: most of what was "heard" is words of
+ *  that answer. Such text is dropped instead of being sent back as a question. */
+export function isEcho(heard: string, answer: string): boolean {
+  const words = (s: string) => s.toLowerCase().replace(/[^a-z0-9\s]/g, " ").split(/\s+/).filter((w) => w.length > 1);
+  const said = words(heard);
+  if (said.length < 3 || !answer) return false;
+  const vocab = new Set(words(answer));
+  return said.filter((w) => vocab.has(w)).length / said.length >= 0.7;
+}
+
 /** Markdown and symbols out, times read naturally. */
 export function plainForSpeech(text: string): string {
   return text
@@ -96,9 +106,50 @@ export class Mic {
     this.timer = setInterval(() => this.tick(buf), 50);
   }
 
-  /** Answer being read aloud: raise the bar so the speaker's own echo doesn't count as the person talking. */
+  /** Answer being read aloud: raise the bar so the speaker's own echo doesn't count as the person talking, and stop
+   *  writing down words (the browser's recognition hears the loudspeaker too). When the answer stops (finished or
+   *  interrupted), listening starts afresh, so none of the answer's own audio ends up in the person's message. */
   setStrict(on: boolean) {
+    if (on === this.strict) return;
     this.strict = on;
+    if (!this.opts) return;
+    this.stopRecognition();
+    this.preview = "";
+    this.finals = "";
+    this.opts.onPreview?.("");
+    if (on) return;
+    if (!this.started) {
+      this.loudSince = 0;
+      this.lastVoice = performance.now();
+    }
+    this.restartRecorder();
+    this.startRecognition();
+  }
+
+  private stopRecognition() {
+    const r = this.recognition;
+    this.recognition = null;
+    try {
+      r?.stop();
+    } catch {
+      /* already stopped */
+    }
+  }
+
+  private restartRecorder() {
+    const old = this.recorder;
+    this.recorder = null;
+    if (old && old.state !== "inactive") {
+      old.ondataavailable = null;
+      old.onstop = null;
+      old.stop();
+    }
+    this.chunks = [];
+    if (!this.stream || !this.useCloud || typeof MediaRecorder === "undefined") return;
+    const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((t) => MediaRecorder.isTypeSupported(t));
+    this.recorder = new MediaRecorder(this.stream, type ? { mimeType: type } : undefined);
+    this.recorder.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
+    this.recorder.start(250);
   }
 
   private tick(buf: Float32Array<ArrayBuffer>) {
@@ -141,14 +192,8 @@ export class Mic {
     this.lastVoice = performance.now();
     this.preview = "";
     this.finals = "";
-    this.chunks = [];
-    if (this.useCloud && typeof MediaRecorder !== "undefined") {
-      const type = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg"].find((t) => MediaRecorder.isTypeSupported(t));
-      this.recorder = new MediaRecorder(this.stream, type ? { mimeType: type } : undefined);
-      this.recorder.ondataavailable = (e) => e.data.size && this.chunks.push(e.data);
-      this.recorder.start(250);
-    }
-    this.startRecognition();
+    this.restartRecorder();
+    if (!this.strict) this.startRecognition(); // while an answer is read aloud, words are written only after it stops
   }
 
   private startRecognition() {
@@ -169,7 +214,7 @@ export class Mic {
     r.onerror = () => {};
     // Chrome ends recognition after a while: keep it going while the utterance lasts, keeping what was heard.
     r.onend = () => {
-      if (this.recognition === r && this.opts) {
+      if (this.recognition === r && this.opts && !this.strict) {
         const kept = this.preview;
         this.recognition = null;
         this.startRecognition();
