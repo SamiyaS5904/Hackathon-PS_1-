@@ -7,7 +7,8 @@ it with one click.
 
 **Hackathon · Samiya Sehgal (URN 2302662)**
 
-- **Live:** _web app link (Vercel) and API link go here after deployment_. Steps:
+- **Live:** web app **https://hackathon-ps-1.vercel.app** · API https://timetabl-api.fly.dev (health:
+  `/api/health`). Click **Explore the live demo** for one-click logins. Deployment steps:
   [`docs/DEPLOY.md`](docs/DEPLOY.md).
 - **Demo guide** (logins, where every feature is, a demo script): [`docs/DEMO_GUIDE.md`](docs/DEMO_GUIDE.md).
 - **Design and rules:** [`CLAUDE.md`](CLAUDE.md) · [`backend/CLAUDE.md`](backend/CLAUDE.md) ·

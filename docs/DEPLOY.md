@@ -206,6 +206,7 @@ Raise the machine size if either of these happens:
 | `OPENAI_API_KEY` / `OPENROUTER_API_KEY` | Fly secret | Optional natural voice (listening + speaking) |
 | `CORS_ORIGINS` | Fly secret | Web app addresses allowed to call the API, comma separated |
 | `FRONTEND_URL` | Fly secret | The web app address used in invite links |
+| `CORS_ORIGIN_REGEX` | Fly secret | Optional pattern for more web app addresses, e.g. every Vercel deployment: `^https://(hackathon-ps-1\|timetabl-ai)[a-z0-9-]*\.vercel\.app$` |
 | `DEMO_PLATFORM_OWNER` | `fly.toml` (1) | `1` shows the platform owner demo login (`owner@demo.timetabl.ai`) |
 | `SUPERADMIN_EMAILS` | Fly secret | Real platform owners, comma separated |
 | `SOLVER_WORKERS` | `fly.toml` (1) | Parallel workers while generating; raise it with a bigger machine |
