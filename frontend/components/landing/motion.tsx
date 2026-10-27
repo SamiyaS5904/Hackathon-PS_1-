@@ -120,18 +120,17 @@ export function ChatDemo() {
 
 const PERIODS = ["9:00", "10:00", "11:00", "12:00", "1:00"];
 const WEEK = ["Mon", "Tue", "Wed", "Thu", "Fri"];
-const CELLS: (string | null)[][] = [
-  ["DBMS", "OS", "Maths", "DBMS", "CN"],
-  ["OS", "Lab", "CN", "Maths", "OS"],
-  ["Lunch", "Lab", "Lunch", "Lunch", "DBMS"],
-  [null, "Lunch", "OS", "Lab", "Lunch"],
-  ["Maths", null, null, "Lab", null],
-];
 const HUES: Record<string, number> = { DBMS: 228, OS: 160, CN: 32, Maths: 280, Lab: 200 };
-const FROM = { r: 3, c: 0 };
-const TO = { r: 4, c: 2 };
-const SAFE = ["4-1", "4-2"];
-const OKAY = ["4-4"];
+const LUNCH = new Set(["2-0", "2-2", "2-3", "3-1", "3-4"]);
+const BUSY = new Set(["4-4"]); // the teacher has another class then: shows that every move is checked
+type Klass = { id: number; s: string; r: number; c: number; off?: boolean };
+const START: Klass[] = [
+  ["DBMS", 0, 0], ["OS", 0, 1], ["Maths", 0, 2], ["DBMS", 0, 3], ["CN", 0, 4],
+  ["OS", 1, 0], ["Lab", 1, 1], ["CN", 1, 2], ["Maths", 1, 3], ["OS", 1, 4],
+  ["Lab", 2, 1], ["DBMS", 2, 4],
+  ["CN", 3, 0], ["OS", 3, 2], ["Lab", 3, 3],
+  ["Maths", 4, 0], ["Lab", 4, 3],
+].map(([s, r, c], id) => ({ id, s: s as string, r: r as number, c: c as number }));
 const ROW_H = 46;
 const HEAD_H = 24;
 const at = (r: number, c: number): CSSProperties => ({
@@ -140,32 +139,57 @@ const at = (r: number, c: number): CSSProperties => ({
   width: "calc((100% - 44px) / 5 - 6px)",
   height: ROW_H - 6,
 });
+const when = (r: number, c: number) => `${WEEK[c]} ${PERIODS[r]}`;
+type Toast = { ok: boolean; text: string; undo?: Klass[] };
 
-/** The product itself in the hero: a class is dragged to a safe (green) slot, checked, then undone. Loops. */
+/** The product in the hero, and it works: drag a class (or tap it, then tap a slot) to move it, cancel it for a day,
+ *  undo. Green slots are safe; red ones say why not. Runs only in the browser, nothing is saved. */
 export function HeroApp() {
-  const [phase, setPhase] = useState(0); // 0 idle · 1 pick · 2 moved · 3 toast · 4 undo
+  const [classes, setClasses] = useState<Klass[]>(START);
+  const [sel, setSel] = useState<number | null>(null);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const [touched, setTouched] = useState(false);
   useEffect(() => {
-    if (reduced()) { setPhase(3); return; }
-    const order = [[1, 1400], [2, 1300], [3, 1100], [4, 2600], [0, 1100]] as const;
-    let i = 0;
-    let timer: ReturnType<typeof setTimeout>;
-    const next = () => {
-      const [p, wait] = order[i % order.length];
-      timer = setTimeout(() => { setPhase(p); i += 1; next(); }, wait);
-    };
-    next();
-    return () => clearTimeout(timer);
-  }, []);
-  const moved = phase === 2 || phase === 3;
-  const pos = moved ? TO : FROM;
-  const picking = phase === 1 || phase === 2;
+    if (!toast) return;
+    const t = setTimeout(() => setToast(null), 5000);
+    return () => clearTimeout(t);
+  }, [toast]);
+
+  const picked = classes.find((k) => k.id === sel) ?? null;
+  const occupant = (r: number, c: number) => classes.find((k) => k.r === r && k.c === c);
+  const why = (r: number, c: number): string | null => {
+    const key = `${r}-${c}`;
+    if (LUNCH.has(key)) return "that's the section's lunch break";
+    const other = occupant(r, c);
+    if (other) return `CSE-3A already has ${other.s} then`;
+    if (BUSY.has(key)) return "the teacher has another class then";
+    return null;
+  };
+  const choose = (id: number) => { setTouched(true); setSel((s) => (s === id ? null : id)); };
+  const moveTo = (r: number, c: number) => {
+    if (!picked) return;
+    const reason = why(r, c);
+    if (reason) { setToast({ ok: false, text: `Can't move to ${when(r, c)}: ${reason}.` }); return; }
+    setToast({ ok: true, text: `${picked.s} moved to ${when(r, c)} · checked, 0 clashes`, undo: classes });
+    setClasses(classes.map((k) => (k.id === picked.id ? { ...k, r, c } : k)));
+    setSel(null);
+  };
+  const cancel = () => {
+    if (!picked) return;
+    const off = !picked.off;
+    setToast({ ok: true, text: off ? `${picked.s} on ${when(picked.r, picked.c)} cancelled for one day · students notified` : `${picked.s} restored`, undo: classes });
+    setClasses(classes.map((k) => (k.id === picked.id ? { ...k, off } : k)));
+    setSel(null);
+  };
+  const undo = () => { if (toast?.undo) { setClasses(toast.undo); setToast({ ok: true, text: "Undone" }); } };
+  const reset = () => { setClasses(START); setSel(null); setToast(null); };
 
   return (
     <div className="overflow-hidden rounded-2xl border border-border-strong/70 bg-surface text-left shadow-[0_30px_80px_-20px_rgb(0_0_0/0.35)]">
       <div className="flex items-center gap-2 border-b border-border bg-surface-2/70 px-4 py-2.5">
         <span className="h-2.5 w-2.5 rounded-full bg-border-strong" /><span className="h-2.5 w-2.5 rounded-full bg-border-strong" /><span className="h-2.5 w-2.5 rounded-full bg-border-strong" />
         <span className="mx-auto rounded-md bg-surface px-3 py-0.5 font-mono text-[11px] text-muted">timetabl.ai/timetable</span>
-        <span className="w-10" />
+        <button onClick={reset} className="rounded px-1.5 text-[11px] text-muted hover:text-text">Reset</button>
       </div>
       <div className="flex">
         <div className="hidden w-12 shrink-0 flex-col items-center gap-3 border-r border-border py-4 text-muted sm:flex">
@@ -175,49 +199,71 @@ export function HeroApp() {
           ))}
         </div>
         <div className="min-w-0 flex-1 p-3 sm:p-4">
-          <div className="mb-3 flex flex-wrap items-center gap-2 text-xs">
+          <div className="mb-3 flex min-h-[28px] flex-wrap items-center gap-2 text-xs">
             <span className="inline-flex items-center gap-1 rounded-md border border-border px-2 py-1 font-semibold">CSE-3A <ChevronDown size={12} aria-hidden /></span>
-            <span className="hidden rounded-md bg-surface-2 p-0.5 sm:inline-flex">
-              {["Section", "Teacher", "Room"].map((v, k) => (
-                <span key={v} className={`rounded px-2 py-0.5 ${k === 0 ? "bg-surface font-medium shadow-sm" : "text-muted"}`}>{v}</span>
-              ))}
-            </span>
+            {picked ? (
+              <>
+                <span className="text-muted"><b className="text-text">{picked.s}</b> · {picked.off ? "cancelled for the day" : "drop it on a green slot"}</span>
+                <button onClick={cancel} className="rounded-md border border-border px-2 py-1 font-medium hover:bg-surface-2">
+                  {picked.off ? "Restore" : "Cancel for one day"}
+                </button>
+              </>
+            ) : (
+              <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-medium ${touched ? "text-muted" : "bg-accent-soft text-accent-text"}`}>
+                <MousePointer2 size={12} aria-hidden /> Try it: drag a class, or tap one
+              </span>
+            )}
             <span className="ml-auto inline-flex items-center gap-1 rounded-full bg-ok-soft px-2 py-0.5 font-medium text-ok">
-              <ShieldCheck size={12} aria-hidden /> Published · 0 clashes
+              <ShieldCheck size={12} aria-hidden /> 0 clashes
             </span>
           </div>
-          <div className="relative text-[11px] sm:text-xs" style={{ height: HEAD_H + PERIODS.length * ROW_H }}>
+          <div className="relative select-none text-[11px] sm:text-xs" style={{ height: HEAD_H + PERIODS.length * ROW_H }}>
             {WEEK.map((d, c) => (
               <div key={d} className="absolute text-center font-medium text-muted" style={{ ...at(0, c), top: 0, height: HEAD_H }}>{d}</div>
             ))}
             {PERIODS.map((p, r) => (
               <div key={p} className="absolute left-0 w-10 pt-3 text-right font-mono text-[10px] text-muted" style={{ top: HEAD_H + r * ROW_H }}>{p}</div>
             ))}
-            {CELLS.flatMap((row, r) => row.map((cell, c) => {
+            {PERIODS.flatMap((_, r) => WEEK.map((__, c) => {
               const key = `${r}-${c}`;
-              const tone = picking && SAFE.includes(key) ? "border-ok/60 bg-ok-soft" : picking && OKAY.includes(key) ? "border-warn/60 bg-warn-soft" : "";
-              if (r === FROM.r && c === FROM.c) return <div key={key} className={`absolute rounded-md border border-dashed ${moved ? "border-border-strong" : "border-transparent"}`} style={at(r, c)} />;
-              if (!cell) return <div key={key} className={`absolute rounded-md border border-dashed transition-colors duration-300 ${tone || "border-transparent"}`} style={at(r, c)} />;
+              const bad = picked ? why(r, c) : null;
+              const lunch = LUNCH.has(key);
+              if (!lunch && occupant(r, c)) return null;
+              const tone = !picked ? (lunch ? "border-border-strong text-muted" : "border-transparent")
+                : bad ? "border-danger/50 bg-danger-soft/60 text-danger" : "border-ok/60 bg-ok-soft text-ok";
               return (
-                <div key={key} style={{ ...at(r, c), ["--h" as string]: HUES[cell] } as CSSProperties}
-                  className={`absolute flex items-center justify-center rounded-md font-medium ${cell === "Lunch" ? "border border-dashed border-border-strong text-muted" : "subj border"}`}>
-                  {cell}
-                </div>
+                <button key={key} type="button" aria-label={lunch ? `Lunch, ${when(r, c)}` : `Empty slot, ${when(r, c)}`}
+                  onClick={() => moveTo(r, c)} onDragOver={(e) => { if (picked && !bad) e.preventDefault(); }}
+                  onDrop={(e) => { e.preventDefault(); moveTo(r, c); }}
+                  className={`absolute flex items-center justify-center rounded-md border border-dashed text-[10px] transition-colors duration-200 ${tone} ${picked ? "cursor-pointer" : "cursor-default"}`}
+                  style={at(r, c)}>
+                  {lunch ? "Lunch" : picked && !bad ? "Move here" : ""}
+                </button>
               );
             }))}
-            <div style={{ ...at(pos.r, pos.c), ["--h" as string]: HUES.CN } as CSSProperties}
-              className={`subj absolute z-10 flex items-center justify-center rounded-md border font-medium transition-all duration-[900ms] ease-[cubic-bezier(0.3,0.7,0.2,1)] ${
-                picking ? "scale-105 shadow-xl ring-2 ring-accent/50" : ""}`}>
-              CN
-              <MousePointer2 size={16} className={`absolute -bottom-3 -right-2 fill-text text-surface transition-opacity duration-300 ${picking ? "opacity-100" : "opacity-0"}`} aria-hidden />
-            </div>
+            {classes.map((k) => (
+              <button key={k.id} type="button" draggable onDragStart={() => { setTouched(true); setSel(k.id); }}
+                onClick={() => (picked && picked.id !== k.id ? moveTo(k.r, k.c) : choose(k.id))}
+                style={{ ...at(k.r, k.c), ["--h" as string]: HUES[k.s] } as CSSProperties}
+                aria-label={`${k.s}, ${when(k.r, k.c)}${k.off ? ", cancelled" : ""}`}
+                className={`subj absolute z-10 flex cursor-grab items-center justify-center rounded-md border font-medium transition-all duration-500 ease-[cubic-bezier(0.3,0.7,0.2,1)] active:cursor-grabbing ${
+                  sel === k.id ? "scale-105 shadow-xl ring-2 ring-accent" : "hover:-translate-y-px hover:shadow-md"} ${
+                  k.off ? "line-through opacity-45" : ""} ${!touched && k.id === 12 ? "ring-2 ring-accent/40 ring-offset-1 ring-offset-surface" : ""}`}>
+                {k.s}
+              </button>
+            ))}
           </div>
-          <div className="mt-3 flex h-8 items-center justify-end">
-            {phase >= 3 && (
-              <div className="tt-pop flex items-center gap-2 rounded-lg border border-border bg-surface px-3 py-1.5 text-xs shadow-lg">
-                <CheckCircle2 size={14} className="text-ok" aria-hidden />
-                {phase === 3 ? "Moved to Wed 1:00 · checked, 0 clashes" : "Undone · back on Mon 12:00"}
-                {phase === 3 && <span className="inline-flex items-center gap-1 font-medium text-accent-text"><Undo2 size={12} aria-hidden /> Undo</span>}
+          <div className="mt-3 flex min-h-8 items-center justify-end" aria-live="polite">
+            {toast && (
+              <div key={toast.text} className={`tt-pop flex items-center gap-2 rounded-lg border px-3 py-1.5 text-xs shadow-lg ${
+                toast.ok ? "border-border bg-surface" : "border-danger/40 bg-danger-soft text-danger"}`}>
+                {toast.ok ? <CheckCircle2 size={14} className="shrink-0 text-ok" aria-hidden /> : <ShieldCheck size={14} className="shrink-0" aria-hidden />}
+                {toast.text}
+                {toast.undo && (
+                  <button onClick={undo} className="inline-flex items-center gap-1 font-medium text-accent-text hover:underline">
+                    <Undo2 size={12} aria-hidden /> Undo
+                  </button>
+                )}
               </div>
             )}
           </div>
