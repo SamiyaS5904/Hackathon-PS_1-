@@ -7,7 +7,7 @@ it with one click.
 
 **Hackathon · Samiya Sehgal (URN 2302662)**
 
-- **Live:** _web app link (Vercel) and API link (Fly.io) go here after deployment_. Steps:
+- **Live:** _web app link (Vercel) and API link go here after deployment_. Steps:
   [`docs/DEPLOY.md`](docs/DEPLOY.md).
 - **Demo guide** (logins, where every feature is, a demo script): [`docs/DEMO_GUIDE.md`](docs/DEMO_GUIDE.md).
 - **Design and rules:** [`CLAUDE.md`](CLAUDE.md) · [`backend/CLAUDE.md`](backend/CLAUDE.md) ·
@@ -125,8 +125,8 @@ On a laptop with little memory, set `SOLVER_WORKERS=2` before the backend tests.
 
 ## Deploy
 
-Vercel (web app) + Fly.io (backend + assistant in one always-on Docker machine, billed per second, about $0.19 a
-day) + Supabase (database). Step by step: [`docs/DEPLOY.md`](docs/DEPLOY.md).
+Vercel (web app) + Render free (backend and assistant, no card) or Fly.io (one always-on machine, billed per
+second) + Supabase (database). Step by step: [`docs/DEPLOY.md`](docs/DEPLOY.md).
 
 ## How it is built
 

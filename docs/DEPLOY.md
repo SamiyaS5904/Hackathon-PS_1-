@@ -1,6 +1,90 @@
 # Deploying Timetabl.ai
 
-**Web app on Vercel · backend + AI assistant on Fly.io (one always-on machine) · database on Supabase.**
+Two ways to run the backend + AI assistant. The web app is always on Vercel, and the database is always Supabase.
+
+| | **A. Render free** (no card) | **B. Fly.io** (card, pay per second) |
+|---|---|---|
+| Cost | $0 | about $0.19 a day (1 GB, always on) |
+| Speed | slower (a small share of one CPU); Generate takes minutes | normal |
+| Sleeps | after 15 minutes without visits; a free ping keeps it awake | never |
+| Memory | 512 MB per service (backend and assistant are separate services) | 1 GB for both |
+
+> **Important: one backend per database.** The backend keeps each college in memory and saves to Supabase in the
+> background. Don't run the local app (`start-local.bat`) and the live site against the same database at the same
+> time, or one can overwrite the other's changes. Close the local backend before deploying.
+
+---
+
+# A. Render free (no card)
+
+```
+ Browser ──► Vercel (web app)
+               ├─► https://timetabl-backend.onrender.com     (data, timetable engine)
+               └─► https://timetabl-assistant.onrender.com   (AI assistant, voice) ──► backend
+                                    │
+                                    ▼
+                         Supabase Postgres
+```
+
+## A1. Supabase connection for Render (2 minutes)
+
+Render can only reach the database over IPv4. Use Supabase's **Session pooler** address:
+1. Open Supabase → your project → **Connect**.
+2. Copy the **Session pooler** URI. It looks like
+   `postgresql://postgres.<project>:[YOUR-PASSWORD]@aws-0-<region>.pooler.supabase.com:5432/postgres`.
+3. Put your database password in it.
+
+Keep it in Notepad for step A2; never paste it into chats.
+
+## A2. Create both services from the blueprint (10-15 minutes, mostly the build)
+
+1. Sign up at **render.com** with GitHub. No card is needed for free services.
+2. **New → Blueprint** → pick the repository `Hackathon-PS_1-`. Render reads `render.yaml` and shows two free
+   services: `timetabl-backend` and `timetabl-assistant`.
+3. Fill in the values it asks for:
+
+   | Service | Setting | Value |
+   |---|---|---|
+   | backend | `DATABASE_URL` | the Session pooler URI from A1 |
+   | backend | `APP_SECRET` | the same value as in `backend/.env` |
+   | backend | `CORS_ORIGINS`, `FRONTEND_URL` | `http://localhost:3000` for now (step A4 changes it) |
+   | assistant | `ANTHROPIC_API_KEY`, `OPENAI_API_KEY` | from `chatbot/.env` |
+   | assistant | `BACKEND_URL` | `https://timetabl-backend.onrender.com` (the backend's address, shown on its page) |
+   | assistant | `CORS_ORIGINS` | `http://localhost:3000` for now |
+
+4. **Apply**. Wait until both show **Live**. Then check both addresses:
+   - `https://timetabl-backend.onrender.com/api/health` should answer `{"ok": true}`. The first start loads both demo
+     colleges, so give it a minute or two.
+   - `https://timetabl-assistant.onrender.com/health` should answer too.
+
+## A3. Keep them awake (3 minutes, free)
+
+Free services sleep after 15 minutes without visits, and the first visit after that waits about a minute. To keep them
+awake:
+1. Sign up at **cron-job.org** (free, no card).
+2. Create two cron jobs, **every 10 minutes**:
+   - `https://timetabl-backend.onrender.com/api/health`
+   - `https://timetabl-assistant.onrender.com/health`
+
+The free plan has 750 hours a month in total. Two services awake all the time use about 1,490 hours a month, so the
+two of them stay awake for about 15 days. Pause the cron jobs after judging.
+
+## A4. Web app on Vercel (5 minutes)
+
+1. **vercel.com → Add New → Project → Import** your GitHub repository.
+2. **Root Directory: `frontend`** (Framework: Next.js is detected).
+3. **Environment Variables**:
+   - `NEXT_PUBLIC_BACKEND_URL` = `https://timetabl-backend.onrender.com`
+   - `NEXT_PUBLIC_CHATBOT_URL` = `https://timetabl-assistant.onrender.com`
+4. **Deploy**. Note the address, for example `https://timetabl-ai.vercel.app`.
+5. On Render, set `CORS_ORIGINS` = `https://timetabl-ai.vercel.app,http://localhost:3000` on **both** services, and
+   `FRONTEND_URL` = `https://timetabl-ai.vercel.app` on the backend. Each service restarts by itself.
+
+Then check the live site (section 5 below).
+
+---
+
+# B. Fly.io (card, pay per second)
 
 ```
  Browser ──► Vercel (Next.js web app)
@@ -15,15 +99,8 @@
 ```
 
 **Cost:** Fly.io bills per second while the machine runs, with no plan or minimum. 1 GB shared CPU is about
-**$5.70 a month** if left on all the time (about $0.19 a day). Stop it when you don't need it (step 6) and billing
-stops. Claude and OpenAI usage is billed separately, on your own API keys. Total set-up time: about 20 minutes, most
-of it the first build.
-
-> **Important: one backend per database.** The backend keeps each college in memory and saves to Supabase in the
-> background. Don't run the local app (`start-local.bat`) and the live site against the same database at the same
-> time, or one can overwrite the other's changes. Close the local backend before step 3.
-
----
+**$5.70 a month** if left on all the time. Stop it when you don't need it (step 6) and billing stops. Claude and
+OpenAI usage is billed separately, on your own API keys.
 
 ## 1. Install Fly.io and log in (5 minutes)
 
@@ -93,7 +170,7 @@ The first start loads both demo colleges from Supabase. It can take a minute bef
    fly secrets set CORS_ORIGINS="https://timetabl-ai.vercel.app,http://localhost:3000" FRONTEND_URL="https://timetabl-ai.vercel.app"
    ```
 
-## 5. Check the live site (3 minutes)
+## 5. Check the live site (both options, 3 minutes)
 
 1. Open the Vercel address. You should see the home page. Click **Try the demo**, then **College Admin**.
 2. Home shows the published timetable with 0 clashes. The **GNDEC** tab on the Demo page has the second college.
@@ -102,8 +179,8 @@ The first start loads both demo colleges from Supabase. It can take a minute bef
 5. Switch to **Talk**, allow the microphone and speak. It should answer aloud.
 
 If something fails, check two places:
-- `fly logs` shows the backend and assistant output.
-- A `CORS` error in the browser console means step 4.5 is missing the exact Vercel address.
+- **Logs:** use the **Logs** tab on Render, or `fly logs` on Fly.io.
+- **Browser console:** a `CORS` error there means `CORS_ORIGINS` is missing the exact Vercel address.
 
 ## 6. Day-to-day
 
@@ -143,5 +220,4 @@ Raise the machine size if either of these happens:
   and test out of the image.
 - **The timetable is always made by the algorithm.** The AI assistant only prepares changes that people apply.
 
-Other hosts: `deploy/hf-space/` (a Hugging Face Docker Space, now a paid plan) and `render.yaml` (Render) also work
-with the same code.
+Another host: `deploy/hf-space/` (a Hugging Face Docker Space, now a paid plan) works with the same code.

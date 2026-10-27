@@ -1,8 +1,8 @@
-# Render blueprint: the backend API and the assistant, as two web services.
-# Render dashboard -> New -> Blueprint -> pick this repository. Secrets marked `sync: false`
+# Render blueprint: the backend API and the assistant, as two FREE web services (no card needed).
+# Render dashboard -> New -> Blueprint -> pick this repository. Values marked `sync: false`
 # are typed in the dashboard (never committed). Full steps: docs/DEPLOY.md.
 #
-# Pick the region closest to your Supabase project (same region = ~1 ms per database query).
+# Free services sleep after 15 minutes without visits; a free ping every 10 minutes (cron-job.org) keeps them awake.
 # Both services must run ONE process: college data lives in memory and is saved in the
 # background, so several workers would not see each other's changes.
 
@@ -12,20 +12,24 @@ services:
     runtime: python
     rootDir: backend
     region: singapore
-    plan: starter
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /api/health
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.8
+      - key: SOLVER_WORKERS # the free machine has a small share of one CPU
+        value: "1"
+      - key: DEMO_PLATFORM_OWNER
+        value: "1"
       - key: DATABASE_URL # Supabase -> Connect -> Session pooler URI (IPv4), with your database password
         sync: false
-      - key: APP_SECRET # signs login tokens; Render makes a long random value
-        generateValue: true
+      - key: APP_SECRET # the same value as in backend/.env, so logins work everywhere
+        sync: false
       - key: CORS_ORIGINS # your Vercel URL, e.g. https://timetabl-ai.vercel.app
         sync: false
-      - key: FRONTEND_URL
+      - key: FRONTEND_URL # your Vercel URL (used in invite links)
         sync: false
 
   - type: web
@@ -33,7 +37,7 @@ services:
     runtime: python
     rootDir: chatbot
     region: singapore
-    plan: starter
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
     healthCheckPath: /health
@@ -41,6 +45,8 @@ services:
       - key: PYTHON_VERSION
         value: 3.12.8
       - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: OPENAI_API_KEY # optional: natural voice
         sync: false
       - key: BACKEND_URL # the backend's Render URL, e.g. https://timetabl-backend.onrender.com
         sync: false
