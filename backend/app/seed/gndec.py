@@ -93,17 +93,17 @@ def _venues() -> list[Venue]:
         return Venue(id=vid, name=name, type=VenueType.lab, capacity=seats, department_id=dept, tags=list(tags))
 
     return [
-        # Shared halls (first-year combined classes, events)
-        lec("lt-1", "Lecture Theatre LT-1", 150, None),
-        lec("lt-2", "Lecture Theatre LT-2", 130, None),
+        # Shared hall for events (added by the College Admin in Setup; no class needs it)
         Venue(id="ws-hall", name="WS Seminar Hall", type=VenueType.seminar, capacity=200),
+        # Applied Sciences: first-year rooms, halls and labs (in its Excel file, so uploads bring them along)
+        lec("lt-1", "Lecture Theatre LT-1", 150, "as"),
+        lec("lt-2", "Lecture Theatre LT-2", 130, "as"),
         Venue(id="dept-lib", name="CSE Department Library", type=VenueType.seminar, capacity=40, department_id="cse"),
-        # Applied Sciences (first year)
         lec("a-101", "A-101", 70, "as"), lec("a-102", "A-102", 70, "as"),
         lab("phy-lab", "Physics Lab", 32, "as", "physics"),
         lab("ee-lab", "Basic Electrical Lab", 32, "as", "electrical"),
-        lab("draw-1", "Drawing Hall-1", 32, None, "drawing"), lab("draw-2", "Drawing Hall-2", 32, None, "drawing"),
-        lab("ws-1", "Central Workshop-1", 32, None, "workshop"), lab("ws-2", "Central Workshop-2", 32, None, "workshop"),
+        lab("draw-1", "Drawing Hall-1", 32, "as", "drawing"), lab("draw-2", "Drawing Hall-2", 32, "as", "drawing"),
+        lab("ws-1", "Central Workshop-1", 32, "as", "workshop"), lab("ws-2", "Central Workshop-2", 32, "as", "workshop"),
         # CSE (real rooms seat 75)
         lec("g-12", "G-12", 75, "cse"), lec("g-13", "G-13", 75, "cse"), lec("g-14", "G-14", 75, "cse"),
         lec("g-17", "G-17", 75, "cse"), lec("g-18", "G-18", 75, "cse"), lec("s-215", "S-215", 75, "cse"),
@@ -428,7 +428,7 @@ READ_ME = [
     ("  once that department's file is uploaded: upload Applied Sciences first.", False),
     ("Students: Roll no, Name, Email (their login; first password = roll number), Section, Batch.", True),
     ("Rooms: rooms this department owns. Type: Lecture, Lab or Seminar. Seats. Equipment for labs.", True),
-    ("  Shared halls (lecture theatres, seminar hall, drawing halls, workshops) are added by the College Admin in Setup.", False),
+    ("  Rooms every department may use (e.g. a seminar hall) are added by the College Admin in Setup as shared rooms.", False),
     ("", False),
     ("Not in this file: the time grid, lunch window, holidays, electives and pooled groups (e.g. JPAL),", False),
     ("rules and shared rooms. The College Admin sets those in Setup.", False),
@@ -477,8 +477,9 @@ def department_files(college: College | None = None) -> dict[str, bytes]:
         tchs = sum(1 for t in college.teachers if t.department_id == dept)
         intro = [(f"{d.name} ({d.short}): {secs} sections, {studs} students, {tchs} teachers.", True),
                  ("Upload order: Applied Sciences first (its teachers teach first-year classes of every branch),", False),
-                 ("then CSE, IT, ME and CE. Shared halls, the JPAL hour and the final-year CSE elective are set up by", False),
-                 ("the College Admin (they are already in the built-in GNDEC demo college).", False), ("", False)]
+                 ("then CSE, IT, ME and CE. Its file also has the lecture theatres, drawing halls and workshops of", False),
+                 ("first year. Not in the files: the JPAL hour and the final-year CSE elective (they need a student list", False),
+                 ("per group; they are in the built-in GNDEC demo college).", False), ("", False)]
         out[f"GNDEC_{i}_{d.short}.xlsx"] = _with_read_me(_dept_template(college, dept), f"GNDEC (demo): {d.name}",
                                                           intro + READ_ME)
     return out
