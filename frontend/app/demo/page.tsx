@@ -20,9 +20,11 @@ const DEPARTMENTS = [
 ];
 const SECTIONS = ["cse-1a", "cse-1b", "cse-2a", "cse-2b", "cse-3a", "cse-3b", "ece-1a", "ece-2a", "ece-3a",
   "me-1a", "me-2a", "me-3a"];
+// Busiest first, so a demo shows a full week.
 const TEACHERS = [
-  ["anita.sharma", "Dr. Anita Sharma"], ["harpreet.kaur", "Dr. Harpreet Kaur"], ["rohit.bansal", "Prof. Rohit Bansal"],
-  ["neha.arora", "Dr. Neha Arora"], ["amit.malhotra", "Prof. Amit Malhotra"], ["simran.gill", "Dr. Simran Gill"],
+  ["vikram.singh", "Prof. Vikram Singh"], ["harpreet.kaur", "Dr. Harpreet Kaur"],
+  ["rohit.bansal", "Prof. Rohit Bansal"], ["priya.nair", "Dr. Priya Nair"], ["karan.mehra", "Prof. Karan Mehra"],
+  ["rajesh.kumar", "Dr. Rajesh Kumar"], ["anita.sharma", "Dr. Anita Sharma"],
 ];
 const sectionName = (id: string) => id.toUpperCase().replace(/-(\d)/, "-$1");
 
@@ -115,7 +117,7 @@ function Picker({ title, hint, Icon, email, options, value, onChange, go, busy, 
 function DemoInstitute(p: Props) {
   const [dept, setDept] = useState("cse");
   const [section, setSection] = useState("cse-3a");
-  const [teacher, setTeacher] = useState("anita.sharma");
+  const [teacher, setTeacher] = useState("vikram.singh");
   return (
     <div className="mt-4 space-y-2">
       <p className="text-sm text-muted">Demo Institute of Technology: 4 departments, 12 sections, 2 shifts. Pick who you want to be.</p>
