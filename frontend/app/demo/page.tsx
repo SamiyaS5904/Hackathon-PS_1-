@@ -20,6 +20,10 @@ const DEPARTMENTS = [
 ];
 const SECTIONS = ["cse-1a", "cse-1b", "cse-2a", "cse-2b", "cse-3a", "cse-3b", "ece-1a", "ece-2a", "ece-3a",
   "me-1a", "me-2a", "me-3a"];
+const TEACHERS = [
+  ["anita.sharma", "Dr. Anita Sharma"], ["harpreet.kaur", "Dr. Harpreet Kaur"], ["rohit.bansal", "Prof. Rohit Bansal"],
+  ["neha.arora", "Dr. Neha Arora"], ["amit.malhotra", "Prof. Amit Malhotra"], ["simran.gill", "Dr. Simran Gill"],
+];
 const sectionName = (id: string) => id.toUpperCase().replace(/-(\d)/, "-$1");
 
 const select = "w-full rounded-lg border border-border-strong bg-surface px-2.5 py-1.5 text-sm";
@@ -111,6 +115,7 @@ function Picker({ title, hint, Icon, email, options, value, onChange, go, busy, 
 function DemoInstitute(p: Props) {
   const [dept, setDept] = useState("cse");
   const [section, setSection] = useState("cse-3a");
+  const [teacher, setTeacher] = useState("anita.sharma");
   return (
     <div className="mt-4 space-y-2">
       <p className="text-sm text-muted">Demo Institute of Technology: 4 departments, 12 sections, 2 shifts. Pick who you want to be.</p>
@@ -124,13 +129,9 @@ function DemoInstitute(p: Props) {
       <Picker {...p} title="Department Coordinator" hint="Own department's data, leave cover, approvals" Icon={UserCog}
         email={`${dept}.coordinator@${DOMAIN}`} value={dept} onChange={setDept}
         options={DEPARTMENTS.map((d) => ({ value: d.id, label: d.name }))} />
-      <button className={card} disabled={!!p.busy} onClick={() => p.go(`anita.sharma@${DOMAIN}`)}>
-        {p.icon(`anita.sharma@${DOMAIN}`, User)}
-        <span>
-          <span className="block font-medium">Teacher: Dr. Anita Sharma</span>
-          <span className="text-xs text-muted">Own lectures, one-day changes, leave, attendance</span>
-        </span>
-      </button>
+      <Picker {...p} title="Teacher" hint="Own lectures, one-day changes, leave, attendance" Icon={User}
+        email={`${teacher}@${DOMAIN}`} value={teacher} onChange={setTeacher}
+        options={TEACHERS.map(([id, name]) => ({ value: id, label: name }))} />
       <Picker {...p} title="Student" hint="Own section's week, attendance and the assistant" Icon={GraduationCap}
         email={`${section.replace("-", "")}.01@${DOMAIN}`} value={section} onChange={setSection}
         options={SECTIONS.map((s) => ({ value: s, label: `${sectionName(s)}, roll 01` }))} />
