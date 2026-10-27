@@ -467,12 +467,18 @@ def blank_template() -> bytes:
     return _with_read_me(buf.getvalue(), "Timetabl.ai: blank department template", READ_ME)
 
 
-def department_files(college: College | None = None) -> dict[str, bytes]:
-    """One upload file per department, filled with this college's data (Applied Sciences first)."""
+def department_files(college: College | None = None, *, domain: str = FILES_DOMAIN, prefix: str = "GNDEC",
+                     label: str = "GNDEC (demo)", note: tuple[str, ...] | None = None) -> dict[str, bytes]:
+    """One upload file per department, filled with this college's data (Applied Sciences first). ``domain`` is
+    the students' email domain, ``prefix`` and ``label`` name the files and their Read me (another sample college
+    such as PIET reuses the same data under its own name)."""
 
     college = college or build_gndec_college()
     college = college.model_copy(update={"students": [
-        s.model_copy(update={"email": s.email.replace(f"@{DOMAIN}", f"@{FILES_DOMAIN}")}) for s in college.students]})
+        s.model_copy(update={"email": s.email.replace(f"@{DOMAIN}", f"@{domain}")}) for s in college.students]})
+    if note is None:
+        note = ("first year. Not in the files: the JPAL hour and the final-year CSE elective (they need a student list",
+                "per group; they are in the built-in GNDEC demo college).")
     out = {}
     for i, dept in enumerate(["as", "cse", "it", "me", "ce"], start=1):
         d = next(x for x in college.departments if x.id == dept)
@@ -482,10 +488,9 @@ def department_files(college: College | None = None) -> dict[str, bytes]:
         intro = [(f"{d.name} ({d.short}): {secs} sections, {studs} students, {tchs} teachers.", True),
                  ("Upload order: Applied Sciences first (its teachers teach first-year classes of every branch),", False),
                  ("then CSE, IT, ME and CE. Its file also has the lecture theatres, drawing halls and workshops of", False),
-                 ("first year. Not in the files: the JPAL hour and the final-year CSE elective (they need a student list", False),
-                 ("per group; they are in the built-in GNDEC demo college).", False), ("", False)]
-        out[f"GNDEC_{i}_{d.short}.xlsx"] = _with_read_me(_dept_template(college, dept), f"GNDEC (demo): {d.name}",
-                                                          intro + READ_ME)
+                 *[(line, False) for line in note], ("", False)]
+        out[f"{prefix}_{i}_{d.short}.xlsx"] = _with_read_me(_dept_template(college, dept), f"{label}: {d.name}",
+                                                             intro + READ_ME)
     return out
 
 
