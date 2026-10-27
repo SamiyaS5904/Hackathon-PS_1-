@@ -20,9 +20,11 @@ def test_voice_needs_login():
         assert c.post("/speak", json={"org": "demo", "text": "hi"}).status_code == 401
 
 
-def test_hint_asks_for_roman_hinglish_and_college_names():
-    h = voice._hint(["CSE-3A", "Dr. Anita Sharma"] + [f"Name {i}" for i in range(500)])
-    assert "Roman script" in h and "CSE-3A" in h and "Dr. Anita Sharma" in h and len(h) <= 720
+def test_silence_and_noise_transcripts_are_dropped():
+    for noise in ["Thank you.", "Thanks for watching!", "you", "...", "Hmm.", "[Music]", "Uh", "  "]:
+        assert voice.clean(noise) == "", noise
+    for said in ["Which rooms are free right now?", "kal mera DBMS lecture kab hai", "bye", "stop", "yes apply it"]:
+        assert voice.clean(said) == said
     assert voice._ext("audio/webm;codecs=opus") == "webm" and voice._ext("audio/mp4") == "mp4"
 
 

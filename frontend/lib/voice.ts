@@ -65,7 +65,8 @@ export interface UtteranceOptions {
 }
 
 const SILENCE_MS = 1000; // pause that ends a spoken question in talk mode
-const START_MS = 180; // talking this long counts as speech (ignores clicks and coughs)
+const START_MS = 300; // talking this long counts as speech (ignores clicks, coughs and short noises)
+const MIN_SPEECH_MS = 400; // less speech than this in a message = noise: nothing is sent ("stop" is ~0.4 s)
 
 export class Mic {
   private stream: MediaStream | null = null;
@@ -82,6 +83,7 @@ export class Mic {
   private loudSince = 0;
   private lastVoice = 0;
   private started = false; // speech heard in this utterance
+  private voicedMs = 0; // how long the person actually spoke in this utterance
   private strict = false; // the answer is being read aloud: only clear speech interrupts it
   level = 0;
 
@@ -120,6 +122,7 @@ export class Mic {
     if (on) return;
     if (!this.started) {
       this.loudSince = 0;
+      this.voicedMs = 0;
       this.lastVoice = performance.now();
     }
     this.restartRecorder();
@@ -160,16 +163,18 @@ export class Mic {
     const rms = Math.sqrt(sum / buf.length);
     // Slowly track the room's background noise; speech must stand clearly above it.
     this.noise = rms < this.noise ? rms : this.noise * 0.995 + rms * 0.005;
-    const bar = this.strict ? Math.max(0.06, this.noise * 6) : Math.max(0.018, this.noise * 3);
+    const bar = this.strict ? Math.max(0.06, this.noise * 6) : Math.max(0.025, this.noise * 3.5);
     const now = performance.now();
     this.level = Math.min(1, rms / 0.15);
     this.onLevel?.(this.level);
     if (!this.opts) return;
     if (rms > bar) {
+      if (this.started) this.voicedMs += 50;
       this.lastVoice = now;
       if (!this.loudSince) this.loudSince = now;
       if (!this.started && now - this.loudSince > (this.strict ? 350 : START_MS)) {
         this.started = true;
+        this.voicedMs = now - this.loudSince; // the start of the speech counts too
         this.opts.onSpeech?.();
       }
     } else if (now - this.lastVoice > 250) {
@@ -188,6 +193,7 @@ export class Mic {
     this.endRecording();
     this.opts = opts;
     this.started = false;
+    this.voicedMs = 0;
     this.loudSince = 0;
     this.lastVoice = performance.now();
     this.preview = "";
@@ -257,19 +263,21 @@ export class Mic {
 
   /** End the current message and return its text ("" if nothing was said). */
   async finishUtterance(): Promise<string> {
-    const heard = this.started;
-    const fallback = (this.preview || this.finals).trim();
+    // Too little real speech (a cough, a click, the fan): nothing was said.
+    const heard = this.started && this.voicedMs >= MIN_SPEECH_MS;
+    const fallback = heard ? (this.preview || this.finals).trim() : "";
     this.opts = null;
     const blob = await this.endRecording();
-    if (!blob || !heard) return fallback;
+    if (!heard) return "";
+    if (!blob) return fallback; // no cloud voice: the browser's own recognition is all there is
     try {
       const { token, org } = getSession();
       const res = await fetch(`${CHATBOT}/transcribe?org=${encodeURIComponent(org || "platform")}`, {
         method: "POST", body: blob, headers: { "Content-Type": blob.type, Authorization: `Bearer ${token}` },
       });
       if (!res.ok) return fallback;
-      const text = ((await res.json()) as { text?: string }).text?.trim();
-      return text || fallback;
+      // The cloud heard only noise: trust it, rather than the browser's rougher guess.
+      return ((await res.json()) as { text?: string }).text?.trim() ?? "";
     } catch {
       return fallback;
     }

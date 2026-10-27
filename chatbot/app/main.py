@@ -131,15 +131,8 @@ async def transcribe(request: Request, org: str, authorization: str | None = Hea
     """Speech-to-text for the chat panel. Body: the recorded audio (webm / ogg / mp4)."""
     backend = await _member(authorization, org)
     try:
-        names: list[str] = []
-        if org != PLATFORM:
-            try:
-                c = await backend.college()
-                names = [s["name"] for s in c["sections"]] + [t["name"] for t in c["teachers"]]                     + [s["name"] for s in c["subjects"]]
-            except BackendError:
-                names = []
         audio = await request.body()
-        text = await voice.transcribe(audio, request.headers.get("content-type", "audio/webm"), names)
+        text = await voice.transcribe(audio, request.headers.get("content-type", "audio/webm"))
     except voice.VoiceError as exc:
         raise HTTPException(exc.status, exc.message) from exc
     finally:

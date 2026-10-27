@@ -7,6 +7,7 @@ Both functions sit behind one small interface so another provider can be swapped
 from __future__ import annotations
 
 import os
+import re
 from collections.abc import AsyncIterator
 
 import httpx
@@ -63,19 +64,20 @@ def _ext(content_type: str) -> str:
             "audio/wav": "wav", "audio/x-wav": "wav"}.get(ct, "webm")
 
 
-def _hint(names: list[str]) -> str:
-    """Steers spelling: Roman-script Hinglish, and this college's own names (sections, teachers, subjects)."""
-    base = ("College timetable assistant. English or Hinglish written in Roman script, e.g. 'kal mera DBMS lecture "
-            "kab hai', 'CSE-3A ka timetable dikhao'. ")
-    out = base
-    for n in names:
-        if len(out) + len(n) + 2 > 700:
-            break
-        out += n + ", "
-    return out.rstrip(", ")
+# What speech-to-text models write for silence, breathing or room noise. A whole transcript like this is dropped.
+_NOISE = re.compile(
+    r"^\W*(thank you( (so|very) much)?( for watching)?|thanks for watching|you|hmm+|uh+|um+|ah+|oh+|"
+    r"subtitles by .*|please subscribe.*|\.+|music|\[.*\]|\(.*\))\W*$", re.I)
 
 
-async def transcribe(audio: bytes, content_type: str, names: list[str]) -> str:
+def clean(text: str) -> str:
+    """The transcript, or "" when it is only what the model writes for silence or noise."""
+    text = " ".join(text.split())
+    return "" if not text or _NOISE.match(text) else text
+
+
+async def transcribe(audio: bytes, content_type: str) -> str:
+    """No prompt is sent: with a quiet recording the model would echo the prompt's words back as if they were said."""
     if not available():
         raise VoiceError(503, "Cloud voice isn't set up.")
     if not audio:
@@ -83,7 +85,7 @@ async def transcribe(audio: bytes, content_type: str, names: list[str]) -> str:
     if len(audio) > MAX_AUDIO:
         raise VoiceError(413, "That recording is too long. Keep it under a few minutes.")
     files = {"file": (f"speech.{_ext(content_type)}", audio, content_type.split(";")[0] or "audio/webm")}
-    data = {"model": STT_MODEL, "prompt": _hint(names), "response_format": "json",
+    data = {"model": STT_MODEL, "response_format": "json",
             **({"language": STT_LANGUAGE} if STT_LANGUAGE else {})}
     try:
         r = await _client().post(f"{OPENAI_URL}/audio/transcriptions", headers=_headers(), files=files, data=data)
@@ -93,7 +95,7 @@ async def transcribe(audio: bytes, content_type: str, names: list[str]) -> str:
         raise VoiceError(503, "The voice key in chatbot/.env isn't accepted (or has no credit left).")
     if r.status_code >= 400:
         raise VoiceError(502, "The voice service couldn't read that. Try again or type it.")
-    return (r.json().get("text") or "").strip()
+    return clean(r.json().get("text") or "")
 
 
 async def speech(text: str) -> AsyncIterator[bytes]:
