@@ -10,6 +10,7 @@ it with one click.
 - **Live:** web app **https://timetabl-ai.vercel.app** · API https://timetabl-api.fly.dev (health:
   `/api/health`). Click **Explore the live demo** for one-click logins. Deployment steps:
   [`docs/DEPLOY.md`](docs/DEPLOY.md).
+- **Presentation (PDF):** [`Timetabl_ai_Hackathon_Submission.pdf`](Timetabl_ai_Hackathon_Submission.pdf).
 - **Demo guide** (logins, where every feature is, a demo script): [`docs/DEMO_GUIDE.md`](docs/DEMO_GUIDE.md).
 - **Design and rules:** [`CLAUDE.md`](CLAUDE.md) · [`backend/CLAUDE.md`](backend/CLAUDE.md) ·
   [`frontend/CLAUDE.md`](frontend/CLAUDE.md) · [`chatbot/CLAUDE.md`](chatbot/CLAUDE.md).
