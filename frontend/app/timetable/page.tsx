@@ -10,6 +10,7 @@ import { DayList, useIsPhone } from "@/components/timetable/DayList";
 import { FindAny } from "@/components/timetable/FindAny";
 import { TrustBar } from "@/components/timetable/TrustBar";
 import { OneDayPanel } from "@/components/timetable/OneDayPanel";
+import { MoveSuggestions } from "@/components/timetable/MoveSuggestions";
 import { ProposalDialog } from "@/components/timetable/ProposalDialog";
 import { RequestDialog } from "@/components/timetable/RequestDialog";
 import { TodayView } from "@/components/timetable/TodayView";
@@ -345,6 +346,7 @@ export default function TimetablePage() {
             <EditBar
               editor={editor}
               college={college}
+              requestOnly={isTeacher}
               hint={HINTS[role ?? "student"][mode]}
             />
           )}
@@ -420,10 +422,12 @@ function EditBar({
   editor,
   college,
   hint,
+  requestOnly = false,
 }: {
   editor: ReturnType<typeof useMoveEditor>;
   college: NonNullable<ReturnType<typeof useTimetable>["college"]>;
   hint?: string;
+  requestOnly?: boolean;
 }) {
   const {
     moving, options, busy, proposal, apply, discard, cancel, moveRequest, sendRequest, closeRequest,
@@ -461,6 +465,10 @@ function EditBar({
         )}
       </div>
 
+      {moving && options && !proposal && editor.edit && (
+        <MoveSuggestions college={college} moving={moving} options={options} busy={busy} requestOnly={requestOnly}
+          onPick={editor.edit.onDrop} />
+      )}
       {proposal && <ProposalDialog proposal={proposal} busy={busy} onApply={apply} onDiscard={discard} />}
       {moveRequest && (
         <RequestDialog request={moveRequest} subject={subject ?? ""} busy={busy} onSend={sendRequest}

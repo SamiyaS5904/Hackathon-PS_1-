@@ -7,6 +7,7 @@ import { Button } from "@/components/ui";
 import { api, extraApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import type { College, DayInfo, MoveOption, Occurrence, OverrideOut, RescheduleOption } from "@/lib/types";
+import { AskAssistant } from "./MoveSuggestions";
 
 /** Change one class on one real date. Opens on the finder: every time in the coming days when the teacher, every
  * student and a room are free. Pick one, then move it for that day only, or (teachers) ask to move it every week.
@@ -179,6 +180,11 @@ export function OneDayPanel({
                     ))}
                   </div>
                 )
+              )}
+              {mode === "find" && makeups && (
+                <AskAssistant before={onClose} label={makeups.length ? "None of these suits? Ask the assistant" : "Ask the assistant to find a way"}
+                  text={`Find a time to move ${subject?.name ?? "this class"} (${sections}) from ${dayLabel} ${s.start}. `
+                    + "The teacher, every student and a room must be free."} />
               )}
               {mode === "move" && (
                 <>
