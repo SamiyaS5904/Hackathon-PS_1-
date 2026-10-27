@@ -30,7 +30,7 @@ from app.college_edit import (
     settings_of,
     structural_errors,
 )
-from app.core.config import AUTO_DEMO_TIMETABLE, CORS_ORIGINS
+from app.core.config import AUTO_DEMO_TIMETABLE, CORS_ORIGIN_REGEX, CORS_ORIGINS
 from app.core.deps import Ctx, allow, current_user, org_ctx
 from app.core.security import create_token
 from app.db.models import UserRow
@@ -112,7 +112,8 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="Timetabl.ai API", version="0.4.0", lifespan=lifespan)
-app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_methods=["*"], allow_headers=["*"],
+app.add_middleware(CORSMiddleware, allow_origins=CORS_ORIGINS, allow_origin_regex=CORS_ORIGIN_REGEX,
+                   allow_methods=["*"], allow_headers=["*"],
                    expose_headers=["Content-Disposition"])  # file names for downloads
 app.include_router(bookings_router)
 app.include_router(platform_router)

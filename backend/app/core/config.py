@@ -40,6 +40,8 @@ if not APP_SECRET:
 TOKEN_DAYS = int(os.environ.get("TOKEN_DAYS", "7"))
 FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 CORS_ORIGINS = [o.strip() for o in os.environ.get("CORS_ORIGINS", FRONTEND_URL).split(",") if o.strip()]
+# Also allowed: web app addresses matching this pattern (e.g. every Vercel deployment of the project).
+CORS_ORIGIN_REGEX = os.environ.get("CORS_ORIGIN_REGEX") or None
 DEMO_PASSWORD = os.environ.get("DEMO_PASSWORD", "demo1234")
 # Build and publish the demo college's timetable at startup when it is missing or out of date.
 AUTO_DEMO_TIMETABLE = os.environ.get("AUTO_DEMO_TIMETABLE", "1") == "1"
