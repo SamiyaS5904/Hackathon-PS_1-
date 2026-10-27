@@ -1,0 +1,28 @@
+# Fly.io: the backend + AI assistant in one always-on machine (pay per second while it runs).
+# Steps: docs/DEPLOY.md. Secrets (DATABASE_URL, APP_SECRET, ANTHROPIC_API_KEY, OPENAI_API_KEY) are set with
+# `fly secrets set`, never written here.
+#
+# Exactly ONE machine: college data lives in memory and is saved to Supabase in the background, so two machines
+# would not see each other's changes. Deploy with `fly deploy --ha=false`.
+
+app = "timetabl-api"
+primary_region = "sin"  # Singapore, next to the Supabase database
+
+[build]
+  dockerfile = "deploy/fly/Dockerfile"
+
+[env]
+  PORT = "8080"
+  SOLVER_WORKERS = "1"
+  DEMO_PLATFORM_OWNER = "1"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "off"   # always on: no cold starts during judging
+  auto_start_machines = true
+  min_machines_running = 1
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "1gb"

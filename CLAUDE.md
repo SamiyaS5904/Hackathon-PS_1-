@@ -241,7 +241,8 @@ Every feature must keep these in mind. ✅ = handled + tested in the engine · �
 - **Assistant:** model router (Sonnet 5.5 agentic, Haiku 5.5 look-ups, Opus 5.5 retry), instant answers without AI,
   English-first replies, roughly 2x faster.
 - **Home page:** public `/welcome` with features and indicative pricing.
-- **Deployment set-up:** Hugging Face Space for backend + assistant, Vercel, Supabase (`docs/DEPLOY.md`).
+- **Deployment set-up:** Fly.io for backend + assistant (one machine, `fly.toml`), Vercel, Supabase
+  (`docs/DEPLOY.md`). Hugging Face Docker Spaces turned paid, so Fly.io replaced them.
 - **GNDEC (demo):** a second demo college (`backend/app/seed/gndec.py`), seeded at start-up (`DEMO_GNDEC`), with
   its own Demo page tab. It has 28 sections, 570 classes, 0 clashes and quality 79, plus a JPAL lab for selected
   final-year CSE students.

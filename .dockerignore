@@ -1,0 +1,16 @@
+# Only backend/, chatbot/ and the start script go into the image. Never secrets or local data.
+**/.env
+**/.env.*
+!**/.env.example
+**/.venv
+**/__pycache__
+**/.pytest_cache
+**/*.db
+**/*.db-journal
+**/tests
+.git
+.claude
+frontend
+docs
+deploy/_hf_space
+*.pdf
