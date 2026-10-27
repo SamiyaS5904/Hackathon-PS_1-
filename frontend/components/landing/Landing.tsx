@@ -1,4 +1,7 @@
-import { ArrowRight, CheckCircle2, FileSpreadsheet, Mic, ShieldCheck, Undo2 } from "lucide-react";
+import {
+  ArrowRight, CalendarSearch, CheckCircle2, DoorOpen, FileSpreadsheet, Languages, Lock, MessageSquareText, MoveRight,
+  ShieldCheck, Undo2, UserCheck,
+} from "lucide-react";
 import { Instrument_Serif } from "next/font/google";
 import Link from "next/link";
 import type { ReactNode } from "react";
@@ -46,7 +49,7 @@ function Nav() {
       <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
         <Logo />
         <nav className="ml-6 hidden gap-6 text-sm text-muted md:flex">
-          <a href="#features" className="hover:text-text">Product</a>
+          <a href="#features" className="hover:text-text">Platform</a>
           <a href="#assistant" className="hover:text-text">Assistant</a>
           <a href="#pricing" className="hover:text-text">Pricing</a>
         </nav>
@@ -75,21 +78,18 @@ function Hero() {
           Timetables that <span className="whitespace-nowrap"><Em>never clash.</Em></span>
         </h1>
         <p className="tt-fade-up mx-auto mt-6 max-w-lg text-lg text-muted md:text-xl" style={{ animationDelay: "160ms" }}>
-          Made in minutes. Kept right all semester.
+          Timetable management for colleges. Built in minutes, kept right all semester.
         </p>
         <div className="tt-fade-up mt-9 flex flex-wrap justify-center gap-3" style={{ animationDelay: "240ms" }}>
-          <Link href="/demo" className={primary}>Try the demo college <ArrowRight size={16} aria-hidden /></Link>
-          <Link href="/signup" className={secondary}>Create your college</Link>
+          <Link href="/signup" className={primary}>Get started free <ArrowRight size={16} aria-hidden /></Link>
+          <Link href="/demo" className={secondary}>Explore the live demo</Link>
         </div>
         <p className="tt-fade-up mt-4 text-xs text-muted" style={{ animationDelay: "300ms" }}>
-          No sign-up. One click to log in as an admin, teacher or student.
+          Free for one department. No card required.
         </p>
         <div className="tt-fade-up mx-auto mt-16 max-w-4xl" style={{ animationDelay: "380ms" }}>
           <HeroApp />
         </div>
-        <p className="tt-fade-up mt-8 text-xs text-muted" style={{ animationDelay: "500ms" }}>
-          Tested on two colleges · Demo Institute of Technology · GNDEC (demo) · 570 classes, 0 clashes
-        </p>
       </div>
     </section>
   );
@@ -135,17 +135,17 @@ const RULES = [["No first-year class after 4 pm", "Must"], ["At most 4 lectures 
 function Bento() {
   return (
     <section id="features" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-24">
-      <Heading eyebrow="Product" title={<>The hardest part of a semester, <Em>solved.</Em></>} />
+      <Heading eyebrow="Platform" title={<>The hardest part of a semester, <Em>solved.</Em></>} />
       <div className="mt-14 grid gap-4 md:grid-cols-3">
         <Tile className="md:col-span-2" title={<>One click. <Em>The whole college.</Em></>}>
           <ul className="space-y-2.5 text-sm text-muted">
-            <Tick i={0}>Reads 28 sections, 96 teachers and 51 rooms</Tick>
+            <Tick i={0}>Every department, section, teacher and room in one plan</Tick>
             <Tick i={1}>Places labs as blocks and electives side by side</Tick>
             <Tick i={2}>Gives every section a lunch gap, every day</Tick>
           </ul>
           <div className="mt-6 h-1.5 overflow-hidden rounded-full bg-surface-2"><div className="tt-bar h-full rounded-full bg-accent" /></div>
           <p className="tt-stagger mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm" style={{ animationDelay: "2600ms" }}>
-            <span className="font-semibold">570 classes</span><span className="text-ok">0 clashes</span><span className="text-muted">quality 79/100</span>
+            <span className="font-semibold">Timetable ready</span><span className="text-ok">0 clashes</span><span className="text-muted">for every section, teacher and room</span>
           </p>
         </Tile>
         <Tile delay={100} title={<>Checked <Em>twice.</Em></>}>
@@ -220,30 +220,53 @@ function Bento() {
   );
 }
 
+const ABILITIES: [typeof UserCheck, string, string][] = [
+  [UserCheck, "Covers teacher leave", "Ranks free substitutes of the same subject, or cancels and notifies."],
+  [MoveRight, "Moves classes safely", "Finds a slot where the teacher, students and a room are all free."],
+  [CalendarSearch, "Finds makeup times", "Over the next week, without clashing with anyone."],
+  [DoorOpen, "Finds free rooms", "Right now or at any time, own department first."],
+  [MessageSquareText, "Answers everyone", "Next class, where a teacher is, attendance, bookings."],
+  [Languages, "Speaks your way", "Typed or by voice, in English or Hinglish."],
+];
+
+const TRUST: [typeof Lock, string][] = [
+  [Lock, "Acts with your permissions"], [ShieldCheck, "Every change checked"], [Undo2, "Nothing changes until you Apply"],
+];
+
 function AssistantShowcase() {
-  const points: [typeof Mic, string][] = [
-    [CheckCircle2, "Plans cover when a teacher is away"],
-    [Mic, "Typed or spoken, in English or Hinglish"],
-    [Undo2, "Changes nothing until you click Apply"],
-  ];
   return (
     <section id="assistant" className="relative scroll-mt-20 border-y border-border/70 bg-surface/40">
-      <div className="mx-auto grid max-w-6xl items-center gap-12 px-4 py-24 md:grid-cols-2">
-        <Reveal>
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-text">AI assistant</p>
-          <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] md:text-5xl">Say it. It plans it. <Em>You approve.</Em></h2>
-          <ul className="mt-8 space-y-4">
-            {points.map(([Icon, t]) => (
-              <li key={t} className="flex items-center gap-3 text-lg">
-                <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-accent-soft text-accent-text"><Icon size={16} aria-hidden /></span>
-                {t}
-              </li>
-            ))}
-          </ul>
-        </Reveal>
-        <Reveal delay={150}>
-          <ChatDemo />
-        </Reveal>
+      <div className="mx-auto max-w-6xl px-4 py-24">
+        <div className="grid items-center gap-12 md:grid-cols-2">
+          <Reveal>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-text">AI assistant</p>
+            <h2 className="mt-3 text-3xl font-semibold tracking-[-0.03em] md:text-5xl">Say it. It plans it. <Em>You approve.</Em></h2>
+            <p className="mt-5 max-w-md text-muted md:text-lg">
+              An assistant that knows your timetable and does the legwork, for every role in the college.
+            </p>
+            <p className="mt-6 flex flex-wrap gap-2 text-xs">
+              {TRUST.map(([Icon, l]) => (
+                <span key={l} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1.5 text-muted">
+                  <Icon size={13} className="text-accent-text" aria-hidden /> {l}
+                </span>
+              ))}
+            </p>
+          </Reveal>
+          <Reveal delay={150}>
+            <ChatDemo />
+          </Reveal>
+        </div>
+        <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-border bg-border sm:grid-cols-2 lg:grid-cols-3">
+          {ABILITIES.map(([Icon, title, line], i) => (
+            <Reveal key={title} delay={i * 70} className="h-full">
+              <div className="h-full bg-surface p-6">
+                <Icon size={18} className="text-accent-text" aria-hidden />
+                <h3 className="mt-3 font-semibold">{title}</h3>
+                <p className="mt-1 text-sm text-muted">{line}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -297,14 +320,14 @@ function Pricing() {
   const plans = [
     { name: "Starter", price: "Free", unit: "", note: "One department, to try it.", cta: "Create your college", href: "/signup",
       items: ["Up to 300 students", "Generate, views, drag and drop", "Assistant: 100 answers / month"] },
-    { name: "College", price: "₹25", unit: "/ student / year", note: "Minimum ₹25,000 a year.", cta: "Try the demo", href: "/demo", featured: true,
+    { name: "College", price: "₹25", unit: "/ student / year", note: "Minimum ₹25,000 a year.", cta: "Get started", href: "/signup", featured: true,
       items: ["Unlimited departments and shifts", "Leave cover, bookings, attendance", "Assistant with voice"] },
     { name: "University", price: "Custom", unit: "", note: "Several campuses.", cta: "Talk to us", href: "/signup",
       items: ["Everything in College", "Help importing your timetable", "Priority support"] },
   ];
   return (
     <section id="pricing" className="mx-auto max-w-6xl scroll-mt-20 px-4 py-20">
-      <Heading eyebrow="Pricing" title={<>Simple, <Em>per student.</Em></>} sub="Indicative prices." />
+      <Heading eyebrow="Pricing" title={<>Simple, <Em>per student.</Em></>} sub="Start free with one department. Upgrade when the whole college is on board." />
       <div className="mt-14 grid gap-5 md:grid-cols-3">
         {plans.map((p, i) => (
           <Reveal key={p.name} delay={i * 110}>
@@ -334,9 +357,12 @@ function FinalCta() {
       <Reveal className="relative mx-auto max-w-5xl overflow-hidden rounded-3xl border border-border bg-surface px-6 py-16 text-center">
         <div className="tt-grid-bg pointer-events-none absolute inset-0 opacity-70" aria-hidden />
         <div className="relative">
-          <h2 className="text-3xl font-semibold tracking-[-0.03em] md:text-5xl">See it on a <Em>real</Em> college.</h2>
+          <h2 className="text-3xl font-semibold tracking-[-0.03em] md:text-5xl">Bring <Em>clash-free</Em> timetables to your college.</h2>
           <p className="mt-4 text-muted md:text-lg">For admins, coordinators, teachers and students.</p>
-          <Link href="/demo" className={`${primary} mt-8 px-6 py-3 text-base`}>Open the demo <ArrowRight size={18} aria-hidden /></Link>
+          <div className="mt-8 flex flex-wrap justify-center gap-3">
+            <Link href="/signup" className={`${primary} px-6 py-3 text-base`}>Get started free <ArrowRight size={18} aria-hidden /></Link>
+            <Link href="/demo" className={`${secondary} px-6 py-3 text-base`}>Explore the live demo</Link>
+          </div>
         </div>
       </Reveal>
     </section>
@@ -348,7 +374,7 @@ function Footer() {
     <footer className="border-t border-border">
       <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-4 py-8 text-sm text-muted">
         <Logo />
-        <span className="hidden sm:inline">Clash-free timetables for any college.</span>
+        <span className="hidden sm:inline">© 2026 Timetabl.ai · Clash-free timetables for colleges.</span>
         <div className="ml-auto flex gap-5">
           <Link href="/demo" className="hover:text-text">Demo</Link>
           <Link href="/login" className="hover:text-text">Log in</Link>
